@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError, User } from "@/lib/api";
 import { getToken, clearToken } from "@/lib/auth";
-import { navFor } from "@/lib/nav";
+import { COMMON_NAV, ACCOUNT_NAV, SUPER_ADMIN_NAV, visibleItems, groupForPath, NavItem } from "@/lib/nav";
 import { UserContext } from "@/lib/user-context";
 import { Preloader } from "@/components/Preloader";
 import { NoPlanGate, ExpiredBanner, ExpiredBlock, isAllowedWhenExpired } from "@/components/PlanGate";
@@ -167,15 +167,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <img src="/eydia-logo.png" alt="Eydia.ai Automate · Engage · Grow" style={{ width: "100%", maxWidth: 150, height: "auto", display: "block" }} />
           </div>
           <nav>
-            {navFor(user).map((item) => {
-              const active = pathname === item.href || pathname.startsWith(item.href + "/");
+            {(() => {
+              const renderLink = (item: NavItem) => {
+                const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <Link key={item.href} href={item.href} className={active ? "active" : ""} onClick={() => setSidebarOpen(false)}>
+                    <span className="nav-ic">{item.icon}</span>
+                    {item.label}
+                  </Link>
+                );
+              };
+
+              if (user.is_super_admin) {
+                return SUPER_ADMIN_NAV.map(renderLink);
+              }
+
+              const group = groupForPath(pathname);
+              const groupItems = group ? visibleItems(group.items, user) : [];
               return (
-                <Link key={item.href} href={item.href} className={active ? "active" : ""} onClick={() => setSidebarOpen(false)}>
-                  <span className="nav-ic">{item.icon}</span>
-                  {item.label}
-                </Link>
+                <>
+                  {visibleItems(COMMON_NAV, user).map(renderLink)}
+                  {group && groupItems.length > 0 && (
+                    <>
+                      <Link href="/dashboard" className="nav-back" onClick={() => setSidebarOpen(false)}>← Dashboards</Link>
+                      <div className="nav-group-label"><span>{group.icon}</span> {group.label}</div>
+                      {groupItems.map(renderLink)}
+                      <div className="nav-divider" />
+                    </>
+                  )}
+                  {visibleItems(ACCOUNT_NAV, user).map(renderLink)}
+                </>
               );
-            })}
+            })()}
           </nav>
           <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <div className="side-user">

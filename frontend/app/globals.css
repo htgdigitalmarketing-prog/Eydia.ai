@@ -383,6 +383,11 @@ a:hover { text-decoration: underline; }
 /* Active item: soft royal-blue pill + gradient icon chip. */
 .sidebar nav a.active { background: #eef0ff; color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
 .sidebar nav a.active .nav-ic { background: var(--brand-grad); color: #fff; box-shadow: 0 5px 14px rgba(76,87,216,.4); }
+/* Contextual dashboard group header inside the sidebar */
+.sidebar .nav-back { display: inline-flex; align-items: center; color: var(--muted); font-size: 12px; font-weight: 700; padding: 10px 11px 4px; }
+.sidebar .nav-back:hover { color: var(--accent); background: none; text-decoration: none; }
+.sidebar .nav-group-label { display: flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; color: var(--accent); padding: 4px 11px 8px; }
+.sidebar .nav-divider { height: 1px; background: var(--border); margin: 10px 6px; }
 
 /* Sidebar footer user block */
 .side-user { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
