@@ -41,6 +41,7 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
 
         Route::middleware('plan')->group(function () {
             require __DIR__ . '/modules/assistant.php';
+            require __DIR__ . '/modules/ai.php';
             require __DIR__ . '/modules/whatsapp.php';
             require __DIR__ . '/modules/contacts.php';
             require __DIR__ . '/modules/templates.php';

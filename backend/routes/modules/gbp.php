@@ -11,7 +11,11 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     Route::get('/overview', [GbpController::class, 'overview']);
     Route::get('/reviews', [GbpController::class, 'reviews']);
     Route::post('/reviews/{uuid}/reply', [GbpController::class, 'reply']);
+    Route::post('/reviews/{uuid}/suggest', [GbpController::class, 'suggestReply']);
     Route::post('/sync', [GbpController::class, 'sync']);
+
+    // One-click AI optimization of the profile.
+    Route::post('/optimize', [GbpController::class, 'optimize']);
 
     // Business insights (performance metrics) + CSV export.
     Route::get('/insights', [GbpController::class, 'insights']);
@@ -22,6 +26,7 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
 
     // GBP posts (localPosts).
     Route::get('/posts', [GbpPostController::class, 'index']);
+    Route::post('/posts/generate', [GbpPostController::class, 'generate']); // AI caption
     Route::post('/posts', [GbpPostController::class, 'store']);
     Route::put('/posts/{uuid}', [GbpPostController::class, 'update']);
     Route::post('/posts/{uuid}/publish', [GbpPostController::class, 'publish']);
@@ -29,6 +34,7 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
 
     // GBP photos (media).
     Route::get('/photos', [GbpPhotoController::class, 'index']);
+    Route::post('/photos/caption', [GbpPhotoController::class, 'caption']); // AI caption
     Route::post('/photos', [GbpPhotoController::class, 'store']);
     Route::post('/photos/{uuid}/publish', [GbpPhotoController::class, 'publish']);
     Route::delete('/photos/{uuid}', [GbpPhotoController::class, 'destroy']);

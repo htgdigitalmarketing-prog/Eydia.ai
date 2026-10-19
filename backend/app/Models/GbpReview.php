@@ -18,8 +18,8 @@ class GbpReview extends Model
 
     protected $fillable = [
         'tenant_id', 'gbp_location_id', 'google_review_id', 'author_name',
-        'author_photo', 'rating', 'comment', 'reply', 'replied_at',
-        'reviewed_at', 'meta',
+        'author_photo', 'rating', 'comment', 'reply', 'draft_reply', 'sentiment',
+        'replied_at', 'reviewed_at', 'meta',
     ];
 
     protected $casts = [

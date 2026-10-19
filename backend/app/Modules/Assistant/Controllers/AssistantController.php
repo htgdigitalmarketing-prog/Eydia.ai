@@ -78,6 +78,50 @@ class AssistantController extends Controller
     }
 
     /**
+     * AI Chat Mode (ReviewFlow §21): an open-ended marketing advisor for local
+     * businesses (Google reviews, WhatsApp, social, local SEO). Unlike ask(),
+     * this does NOT read the tenant's data — it gives general marketing advice.
+     * Credit-gated ('ai_chat'); falls back to canned guidance when AI is off.
+     */
+    public function chat(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'message' => ['required', 'string', 'max:2000'],
+            'language' => ['sometimes', 'string', 'max:20'],
+        ]);
+
+        $system = implode("\n", [
+            'You are Eydia AI, a practical marketing assistant for local and small businesses.',
+            'Help with Google reviews, WhatsApp marketing, social media, local SEO and lead follow-up.',
+            'Be concrete and concise — give steps the owner can act on today. ' . $this->languageInstruction($data['language'] ?? 'en'),
+            'Use plain text, short paragraphs or simple dashes; no markdown tables or headings.',
+        ]);
+
+        $tenantId = $request->user()->tenant_id;
+        $answer = null;
+        $source = 'fallback';
+        if ($tenantId && $this->credits->canAfford($tenantId, 'ai_chat')) {
+            $answer = $this->ai->classify($system, [['role' => 'user', 'content' => $data['message']]]);
+            if ($answer) {
+                $this->credits->deduct($tenantId, $request->user()->id, 'ai_chat', 'Marketing assistant chat');
+                $source = 'ai';
+            }
+        }
+
+        if (! $answer) {
+            $answer = 'Here are a few evergreen wins: ask every happy customer for a Google review and reply to all reviews; '
+                . 'post on your Google profile weekly; follow up new WhatsApp leads within an hour; and keep your business '
+                . 'info (hours, phone, address) accurate everywhere. (AI chat is not configured right now, so this is general advice.)';
+        }
+
+        return $this->ok([
+            'answer' => $answer,
+            'source' => $source,
+            'credits' => $tenantId ? $this->credits->balance($tenantId) : null,
+        ]);
+    }
+
+    /**
      * A compact, scope-correct picture of the user's data.
      *
      * @return array<string, int|string>

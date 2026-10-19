@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\GbpLocation;
 use App\Models\GbpPhoto;
 use App\Models\Integration;
+use App\Modules\Billing\Services\CreditService;
+use App\Modules\Chatbot\Services\AiReplyService;
 use App\Modules\Gbp\Services\GoogleGbpProvider;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,6 +19,45 @@ use Illuminate\Http\Request;
  */
 class GbpPhotoController extends Controller
 {
+    public function __construct(
+        private readonly AiReplyService $ai,
+        private readonly CreditService $credits,
+    ) {}
+
+    /** AI-generate a short photo caption from a topic (ReviewFlow §10). Credit-gated ('ai_caption'). */
+    public function caption(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'topic' => ['required', 'string', 'max:300'],
+            'location' => ['nullable', 'string'],
+        ]);
+
+        $tenantId = $request->user()->tenant_id;
+        if ($tenantId && ! $this->credits->canAfford($tenantId, 'ai_caption')) {
+            return $this->fail('You are out of AI credits (' . $this->credits->cost('ai_caption') . ' needed). Top up or upgrade your plan.', ['credits' => ['insufficient']], 402);
+        }
+
+        $business = ! empty($data['location'])
+            ? (GbpLocation::where('uuid', $data['location'])->value('name') ?: 'our business')
+            : (GbpLocation::query()->value('name') ?: 'our business');
+
+        $system = 'You write a single short, friendly caption (max 255 characters) for a Google Business Profile photo. Plain text, at most one emoji, no hashtags.';
+        $user = "Business: {$business}. Photo is about: {$data['topic']}. Write the caption only.";
+
+        $text = $this->ai->classify($system, [['role' => 'user', 'content' => $user]]);
+        $source = 'ai';
+
+        if (! $text) {
+            $source = 'fallback';
+            $text = mb_substr("{$data['topic']} at {$business}", 0, 255);
+        } else {
+            $text = mb_substr(trim($text), 0, 255);
+            $this->credits->deduct($tenantId, $request->user()->id, 'ai_caption', 'AI GBP photo caption');
+        }
+
+        return $this->ok(['text' => $text, 'source' => $source, 'credits' => $tenantId ? $this->credits->balance($tenantId) : null]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = GbpPhoto::query()->with('location:id,uuid,name')->latest();

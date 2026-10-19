@@ -6,7 +6,7 @@ import { AccessDenied, hasFeature } from "@/components/PlanGate";
 import { PageHeader } from "@/components/PageHeader";
 import {
   api, ApiError, GbpConnection, GbpOverview, GbpReviewItem,
-  GbpPostItem, GbpPhotoItem, GbpInsights, GbpHealth, GbpLocationItem,
+  GbpPostItem, GbpPhotoItem, GbpInsights, GbpHealth, GbpLocationItem, GbpOptimizeResult,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
@@ -85,6 +85,7 @@ function ReviewsTab({ overview }: { overview: GbpOverview | null }) {
   const [reviews, setReviews] = useState<GbpReviewItem[]>([]);
   const [filter, setFilter] = useState<{ unreplied: boolean; rating: number }>({ unreplied: false, rating: 0 });
   const [replyTo, setReplyTo] = useState<GbpReviewItem | null>(null);
+  const [autoSuggest, setAutoSuggest] = useState(false);
 
   const loadReviews = useCallback(async () => {
     const token = getToken();
@@ -134,7 +135,10 @@ function ReviewsTab({ overview }: { overview: GbpOverview | null }) {
                       <div style={{ fontSize: 13, color: "#f6a609", letterSpacing: 1 }}>{stars(r.rating)}</div>
                     </div>
                   </div>
-                  <span className="muted" style={{ fontSize: 12 }}>{r.location?.name}</span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    <span className="muted" style={{ fontSize: 12 }}>{r.location?.name}</span>
+                    <SentimentChip s={r.sentiment} />
+                  </div>
                 </div>
                 {r.comment && <p style={{ margin: "10px 0 0", fontSize: 14 }}>{r.comment}</p>}
                 {r.reply ? (
@@ -143,7 +147,10 @@ function ReviewsTab({ overview }: { overview: GbpOverview | null }) {
                     <div style={{ fontSize: 13.5 }}>{r.reply}</div>
                   </div>
                 ) : (
-                  <button className="btn-mini" style={{ marginTop: 10 }} onClick={() => setReplyTo(r)}>Reply</button>
+                  <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+                    <button className="btn-mini" onClick={() => { setAutoSuggest(false); setReplyTo(r); }}>Reply</button>
+                    <button className="btn-mini" onClick={() => { setAutoSuggest(true); setReplyTo(r); }}>✨ AI reply</button>
+                  </div>
                 )}
               </div>
             ))}
@@ -181,7 +188,7 @@ function ReviewsTab({ overview }: { overview: GbpOverview | null }) {
         </div>
       </div>
 
-      {replyTo && <ReplyModal review={replyTo} onClose={() => setReplyTo(null)} onReplied={() => { setReplyTo(null); loadReviews(); }} />}
+      {replyTo && <ReplyModal review={replyTo} autoSuggest={autoSuggest} onClose={() => setReplyTo(null)} onReplied={() => { setReplyTo(null); loadReviews(); }} />}
     </>
   );
 }
@@ -207,10 +214,22 @@ function PostsTab({ locations }: { locations: GbpLocationItem[] }) {
   const [form, setForm] = useState({ type: "STANDARD", summary: "", image_url: "", cta_type: "NONE", cta_url: "" });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
 
   useEffect(() => { if (locations.length && !loc) setLoc(locations[0].id); }, [locations, loc]);
   const load = useCallback(() => { const t = getToken(); if (t) api.gbp.posts(t).then((r) => setPosts(r.posts)).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
+
+  async function generate() {
+    const t = getToken(); if (!t) return;
+    const topic = (form.summary.trim() || window.prompt("What should this post be about?") || "").trim();
+    if (!topic) return;
+    setGenBusy(true); setErr(null);
+    try {
+      const r = await api.gbp.generatePost(t, { topic, type: form.type, location: loc || undefined });
+      setForm((f) => ({ ...f, summary: r.text }));
+    } catch (e) { setErr((e as ApiError).message); } finally { setGenBusy(false); }
+  }
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -237,8 +256,12 @@ function PostsTab({ locations }: { locations: GbpLocationItem[] }) {
             {POST_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>)}
           </select>
         </div>
-        <div className="field"><label>Post text</label>
-          <textarea value={form.summary} onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))} required rows={4} maxLength={1500} placeholder="What's new with your business?" style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} />
+        <div className="field">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <label style={{ marginBottom: 0 }}>Post text</label>
+            <button type="button" className="btn-mini" disabled={genBusy} onClick={generate}>{genBusy ? "Writing…" : "✨ Write with AI"}</button>
+          </div>
+          <textarea value={form.summary} onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))} required rows={4} maxLength={1500} placeholder="What's new with your business? (or let AI write it)" style={{ ...inp, resize: "vertical", fontFamily: "inherit", marginTop: 6 }} />
         </div>
         <div className="field"><label>Image URL <span className="muted">(optional)</span></label>
           <input value={form.image_url} onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value }))} placeholder="https://…" style={inp} />
@@ -283,10 +306,22 @@ function PhotosTab({ locations }: { locations: GbpLocationItem[] }) {
   const [form, setForm] = useState({ image_url: "", caption: "", category: "ADDITIONAL" });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [genBusy, setGenBusy] = useState(false);
 
   useEffect(() => { if (locations.length && !loc) setLoc(locations[0].id); }, [locations, loc]);
   const load = useCallback(() => { const t = getToken(); if (t) api.gbp.photos(t).then((r) => setPhotos(r.photos)).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
+
+  async function genCaption() {
+    const t = getToken(); if (!t) return;
+    const topic = (form.caption.trim() || window.prompt("What is this photo of?") || "").trim();
+    if (!topic) return;
+    setGenBusy(true); setErr(null);
+    try {
+      const r = await api.gbp.captionPhoto(t, { topic, location: loc || undefined });
+      setForm((f) => ({ ...f, caption: r.text }));
+    } catch (e) { setErr((e as ApiError).message); } finally { setGenBusy(false); }
+  }
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -311,7 +346,13 @@ function PhotosTab({ locations }: { locations: GbpLocationItem[] }) {
             {PHOTO_CATS.map((c) => <option key={c} value={c}>{c.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase())}</option>)}
           </select>
         </div>
-        <div className="field"><label>Caption <span className="muted">(optional)</span></label><input value={form.caption} onChange={(e) => setForm((f) => ({ ...f, caption: e.target.value }))} style={inp} /></div>
+        <div className="field">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <label style={{ marginBottom: 0 }}>Caption <span className="muted">(optional)</span></label>
+            <button type="button" className="btn-mini" disabled={genBusy} onClick={genCaption}>{genBusy ? "Writing…" : "✨ AI"}</button>
+          </div>
+          <input value={form.caption} onChange={(e) => setForm((f) => ({ ...f, caption: e.target.value }))} style={{ ...inp, marginTop: 6 }} />
+        </div>
         {form.image_url && <img src={form.image_url} alt="" style={{ width: "100%", borderRadius: 10, marginBottom: 10, maxHeight: 160, objectFit: "cover" }} />}
         <button className="btn" disabled={busy}>{busy ? "Saving…" : "Save photo"}</button>
       </form>
@@ -414,7 +455,17 @@ function InsightsTab({ locations }: { locations: GbpLocationItem[] }) {
 function HealthTab() {
   const [data, setData] = useState<GbpHealth | null>(null);
   const [loading, setLoading] = useState(true);
+  const [opt, setOpt] = useState<GbpOptimizeResult | null>(null);
+  const [optBusy, setOptBusy] = useState(false);
+  const [optErr, setOptErr] = useState<string | null>(null);
   useEffect(() => { const t = getToken(); if (!t) return; api.gbp.health(t).then(setData).finally(() => setLoading(false)); }, []);
+
+  async function optimize() {
+    const t = getToken(); if (!t) return;
+    setOptBusy(true); setOptErr(null);
+    try { const r = await api.gbp.optimize(t); setOpt(r); if (r.health) setData(r.health); }
+    catch (e) { setOptErr((e as ApiError).message); } finally { setOptBusy(false); }
+  }
 
   if (loading) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Scoring your profile…</span></div>;
   if (!data) return null;
@@ -432,9 +483,26 @@ function HealthTab() {
         </div>
         <div style={{ fontWeight: 800, fontSize: 18, color: "var(--accent)" }}>{data.grade}</div>
         <p className="muted" style={{ fontSize: 12.5 }}>Google Business Profile health</p>
+        <button className="btn" style={{ width: "100%", marginTop: 8 }} disabled={optBusy} onClick={optimize}>{optBusy ? "Optimizing…" : "⚡ One-Click Optimize"}</button>
+        <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>AI builds a prioritized action plan (3 credits).</p>
+        {optErr && <div className="error" style={{ marginTop: 8 }}>{optErr}</div>}
       </div>
 
       <div style={{ display: "grid", gap: 16 }}>
+        {opt && (
+          <div className="panel" style={{ borderLeft: "3px solid var(--accent)" }}>
+            <h2 style={{ fontSize: 15, marginTop: 0 }}>⚡ AI optimization plan {opt.source === "fallback" && <span className="muted" style={{ fontSize: 11, fontWeight: 400 }}>(AI off — basic plan)</span>}</h2>
+            <p style={{ fontSize: 13.5, margin: "4px 0 10px" }}>{opt.summary}</p>
+            <div style={{ display: "grid", gap: 8 }}>
+              {opt.actions.map((a, i) => (
+                <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", fontSize: 13.5 }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, textTransform: "uppercase", color: "#fff", background: prio(a.priority), padding: "2px 7px", borderRadius: 999, flex: "none" }}>{a.priority}</span>
+                  {a.text}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="panel">
           <h2 style={{ fontSize: 15 }}>Sub-scores</h2>
           {data.sub_scores.map((s) => (
@@ -514,10 +582,35 @@ function Stat({ label, value, icon, bg }: { label: string; value: React.ReactNod
   );
 }
 
-function ReplyModal({ review, onClose, onReplied }: { review: GbpReviewItem; onClose: () => void; onReplied: () => void }) {
-  const [text, setText] = useState("");
+function SentimentChip({ s }: { s: GbpReviewItem["sentiment"] }) {
+  if (!s) return null;
+  const c = s === "positive" ? { bg: "#e7f7ef", fg: "#0a7d47", t: "😊 Positive" }
+    : s === "negative" ? { bg: "#fdecec", fg: "#c53030", t: "😟 Negative" }
+    : { bg: "#eef1f2", fg: "#667781", t: "😐 Neutral" };
+  return <span style={{ background: c.bg, color: c.fg, fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>{c.t}</span>;
+}
+
+function ReplyModal({ review, autoSuggest, onClose, onReplied }: { review: GbpReviewItem; autoSuggest?: boolean; onClose: () => void; onReplied: () => void }) {
+  const [text, setText] = useState(review.draft_reply ?? "");
   const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const suggest = useCallback(async () => {
+    const token = getToken(); if (!token) return;
+    setSuggesting(true); setErr(null); setNote(null);
+    try {
+      const res = await api.gbp.suggestReply(token, review.id);
+      setText(res.draft);
+      setNote(res.source === "fallback"
+        ? "AI isn't configured — inserted a suggested template. No credits charged."
+        : `AI draft inserted.${res.credits != null ? ` ${res.credits} credits left.` : ""} Edit it, then post.`);
+    } catch (e) { setErr((e as ApiError).message); } finally { setSuggesting(false); }
+  }, [review.id]);
+
+  // Auto-run the AI suggestion when opened via the "✨ AI reply" button.
+  useEffect(() => { if (autoSuggest && !review.draft_reply) suggest(); }, [autoSuggest, review.draft_reply, suggest]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -534,10 +627,14 @@ function ReplyModal({ review, onClose, onReplied }: { review: GbpReviewItem; onC
           <h2 style={{ margin: 0 }}>Reply to {review.author_name ?? "review"}</h2>
           <button className="btn-mini" onClick={onClose}>Close</button>
         </div>
-        <div style={{ margin: "10px 0", fontSize: 13, color: "#f6a609" }}>{stars(review.rating)}</div>
+        <div style={{ margin: "10px 0", fontSize: 13, color: "#f6a609", display: "flex", gap: 8, alignItems: "center" }}>{stars(review.rating)} <SentimentChip s={review.sentiment} /></div>
         {review.comment && <p className="muted" style={{ fontSize: 13.5 }}>{review.comment}</p>}
         {err && <div className="error">{err}</div>}
+        {note && <div className="panel" style={{ background: "#eef3ff", color: "var(--accent-dark)", fontSize: 12.5, padding: "8px 10px", marginBottom: 8 }}>{note}</div>}
         <form onSubmit={submit}>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+            <button type="button" className="btn-mini" disabled={suggesting} onClick={suggest}>{suggesting ? "Thinking…" : "✨ Suggest with AI"}</button>
+          </div>
           <textarea value={text} onChange={(e) => setText(e.target.value)} required rows={4} placeholder="Write a public reply…"
             style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontFamily: "inherit", resize: "vertical", marginBottom: 10 }} />
           <button className="btn" disabled={saving} style={{ width: "auto", padding: "11px 24px" }}>{saving ? "Posting…" : "Post reply"}</button>

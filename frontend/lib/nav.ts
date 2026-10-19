@@ -37,6 +37,7 @@ export const NAV: NavItem[] = [
 
   // — ReviewFlow extras (per-feature gated) —
   { label: "SEO", href: "/seo", icon: "🔎", feature: "seo" },
+  { label: "AI Studio", href: "/ai-studio", icon: "✨" },
   { label: "Ads Reports", href: "/ads", icon: "📊", feature: "ads" },
   { label: "Invoicing", href: "/invoicing", icon: "🧾", feature: "invoicing" },
 

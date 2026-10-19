@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\GbpLocation;
 use App\Models\GbpPost;
 use App\Models\Integration;
+use App\Modules\Billing\Services\CreditService;
+use App\Modules\Chatbot\Services\AiReplyService;
 use App\Modules\Gbp\Services\GoogleGbpProvider;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +18,49 @@ use Illuminate\Http\Request;
  */
 class GbpPostController extends Controller
 {
+    public function __construct(
+        private readonly AiReplyService $ai,
+        private readonly CreditService $credits,
+    ) {}
+
+    /**
+     * AI-generate a Google post body from a short topic (ReviewFlow §10).
+     * Returns text for the compose form; credit-gated ('ai_caption').
+     */
+    public function generate(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'topic' => ['required', 'string', 'max:500'],
+            'type' => ['nullable', 'in:STANDARD,EVENT,OFFER,ALERT'],
+            'location' => ['nullable', 'string'],
+        ]);
+
+        $tenantId = $request->user()->tenant_id;
+        if ($tenantId && ! $this->credits->canAfford($tenantId, 'ai_caption')) {
+            return $this->fail('You are out of AI credits (' . $this->credits->cost('ai_caption') . ' needed). Top up or upgrade your plan.', ['credits' => ['insufficient']], 402);
+        }
+
+        $business = ! empty($data['location'])
+            ? (GbpLocation::where('uuid', $data['location'])->value('name') ?: 'our business')
+            : (GbpLocation::query()->value('name') ?: 'our business');
+        $type = $data['type'] ?? 'STANDARD';
+
+        $system = 'You write short, engaging Google Business Profile posts (max ~1400 characters, 1 short paragraph + optional 1 line CTA). Plain text, a few tasteful emojis allowed, no markdown or hashtags block.';
+        $user = "Business: {$business}. Post type: {$type}. Topic: {$data['topic']}. Write the post body only.";
+
+        $text = $this->ai->classify($system, [['role' => 'user', 'content' => $user]]);
+        $source = 'ai';
+
+        if (! $text) {
+            $source = 'fallback';
+            $text = "{$data['topic']} — visit {$business} today! Get in touch to learn more.";
+        } else {
+            $this->credits->deduct($tenantId, $request->user()->id, 'ai_caption', 'AI GBP post caption');
+        }
+
+        return $this->ok(['text' => trim($text), 'source' => $source, 'credits' => $tenantId ? $this->credits->balance($tenantId) : null]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = GbpPost::query()->with('location:id,uuid,name')->latest();

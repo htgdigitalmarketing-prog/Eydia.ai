@@ -454,6 +454,22 @@ export const api = {
       request<{ answer: string; snapshot: Record<string, number | string> }>(
         "/assistant/ask", { method: "POST", body: { question, language }, token }
       ),
+    // Open-ended marketing advisor chat (AI Chat Mode).
+    chat: (token: string, message: string, language?: string) =>
+      request<{ answer: string; source: string; credits: number | null }>(
+        "/assistant/chat", { method: "POST", body: { message, language }, token }
+      ),
+  },
+
+  // ---- AI Media generation (text-to-image) ----
+  aiMedia: {
+    list: (token: string) => request<{ media: AiMediaItem[] }>("/ai-media", { token }),
+    generate: (token: string, prompt: string) =>
+      request<{ media: AiMediaItem; source: string; credits: number | null }>(
+        "/ai-media", { method: "POST", body: { prompt }, token }
+      ),
+    remove: (token: string, id: string) =>
+      request<{ message: string }>(`/ai-media/${id}`, { method: "DELETE", token }),
   },
 
   support: {
@@ -572,6 +588,11 @@ export const api = {
     },
     reply: (token: string, id: string, reply: string) =>
       request<{ review: GbpReviewItem }>(`/gbp/reviews/${id}/reply`, { method: "POST", body: { reply }, token }),
+    suggestReply: (token: string, id: string) =>
+      request<{ review: GbpReviewItem; draft: string; source: string; credits: number | null }>(
+        `/gbp/reviews/${id}/suggest`, { method: "POST", token }
+      ),
+    optimize: (token: string) => request<GbpOptimizeResult>("/gbp/optimize", { method: "POST", token }),
     sync: (token: string) => request<{ synced: number; message: string }>("/gbp/sync", { method: "POST", token }),
 
     // Business insights + Google audit / health score
@@ -585,6 +606,8 @@ export const api = {
     // GBP posts (localPosts)
     posts: (token: string, location?: string) =>
       request<{ posts: GbpPostItem[] }>(`/gbp/posts${location ? `?location=${location}` : ""}`, { token }),
+    generatePost: (token: string, body: { topic: string; type?: string; location?: string }) =>
+      request<{ text: string; source: string; credits: number | null }>("/gbp/posts/generate", { method: "POST", body, token }),
     createPost: (token: string, body: GbpPostInput) => request<{ post: GbpPostItem }>("/gbp/posts", { method: "POST", body, token }),
     updatePost: (token: string, id: string, body: Partial<GbpPostInput>) => request<{ post: GbpPostItem }>(`/gbp/posts/${id}`, { method: "PUT", body, token }),
     publishPost: (token: string, id: string) => request<{ post: GbpPostItem }>(`/gbp/posts/${id}/publish`, { method: "POST", token }),
@@ -593,6 +616,8 @@ export const api = {
     // GBP photos (media)
     photos: (token: string, location?: string) =>
       request<{ photos: GbpPhotoItem[] }>(`/gbp/photos${location ? `?location=${location}` : ""}`, { token }),
+    captionPhoto: (token: string, body: { topic: string; location?: string }) =>
+      request<{ text: string; source: string; credits: number | null }>("/gbp/photos/caption", { method: "POST", body, token }),
     createPhoto: (token: string, body: GbpPhotoInput) => request<{ photo: GbpPhotoItem }>("/gbp/photos", { method: "POST", body, token }),
     publishPhoto: (token: string, id: string) => request<{ photo: GbpPhotoItem }>(`/gbp/photos/${id}/publish`, { method: "POST", token }),
     deletePhoto: (token: string, id: string) => request<{ message: string }>(`/gbp/photos/${id}`, { method: "DELETE", token }),
@@ -896,8 +921,28 @@ export type GbpReviewItem = {
   rating: number;
   comment: string | null;
   reply: string | null;
+  draft_reply: string | null;
+  sentiment: "positive" | "negative" | "neutral" | null;
   replied_at: string | null;
   reviewed_at: string | null;
+};
+
+export type GbpOptimizeResult = {
+  source: "ai" | "fallback";
+  summary: string;
+  actions: { priority: string; text: string }[];
+  health: GbpHealth;
+  credits: number | null;
+};
+
+export type AiMediaItem = {
+  id: string;
+  type: string;
+  prompt: string;
+  image_data: string | null;
+  model: string | null;
+  source: "ai" | "fallback";
+  created_at: string | null;
 };
 
 export type GbpOverview = {

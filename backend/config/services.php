@@ -54,6 +54,8 @@ return [
         'key'   => env('GEMINI_API_KEY'),
         // Fast, low-cost default; override with GEMINI_MODEL (e.g. gemini-1.5-flash).
         'model' => env('GEMINI_MODEL', 'gemini-3.6-flash'),
+        // Text-to-image model for AI Media generation (Gemini only).
+        'image_model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image'),
     ],
 
     // Mobile push. Expo needs no key; legacy FCM needs FCM_SERVER_KEY.

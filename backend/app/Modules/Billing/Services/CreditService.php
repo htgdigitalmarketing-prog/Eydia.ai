@@ -17,6 +17,7 @@ class CreditService
     public const COSTS = [
         'ai_chat' => 1,
         'ai_review_reply' => 1,
+        'ai_caption' => 1,
         'ai_keyword_gen' => 2,
         'ai_rank_check' => 1,
         'ai_competitor' => 2,

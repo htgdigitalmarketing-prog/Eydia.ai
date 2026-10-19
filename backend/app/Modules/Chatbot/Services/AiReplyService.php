@@ -152,6 +152,59 @@ class AiReplyService
         return $this->providerChain();
     }
 
+    /** Is a Gemini key configured (image generation is Gemini-only)? */
+    public function canGenerateImages(): bool
+    {
+        return (bool) config('services.gemini.key');
+    }
+
+    /**
+     * Generate an image from a text prompt via Gemini's image model. Returns a
+     * `data:` URI (base64) the caller can store/display, or null when no Gemini
+     * key is set or the call fails — so callers can fall back to a placeholder.
+     */
+    public function generateImage(string $prompt): ?string
+    {
+        $apiKey = config('services.gemini.key');
+        if (! $apiKey) {
+            return null;
+        }
+
+        $model = config('services.gemini.image_model', 'gemini-2.5-flash-image');
+        $url = self::GEMINI_ENDPOINT . $model . ':generateContent?key=' . urlencode($apiKey);
+
+        try {
+            $res = Http::timeout(60)->post($url, [
+                'contents' => [[
+                    'role' => 'user',
+                    'parts' => [['text' => $prompt]],
+                ]],
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning('AI image generation failed: ' . $e->getMessage());
+            return null;
+        }
+
+        if ($res->failed()) {
+            Log::warning('Gemini image API error', ['status' => $res->status(), 'body' => $res->json('error.message')]);
+            return null;
+        }
+
+        // The image comes back as an inline_data part (base64). Grab the first one.
+        foreach ($res->json('candidates.0.content.parts', []) as $part) {
+            $data = $part['inline_data']['data'] ?? $part['inlineData']['data'] ?? null;
+            if ($data) {
+                $mime = $part['inline_data']['mime_type'] ?? $part['inlineData']['mimeType'] ?? 'image/png';
+
+                return "data:{$mime};base64,{$data}";
+            }
+        }
+
+        Log::warning('Gemini image API returned no image data', ['model' => $model]);
+
+        return null;
+    }
+
     /** @param array<int, array{role:string, content:string}> $messages */
     private function callGemini(string $system, array $messages): ?string
     {

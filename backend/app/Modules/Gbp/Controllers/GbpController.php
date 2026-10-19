@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\GbpLocation;
 use App\Models\GbpReview;
 use App\Models\Integration;
+use App\Modules\Billing\Services\CreditService;
+use App\Modules\Chatbot\Services\AiReplyService;
 use App\Modules\Gbp\Services\GbpHealthService;
 use App\Modules\Gbp\Services\GbpSyncService;
 use App\Modules\Gbp\Services\GoogleGbpProvider;
+use App\Modules\Gbp\Services\SentimentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -20,6 +23,26 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  */
 class GbpController extends Controller
 {
+    public function __construct(
+        private readonly AiReplyService $ai,
+        private readonly CreditService $credits,
+        private readonly SentimentService $sentiment,
+    ) {}
+
+    /** 402 when the tenant cannot afford an AI action; null when it can. */
+    private function guardCredits(Request $request, string $action): ?JsonResponse
+    {
+        $tenantId = $request->user()->tenant_id;
+        if ($tenantId && ! $this->credits->canAfford($tenantId, $action)) {
+            return $this->fail(
+                'You are out of AI credits (' . $this->credits->cost($action) . ' needed). Top up or upgrade your plan to continue.',
+                ['credits' => ['insufficient']],
+                402,
+            );
+        }
+
+        return null;
+    }
     /** Dashboard overview: locations + aggregate rating stats. */
     public function overview(Request $request): JsonResponse
     {
@@ -96,6 +119,104 @@ class GbpController extends Controller
         $review->update(['reply' => $data['reply'], 'replied_at' => now()]);
 
         return $this->ok(['review' => $this->reviewArray($review->fresh('location'))]);
+    }
+
+    /**
+     * Generate an AI draft reply for a review (ReviewFlow §8). The draft is
+     * cached on the review; the user edits and posts it via reply(). Credit-gated
+     * ('ai_review_reply'); falls back to a polite template when AI is unavailable.
+     */
+    public function suggestReply(Request $request, string $uuid): JsonResponse
+    {
+        if ($blocked = $this->guardCredits($request, 'ai_review_reply')) {
+            return $blocked;
+        }
+
+        $review = GbpReview::with('location')->where('uuid', $uuid)->firstOrFail();
+        $business = $review->location?->name ?: 'our business';
+        $stars = (int) $review->rating;
+        $comment = trim((string) $review->comment) ?: '(no comment text)';
+
+        $system = implode("\n", [
+            "You are the owner of \"{$business}\" replying to a Google review. Write ONE short, warm, professional reply (2-3 sentences).",
+            '- Thank the reviewer by sentiment; address concerns in low-star reviews and offer to make it right.',
+            '- Never be defensive or argumentative. No markdown, no hashtags, plain text only.',
+            '- Reply in the language the review is written in.',
+        ]);
+        $user = "This is a {$stars}-star review from {$review->author_name}: \"{$comment}\". Write the owner's reply.";
+
+        $draft = $this->ai->classify($system, [['role' => 'user', 'content' => $user]]);
+        $source = 'ai';
+
+        if (! $draft) {
+            // Honest fallback so the feature still helps when AI is off.
+            $source = 'fallback';
+            $draft = $stars >= 4
+                ? "Thank you so much for your kind words and {$stars}-star rating! We're delighted you had a great experience and look forward to serving you again."
+                : "Thank you for your feedback, and we're sorry your experience fell short. We'd love the chance to make this right — please reach out to us directly so we can help.";
+        }
+
+        $review->update([
+            'draft_reply' => $draft,
+            'sentiment' => $review->sentiment ?: $this->sentiment->classify($review->comment),
+        ]);
+
+        if ($source === 'ai') {
+            $this->credits->deduct($request->user()->tenant_id, $request->user()->id, 'ai_review_reply', 'AI review reply draft');
+        }
+
+        return $this->ok([
+            'review' => $this->reviewArray($review->fresh('location')),
+            'draft' => $draft,
+            'source' => $source,
+            'credits' => $this->credits->balance($request->user()->tenant_id),
+        ]);
+    }
+
+    /**
+     * One-Click Optimization (ReviewFlow §20): take the computed health score as a
+     * factual anchor and ask the AI for a prioritized, business-specific action
+     * plan. Credit-gated ('ai_optimize'); falls back to the health "do next" list.
+     */
+    public function optimize(Request $request, GbpHealthService $health): JsonResponse
+    {
+        if ($blocked = $this->guardCredits($request, 'ai_optimize')) {
+            return $blocked;
+        }
+
+        $report = $health->compute();
+        $business = GbpLocation::query()->value('name') ?: 'this business';
+        $subScores = collect($report['sub_scores'])
+            ->map(fn ($s) => "{$s['label']}: {$s['detail']} ({$s['score']}/100)")
+            ->implode('; ');
+
+        $system = 'You are a local-SEO consultant optimizing a Google Business Profile. Return ONLY JSON.';
+        $user = "Business: {$business}. Overall health {$report['score']}/100 ({$report['grade']}). Sub-scores: {$subScores}.\n"
+            . 'Return {"summary":"2-3 sentences on the biggest opportunities","actions":[{"priority":"critical|high|medium|low","text":"one concrete step"}]} with 5-7 prioritized actions.';
+
+        $raw = $this->ai->classify($system, [['role' => 'user', 'content' => $user]]);
+        $parsed = $raw ? json_decode(trim(preg_replace('/```json|```/', '', $raw)), true) : null;
+
+        if (is_array($parsed) && ! empty($parsed['actions'])) {
+            $this->credits->deduct($request->user()->tenant_id, $request->user()->id, 'ai_optimize', 'One-click optimization');
+
+            return $this->ok([
+                'source' => 'ai',
+                'summary' => $parsed['summary'] ?? 'Here is your prioritized optimization plan.',
+                'actions' => $parsed['actions'],
+                'health' => $report,
+                'credits' => $this->credits->balance($request->user()->tenant_id),
+            ]);
+        }
+
+        // Fallback: the deterministic "do next" list from the health service.
+        return $this->ok([
+            'source' => 'fallback',
+            'summary' => "Your profile scores {$report['score']}/100 ({$report['grade']}). Work through these steps to improve it. (Configure an AI provider for a tailored plan.)",
+            'actions' => $report['actions'],
+            'health' => $report,
+            'credits' => $this->credits->balance($request->user()->tenant_id),
+        ]);
     }
 
     /** Re-sync locations & reviews from Google for this tenant. */
@@ -234,6 +355,8 @@ class GbpController extends Controller
             'rating' => $r->rating,
             'comment' => $r->comment,
             'reply' => $r->reply,
+            'draft_reply' => $r->draft_reply,
+            'sentiment' => $r->sentiment ?: $this->sentiment->classify($r->comment),
             'replied_at' => $r->replied_at?->toIso8601String(),
             'reviewed_at' => $r->reviewed_at?->toIso8601String(),
         ];
