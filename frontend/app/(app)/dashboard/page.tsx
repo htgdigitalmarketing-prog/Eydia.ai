@@ -12,23 +12,23 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 type DashCard = {
-  key: string; title: string; tag: string; icon: string; href: string; gradient: string; desc: string; jelly: string;
+  key: string; title: string; tag: string; icon: string; href: string; gradient: string; desc: string;
 };
 
 const CARDS: DashCard[] = [
   {
     key: "dash_whatsapp", title: "WhatsApp Marketing", tag: "Messaging", icon: "💬",
-    href: "/inbox", gradient: "linear-gradient(135deg,#22c7f5,#3b82f6)", jelly: "/jellyfish/blue.png",
+    href: "/inbox", gradient: "linear-gradient(135deg,#22c7f5,#3b82f6)",
     desc: "Team inbox, bulk campaigns, templates, AI chatbot and social publishing.",
   },
   {
     key: "dash_gbp", title: "Google Reviews / GBP", tag: "Reputation", icon: "⭐",
-    href: "/gbp", gradient: "linear-gradient(135deg,#f6a609,#f26f21)", jelly: "/jellyfish/pink.png",
+    href: "/gbp", gradient: "linear-gradient(135deg,#f6a609,#f26f21)",
     desc: "Monitor locations, read & reply to Google reviews, rating analytics.",
   },
   {
     key: "dash_leads", title: "Lead Management", tag: "Sales CRM", icon: "🎯",
-    href: "/leads", gradient: "linear-gradient(135deg,#8b5cf6,#a855f7)", jelly: "/jellyfish/purple.png",
+    href: "/leads", gradient: "linear-gradient(135deg,#8b5cf6,#a855f7)",
     desc: "Capture leads from Google / Meta / manual, work them through a Kanban pipeline.",
   },
 ];
@@ -97,7 +97,6 @@ export default function DashboardHub() {
 
   return (
     <div className="hub">
-      <img className="hub-bg-jelly" src="/jellyfish/white.png" alt="" aria-hidden />
       <div className="hub-top">
         <div className="brand-lockup">
           <span className="brand-mark brand-mark-lg">e</span>
@@ -158,7 +157,6 @@ export default function DashboardHub() {
               return (
                 <div key={c.key} className={`hub-card ${allowed ? "" : "locked"}`} style={{ ["--card-grad" as string]: c.gradient } as React.CSSProperties}>
                   <span className="hub-card-glow" />
-                  <img className="hub-jelly" src={c.jelly} alt="" aria-hidden />
                   {!allowed && <span className="hub-lock-pill">🔒 Locked</span>}
                   <div className="hub-ic">{c.icon}</div>
                   <div className="hub-tag">{c.tag}</div>
