@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useUser } from "@/lib/user-context";
 import { hasFeature } from "@/components/PlanGate";
-import { api } from "@/lib/api";
+import { api, Company } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -40,6 +40,13 @@ const ADMIN_LINKS = [
   { href: "/support", icon: "🎧", title: "Support", desc: "Tenant support tickets & requests.", gradient: "linear-gradient(135deg,#f6a609,#f26f21)" },
 ];
 
+const PLAN_GRADS = [
+  "linear-gradient(135deg,#22c7f5,#3b82f6)",
+  "linear-gradient(135deg,#8b5cf6,#a855f7)",
+  "linear-gradient(135deg,#f6a609,#f26f21)",
+  "linear-gradient(135deg,#34d399,#059669)",
+];
+
 type Kpi = { numbers?: number; reviews?: number; rating?: number; leads?: number; won?: number };
 type AdminStats = { companies: number; active: number; plans: number; users: number };
 
@@ -61,6 +68,8 @@ export default function DashboardHub() {
 
   const [kpi, setKpi] = useState<Kpi>({});
   const [admin, setAdmin] = useState<AdminStats | null>(null);
+  const [adminCompanies, setAdminCompanies] = useState<Company[]>([]);
+  const [adminPlans, setAdminPlans] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
     const token = getToken();
@@ -69,6 +78,8 @@ export default function DashboardHub() {
     if (isAdmin) {
       api.admin.companies(token).then((d) => {
         const companies = d.companies ?? [];
+        setAdminCompanies(companies);
+        setAdminPlans(d.plans ?? []);
         setAdmin({
           companies: companies.length,
           active: companies.filter((c) => c.status === "active").length,
@@ -132,6 +143,33 @@ export default function DashboardHub() {
                 </div>
               </Link>
             ))}
+          </div>
+
+          <p className="hub-section-label" style={{ marginTop: 30 }}>Customers by plan</p>
+          <div className="hub-grid">
+            {adminPlans.map((p, i) => {
+              const count = adminCompanies.filter((c) => c.plan_name === p.name).length;
+              return (
+                <Link key={p.id} href={`/companies?plan=${encodeURIComponent(p.name)}`} className="hub-card hub-link" style={{ ["--card-grad" as string]: PLAN_GRADS[i % PLAN_GRADS.length] } as React.CSSProperties}>
+                  <span className="hub-card-glow" />
+                  <div className="hub-ic">📋</div>
+                  <div className="hub-link-body">
+                    <h3>{p.name}</h3>
+                    <p>{count} customer{count === 1 ? "" : "s"} · View list →</p>
+                  </div>
+                </Link>
+              );
+            })}
+            {adminCompanies.some((c) => !c.plan_name) && (
+              <Link href="/companies?plan=__none__" className="hub-card hub-link" style={{ ["--card-grad" as string]: "linear-gradient(135deg,#94a3b8,#64748b)" } as React.CSSProperties}>
+                <span className="hub-card-glow" />
+                <div className="hub-ic">—</div>
+                <div className="hub-link-body">
+                  <h3>No plan</h3>
+                  <p>{adminCompanies.filter((c) => !c.plan_name).length} customers · View list →</p>
+                </div>
+              </Link>
+            )}
           </div>
 
           <p className="hub-foot">

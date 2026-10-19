@@ -431,6 +431,10 @@ export const api = {
       request<{ users: CompanyUser[] }>(`/admin/companies/${id}/users`, { token }),
     resetUserPassword: (token: string, id: string, userId: string, password: string) =>
       request<{ message: string }>(`/admin/companies/${id}/users/${userId}/reset-password`, { method: "POST", body: { password }, token }),
+    updateCompany: (token: string, id: string, body: { company_name?: string; owner_name?: string; owner_email?: string; phone?: string; password?: string }) =>
+      request<{ message: string; company: Company }>(`/admin/companies/${id}`, { method: "PUT", body, token }),
+    payments: (token: string) =>
+      request<{ payments: AdminPayment[]; stats: { count: number; paid: number; revenue: string } }>("/admin/payments", { token }),
 
     plans: (token: string) =>
       request<{ plans: AdminPlan[]; limit_keys: string[]; feature_keys: string[] }>("/admin/plans", { token }),
@@ -1069,6 +1073,19 @@ export type CompanyUser = {
   email: string;
   status: string;
   role: string;
+};
+
+export type AdminPayment = {
+  id: string;
+  number: string;
+  company: string;
+  customer: string | null;
+  plan: string | null;
+  status: string;
+  gateway: string;
+  payment_id: string | null;
+  total: string;
+  issued_at: string | null;
 };
 
 export type AdminPlan = {

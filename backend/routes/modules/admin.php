@@ -9,7 +9,11 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('admin')->middleware('super_admin')->group(function () {
     Route::get('/companies', [CompanyController::class, 'index']);
     Route::post('/companies', [CompanyController::class, 'store']);
+    Route::put('/companies/{uuid}', [CompanyController::class, 'update']);
     Route::post('/companies/{uuid}/toggle', [CompanyController::class, 'toggle']);
+
+    // Platform-wide payment history (all companies).
+    Route::get('/payments', [CompanyController::class, 'payments']);
     Route::post('/companies/{uuid}/plan', [CompanyController::class, 'assignPlan']);
     Route::post('/companies/{uuid}/credits', [CompanyController::class, 'addCredits']);
     Route::get('/companies/{uuid}/users', [CompanyController::class, 'users']);

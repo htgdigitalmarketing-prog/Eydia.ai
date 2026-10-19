@@ -163,8 +163,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="shell">
         {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
         <aside className={`sidebar ${sidebarOpen ? "sidebar-open" : ""}`}>
-          <div className="logo" style={{ margin: "-20px -14px 14px", padding: "20px 14px 16px", display: "flex", justifyContent: "center", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
-            <img src="/eydia-logo-white.png" alt="Eydia.ai Automate · Engage · Grow" style={{ width: "100%", maxWidth: 150, height: "auto", display: "block", filter: "drop-shadow(0 6px 16px rgba(91,107,245,.35))" }} />
+          <div className="logo" style={{ margin: "-20px -14px 14px", padding: "20px 14px 16px", display: "flex", justifyContent: "center", borderBottom: "1px solid var(--border)" }}>
+            <img src="/eydia-logo.png" alt="Eydia.ai Automate · Engage · Grow" style={{ width: "100%", maxWidth: 150, height: "auto", display: "block" }} />
           </div>
           <nav>
             {navFor(user).map((item) => {
@@ -177,7 +177,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,.12)" }}>
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
             <div className="side-user">
               <div className="side-avatar">
                 {(user.name || "?").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase()}
@@ -191,7 +191,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <button className="side-logout" onClick={logout}>Log out</button>
-            <div style={{ marginTop: 14, fontSize: 11, color: "#6f80a4", lineHeight: 1.5 }}>
+            <div style={{ marginTop: 14, fontSize: 11, color: "var(--muted)", lineHeight: 1.5 }}>
               © {new Date().getFullYear()} Eydia.ai · Automate · Engage · Grow
             </div>
           </div>

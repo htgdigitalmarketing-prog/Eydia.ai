@@ -11,6 +11,8 @@ use App\Modules\Auth\Actions\RegisterTenantAction;
 use App\Modules\Auth\DTOs\RegisterData;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 /**
  * Platform (super-admin) management of companies. A "company" is a tenant plus
@@ -129,6 +131,94 @@ class CompanyController extends Controller
                 'created_at' => $tenant->created_at?->toIso8601String(),
             ],
         ], 201);
+    }
+
+    /**
+     * Super admin updates a company and its owner (admin) account:
+     * company name, owner name/email/mobile and — optionally — a new password.
+     */
+    public function update(Request $request, string $uuid): JsonResponse
+    {
+        $this->ensureSuperAdmin($request);
+        $tenant = $this->findTenant($uuid);
+        $owner = User::where('tenant_id', $tenant->id)->orderBy('id')->first();
+
+        $data = $request->validate([
+            'company_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'owner_name' => ['sometimes', 'required', 'string', 'max:255'],
+            'owner_email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($owner?->id)],
+            'phone' => ['nullable', 'string', 'max:32'],
+            'password' => ['nullable', 'string', 'min:8'],
+        ]);
+
+        if (array_key_exists('company_name', $data)) {
+            $tenant->update(['company_name' => $data['company_name'], 'name' => $data['company_name']]);
+        }
+
+        if ($owner) {
+            $u = [];
+            if (array_key_exists('owner_name', $data)) $u['name'] = $data['owner_name'];
+            if (array_key_exists('owner_email', $data)) $u['email'] = $data['owner_email'];
+            if (array_key_exists('phone', $data)) $u['phone'] = $data['phone'];
+            if (! empty($data['password'])) $u['password'] = Hash::make($data['password']);
+            if ($u) $owner->update($u);
+        }
+
+        return $this->ok([
+            'message' => 'Company updated successfully.',
+            'company' => [
+                'id' => $tenant->uuid ?? (string) $tenant->id,
+                'name' => $tenant->company_name ?? $tenant->name,
+                'owner_name' => $owner?->name,
+                'owner_email' => $owner?->email,
+                'status' => $tenant->status,
+            ],
+        ]);
+    }
+
+    /**
+     * Platform-wide payment history: every plan invoice across all companies
+     * (online Razorpay payments and free activations), newest first.
+     */
+    public function payments(Request $request): JsonResponse
+    {
+        $this->ensureSuperAdmin($request);
+
+        $invoices = \App\Models\Invoice::withoutGlobalScopes()
+            ->orderByDesc('issued_at')->orderByDesc('id')
+            ->limit(500)->get();
+
+        $names = Tenant::query()->pluck('company_name', 'id');
+        $altNames = Tenant::query()->pluck('name', 'id');
+
+        $paid = $invoices->where('status', 'paid');
+
+        return $this->ok([
+            'payments' => $invoices->map(fn ($inv) => [
+                'id' => $inv->uuid,
+                'number' => $inv->number,
+                'company' => $names[$inv->tenant_id] ?? $altNames[$inv->tenant_id] ?? ('Company #' . $inv->tenant_id),
+                'customer' => data_get($inv->meta, 'customer.name'),
+                'plan' => data_get($inv->meta, 'plan_name'),
+                'status' => $inv->status,
+                'gateway' => $inv->gateway,
+                'payment_id' => $inv->gateway_invoice_id,
+                'total' => $this->money($inv->total_minor, $inv->currency),
+                'issued_at' => $inv->issued_at?->toIso8601String(),
+            ])->values(),
+            'stats' => [
+                'count' => $invoices->count(),
+                'paid' => $paid->count(),
+                'revenue' => $this->money((int) $paid->sum('total_minor')),
+            ],
+        ]);
+    }
+
+    /** Format minor units (paise) into a currency string like "₹1,250.00". */
+    private function money(int $minor, string $currency = 'INR'): string
+    {
+        $symbol = $currency === 'INR' ? '₹' : ($currency === 'USD' ? '$' : $currency . ' ');
+        return $symbol . number_format($minor / 100, 2);
     }
 
     /** All users (owner + agents) of a company — for super-admin management. */

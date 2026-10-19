@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { api, ApiError, Company, CompanyUser } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { useUser } from "@/lib/user-context";
@@ -26,7 +27,47 @@ export default function CompaniesPage() {
   const [companyUsers, setCompanyUsers] = useState<CompanyUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
 
+  // Edit-company panel
+  const [editing, setEditing] = useState<Company | null>(null);
+  const [editForm, setEditForm] = useState({ company_name: "", owner_name: "", owner_email: "", phone: "", password: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Plan filter (seeded from ?plan= so the super-admin dashboard can deep-link).
+  const sp = useSearchParams();
+  const [filterPlan, setFilterPlan] = useState("");
+  useEffect(() => { setFilterPlan(sp.get("plan") ?? ""); }, [sp]);
+
   const isSuper = !!me.is_super_admin;
+
+  function openEdit(c: Company) {
+    setEditing(c);
+    setEditForm({ company_name: c.name, owner_name: c.owner_name ?? "", owner_email: c.owner_email ?? "", phone: "", password: "" });
+  }
+
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    const token = getToken();
+    if (!token || !editing) return;
+    setSavingEdit(true);
+    setError(null);
+    try {
+      const body: { company_name?: string; owner_name?: string; owner_email?: string; phone?: string; password?: string } = {
+        company_name: editForm.company_name,
+        owner_name: editForm.owner_name,
+        owner_email: editForm.owner_email,
+      };
+      if (editForm.phone) body.phone = editForm.phone;
+      if (editForm.password) body.password = editForm.password;
+      const res = await api.admin.updateCompany(token, editing.id, body);
+      flash(res.message);
+      setEditing(null);
+      await load();
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setSavingEdit(false);
+    }
+  }
 
   async function openUsers(c: Company) {
     const token = getToken();
@@ -168,6 +209,11 @@ export default function CompaniesPage() {
   }
 
   const active = companies.filter((c) => c.status !== "suspended").length;
+  const filtered = !filterPlan
+    ? companies
+    : filterPlan === "__none__"
+      ? companies.filter((c) => !c.plan_name)
+      : companies.filter((c) => c.plan_name === filterPlan);
 
   return (
     <div>
@@ -185,6 +231,23 @@ export default function CompaniesPage() {
         <div className="stat-card"><div className="ic" style={{ background: "#e7f7ef" }}>✅</div><div><div className="sc-label">Active</div><div className="sc-value">{active}</div></div></div>
         <div className="stat-card"><div className="ic" style={{ background: "#fdecec" }}>⛔</div><div><div className="sc-label">Suspended</div><div className="sc-value">{companies.length - active}</div></div></div>
       </div>
+
+      {/* Filter by plan (also deep-linked from the dashboard) */}
+      {companies.length > 0 && (
+        <div className="panel" style={{ padding: 12, marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Filter by plan</span>
+          <select value={filterPlan} onChange={(e) => setFilterPlan(e.target.value)}
+            style={{ padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 13 }}>
+            <option value="">All plans ({companies.length})</option>
+            {plans.map((p) => (
+              <option key={p.id} value={p.name}>{p.name} ({companies.filter((c) => c.plan_name === p.name).length})</option>
+            ))}
+            {companies.some((c) => !c.plan_name) && <option value="__none__">No plan ({companies.filter((c) => !c.plan_name).length})</option>}
+          </select>
+          {filterPlan && <button className="btn-mini" onClick={() => setFilterPlan("")}>Clear filter</button>}
+          <span className="muted" style={{ fontSize: 12, marginLeft: "auto" }}>Showing {filtered.length} of {companies.length}</span>
+        </div>
+      )}
 
       {loading ? (
         <LoadingBlock label="Loading companies…" />
@@ -209,7 +272,10 @@ export default function CompaniesPage() {
               </tr>
             </thead>
             <tbody>
-              {companies.map((c) => (
+              {filtered.length === 0 && (
+                <tr><td colSpan={6} style={{ padding: "24px 14px", textAlign: "center" }}><span className="muted">No companies on this plan.</span></td></tr>
+              )}
+              {filtered.map((c) => (
                 <tr key={c.id} style={{ borderBottom: "1px solid #f4f6f7" }}>
                   <td style={{ padding: "12px 14px", fontWeight: 600 }}>{c.name}</td>
                   <td style={{ padding: "12px 14px" }}>
@@ -234,7 +300,8 @@ export default function CompaniesPage() {
                     }}>{c.status}</span>
                   </td>
                   <td style={{ padding: "12px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
-                    <button className="btn-mini" onClick={() => openUsers(c)}>Users</button>
+                    <button className="btn-mini" onClick={() => openEdit(c)}>Edit</button>
+                    <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => openUsers(c)}>Users</button>
                     <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => topUpCredits(c)}>+ Credits</button>
                     <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => toggleCompany(c)}>{c.status === "suspended" ? "Reactivate" : "Suspend"}</button>
                     <button className="btn-mini" style={{ color: "#c53030", marginLeft: 6 }} onClick={() => removeCompany(c)}>Delete</button>
@@ -243,6 +310,44 @@ export default function CompaniesPage() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {editing && (
+        <div className="msg-info-overlay" onClick={() => setEditing(null)}>
+          <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 460 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ marginTop: 0 }}>Edit company</h2>
+              <button className="btn-mini" onClick={() => setEditing(null)}>Close</button>
+            </div>
+            <p className="muted" style={{ fontSize: 13, marginTop: 0 }}>Update the company &amp; its owner (admin) account.</p>
+            <form onSubmit={saveEdit}>
+              <div className="field">
+                <label>Company name</label>
+                <input value={editForm.company_name} onChange={(e) => setEditForm((f) => ({ ...f, company_name: e.target.value }))} required />
+              </div>
+              <div className="field">
+                <label>Owner name</label>
+                <input value={editForm.owner_name} onChange={(e) => setEditForm((f) => ({ ...f, owner_name: e.target.value }))} required />
+              </div>
+              <div className="field">
+                <label>Owner email</label>
+                <input type="email" value={editForm.owner_email} onChange={(e) => setEditForm((f) => ({ ...f, owner_email: e.target.value }))} required />
+              </div>
+              <div className="field">
+                <label>Mobile <span className="muted">(leave blank to keep)</span></label>
+                <input value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+91…" />
+              </div>
+              <div className="field">
+                <label>New password <span className="muted">(leave blank to keep)</span></label>
+                <input type="text" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} minLength={8} placeholder="Min 8 characters" />
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button className="btn" disabled={savingEdit}>{savingEdit ? "Saving…" : "Save changes"}</button>
+                <button type="button" className="btn-mini" onClick={() => setEditing(null)}>Cancel</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
