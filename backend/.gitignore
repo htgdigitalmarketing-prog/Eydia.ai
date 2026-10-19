@@ -1,0 +1,19 @@
+/vendor
+/node_modules
+.env
+.phpunit.result.cache
+/storage/*.key
+/public/storage
+# Runtime caches must never be deployed: they hold DB ids from the machine that built them.
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitkeep
+/storage/framework/views/*
+!/storage/framework/views/.gitkeep
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitkeep
+/storage/framework/testing
+/bootstrap/cache/*.php
+/storage/logs/*.log
+
+# Runtime-downloaded WhatsApp media (not source)
+storage/app/whatsapp/media/
