@@ -118,7 +118,7 @@ export default function LoginPage() {
             type="button"
             className="google-btn"
             onClick={() => { setMode("password"); setError(null); setNotice(null); }}
-            style={{ flex: 1, minWidth: 0, padding: "10px 8px", fontSize: 13, gap: 6, ...(mode === "password" ? { borderColor: "#5b6bf5", boxShadow: "0 0 0 1px #5b6bf5 inset", color: "#5b6bf5" } : {}) }}
+            style={{ flex: 1, minWidth: 0, padding: "10px 8px", fontSize: 13, gap: 6, ...(mode === "password" ? { borderColor: "var(--accent)", boxShadow: "0 0 0 1px var(--accent) inset", color: "var(--accent)" } : {}) }}
           >
             <span style={{ fontSize: 15 }}>📧</span> Email &amp; Password
           </button>
@@ -126,7 +126,7 @@ export default function LoginPage() {
             type="button"
             className="google-btn"
             onClick={() => { setMode("otp"); setError(null); setNotice(null); }}
-            style={{ flex: 1, minWidth: 0, padding: "10px 8px", fontSize: 13, gap: 6, ...(mode === "otp" ? { borderColor: "#5b6bf5", boxShadow: "0 0 0 1px #5b6bf5 inset", color: "#5b6bf5" } : {}) }}
+            style={{ flex: 1, minWidth: 0, padding: "10px 8px", fontSize: 13, gap: 6, ...(mode === "otp" ? { borderColor: "var(--accent)", boxShadow: "0 0 0 1px var(--accent) inset", color: "var(--accent)" } : {}) }}
           >
             <span style={{ fontSize: 15 }}>📱</span> Mobile OTP
           </button>
@@ -178,7 +178,7 @@ export default function LoginPage() {
                 <button type="button" onClick={() => { setOtpSent(false); setOtp(""); setNotice(null); }}
                   style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 12, cursor: "pointer", padding: 0 }}>← Change number</button>
                 <button type="button" disabled={resendIn > 0 || loading} onClick={(e) => sendOtp(e)}
-                  style={{ background: "none", border: "none", color: resendIn > 0 ? "var(--muted)" : "#5b6bf5", fontSize: 12, cursor: resendIn > 0 ? "default" : "pointer", padding: 0 }}>
+                  style={{ background: "none", border: "none", color: resendIn > 0 ? "var(--muted)" : "var(--accent)", fontSize: 12, cursor: resendIn > 0 ? "default" : "pointer", padding: 0 }}>
                   {resendIn > 0 ? `Resend in ${resendIn}s` : "Resend code"}
                 </button>
               </div>
@@ -191,8 +191,8 @@ export default function LoginPage() {
           New here? <Link href="/register">Create an account</Link>
         </div>
       </div>
-      <div style={{ marginTop: 18, fontSize: 12, color: "rgba(255,255,255,0.85)", textAlign: "center" }}>
-        © {new Date().getFullYear()} Eydia.ai
+      <div style={{ marginTop: 18, fontSize: 12, color: "var(--muted)", textAlign: "center" }}>
+        © {new Date().getFullYear()} Eydia.ai · Automate · Engage · Grow
       </div>
     </div>
   );

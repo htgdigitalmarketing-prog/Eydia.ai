@@ -62,18 +62,25 @@ a:hover { text-decoration: underline; }
   display: grid;
   place-items: center;
   padding: 24px;
-  background: radial-gradient(1200px 600px at 100% 0%, rgba(34,199,245,.18), transparent 60%),
-              radial-gradient(900px 500px at 0% 100%, rgba(139,92,246,.22), transparent 60%),
-              linear-gradient(135deg, #0a0e27 0%, #141c45 45%, #2b1e63 100%);
+  background: radial-gradient(900px 520px at 100% 0%, rgba(123,47,247,.12), transparent 60%),
+              radial-gradient(820px 480px at 0% 100%, rgba(25,198,214,.13), transparent 60%),
+              linear-gradient(180deg, #f1f0ff 0%, #eef2ff 55%, #eafaf6 100%);
 }
 
 .card {
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   background: var(--card);
-  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  border-radius: 20px;
   padding: 32px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 24px 60px rgba(15, 27, 45, 0.12);
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 5px;
+  background: var(--brand-grad);
 }
 
 .brand {

@@ -1,42 +1,101 @@
+import Link from "next/link";
+
+export const metadata = { title: "About · Eydia.ai" };
+
+const DOES = [
+  { t: "Get found on Google", d: "The GBP AI Agent rewrites your profile with top keywords, replies to every review, posts daily and schedules photos — so more customers discover you." },
+  { t: "Turn enquiries into bookings", d: "The WhatsApp Chat Agent answers questions, nurtures leads, confirms slots and follows up when chats go quiet — multilingual, 24/7." },
+  { t: "Bring customers back", d: "The WhatsApp Marketing Agent runs campaigns, offers, reminders and broadcasts with full delivery, read and reply tracking." },
+  { t: "Manage every lead in one CRM", d: "Leads from Google, Meta and manual sources land in one pipeline, sorted by intent, with automatic follow-ups." },
+  { t: "Work as a team", d: "A shared inbox with role-based access so owners, managers and agents see exactly what they need." },
+  { t: "Track performance", d: "Dashboards for messages, campaigns, reviews, agents and delivery rates — the whole picture in one place." },
+];
+
+const WHY = [
+  { t: "Official Meta & Google partner", d: "Built on the WhatsApp Cloud API and Google Business Profile APIs, fully compliant with platform policies." },
+  { t: "Multi-tenant SaaS", d: "Each business gets its own secure, isolated workspace." },
+  { t: "No code required", d: "Agents, automations and campaigns set up without any technical knowledge." },
+  { t: "Secure by design", d: "Credentials encrypted at rest, HTTPS everywhere, role-based access and audit logging." },
+  { t: "Flexible pricing", d: "Plans for businesses of every size, with pay-as-you-go messaging costs." },
+];
+
 export default function AboutUs() {
   return (
-    <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 20px", fontFamily: "system-ui, sans-serif", lineHeight: 1.7, color: "#333" }}>
-      <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 8 }}>About Us</h1>
-      <p style={{ color: "#666", marginBottom: 32 }}>Eydia.ai</p>
+    <div className="lp">
+      {/* Top bar */}
+      <header className="lp-topbar">
+        <div className="lp-topbar-in">
+          <Link href="/" className="brand-lockup" style={{ textDecoration: "none" }}>
+            <span className="brand-mark">e</span>
+            <span className="brand-word" style={{ fontSize: 20 }}>Eydia.ai</span>
+          </Link>
+          <nav className="lp-topnav">
+            <Link href="/#how">How it works</Link>
+            <Link href="/#pricing">Pricing</Link>
+            <Link href="/contact">Contact</Link>
+            <Link href="/login" className="lp-btn lp-btn-primary">Login →</Link>
+          </nav>
+        </div>
+      </header>
 
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>Who we are</h2>
-      <p>Eydia.ai is a technology company that builds business communication and automation tools. Our flagship product, <strong>Pizi</strong>, is a WhatsApp automation platform built on the official Meta WhatsApp Cloud API, designed to help businesses of all sizes connect with their customers at scale.</p>
+      {/* Hero band */}
+      <section className="lp-final" style={{ padding: "56px 24px" }}>
+        <span className="lp-eyebrow" style={{ color: "rgba(255,255,255,.85)" }}>About us</span>
+        <h2>AI marketing agents for local businesses.</h2>
+        <p>Eydia.ai unifies WhatsApp, Google reviews and leads into one intelligent workspace.</p>
+      </section>
 
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>What we do</h2>
-      <p>Pizi brings WhatsApp, Facebook, and Instagram into a single powerful dashboard. We help businesses:</p>
-      <ul>
-        <li><strong>Manage conversations</strong> — a shared team inbox where multiple agents can handle customer chats, assign conversations, and collaborate in real time.</li>
-        <li><strong>Automate messaging</strong> — build keyword-based chatbots and visual automation workflows that reply to customers 24/7 without writing a single line of code.</li>
-        <li><strong>Run campaigns</strong> — send approved WhatsApp templates to thousands of contacts with delivery, read, and reply tracking.</li>
-        <li><strong>Manage templates</strong> — design WhatsApp message templates with a live phone preview and submit them to Meta for approval in one click.</li>
-        <li><strong>Track performance</strong> — analytics dashboards for messages, campaigns, agent performance, and delivery rates.</li>
-        <li><strong>Manage teams</strong> — role-based access control so owners, managers, and agents see only what they need.</li>
-        <li><strong>Social media</strong> — compose, schedule, and publish posts and reels to Facebook and Instagram from the same workspace.</li>
-      </ul>
+      {/* Content */}
+      <section className="lp-section">
+        <div className="lp-wrap" style={{ maxWidth: 860 }}>
+          <h2 className="lp-h2" style={{ textAlign: "left" }}>Who we are</h2>
+          <p style={{ color: "var(--muted)", fontSize: 16, lineHeight: 1.7, marginTop: 8 }}>
+            Eydia.ai is a technology company that builds AI-powered business communication and marketing
+            tools. Our platform brings <strong>WhatsApp marketing &amp; inbox</strong>, <strong>Google
+            Business Profile &amp; reviews</strong>, and a full <strong>Lead Management CRM</strong> together —
+            so a local business runs every customer conversation, every review and every lead from a single
+            login, powered by AI agents that handle the daily work.
+          </p>
 
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>Our mission</h2>
-      <p>To make professional business communication on WhatsApp accessible, affordable, and easy for every business — from a local shop to a growing enterprise — using the official Meta APIs with full compliance and security.</p>
+          <h2 className="lp-h2" style={{ textAlign: "left", marginTop: 44 }}>What we do</h2>
+          <div className="lp-story-grid" style={{ marginTop: 20 }}>
+            {DOES.map((x) => (
+              <div key={x.t} className="lp-story">
+                <b style={{ fontSize: 16 }}>{x.t}</b>
+                <p style={{ margin: "8px 0 0" }}>{x.d}</p>
+              </div>
+            ))}
+          </div>
 
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>Why choose Pizi</h2>
-      <ul>
-        <li><strong>Official Meta partner</strong> — built on the WhatsApp Cloud API, fully compliant with Meta&apos;s policies.</li>
-        <li><strong>Multi-tenant SaaS</strong> — each business gets its own secure, isolated workspace.</li>
-        <li><strong>No code required</strong> — chatbots, automations, and campaigns can be set up without any technical knowledge.</li>
-        <li><strong>Secure by design</strong> — all credentials encrypted at rest, HTTPS everywhere, role-based access, and audit logging.</li>
-        <li><strong>Flexible pricing</strong> — plans for businesses of every size, with pay-as-you-go Meta messaging costs.</li>
-      </ul>
+          <div className="lp-quote" style={{ maxWidth: "none", marginTop: 44 }}>
+            <p style={{ fontStyle: "normal" }}><strong>Our mission:</strong> to make professional marketing on
+            WhatsApp and Google accessible, affordable and easy for every business — from a local shop to a
+            growing enterprise — using official Meta and Google APIs with full compliance and security.</p>
+          </div>
 
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>Contact</h2>
-      <p>Have questions? Reach out to us at <strong>heltogtechnologies@gmail.com</strong> or visit our <a href="/contact" style={{ color: "#2563eb" }}>Contact page</a>.</p>
+          <h2 className="lp-h2" style={{ textAlign: "left", marginTop: 44 }}>Why choose Eydia.ai</h2>
+          <div className="lp-story-grid" style={{ marginTop: 20 }}>
+            {WHY.map((x) => (
+              <div key={x.t} className="lp-story">
+                <b style={{ fontSize: 16 }}>{x.t}</b>
+                <p style={{ margin: "8px 0 0" }}>{x.d}</p>
+              </div>
+            ))}
+          </div>
 
-      <div style={{ marginTop: 40, paddingTop: 24, borderTop: "1px solid #e5e7eb", fontSize: 14, color: "#666" }}>
-        <p><a href="/privacy" style={{ color: "#2563eb", marginRight: 16 }}>Privacy Policy</a> <a href="/terms" style={{ color: "#2563eb", marginRight: 16 }}>Terms</a> <a href="/pricing-policy" style={{ color: "#2563eb", marginRight: 16 }}>Pricing</a> <a href="/cancellation-policy" style={{ color: "#2563eb" }}>Refund Policy</a></p>
-      </div>
+          <div style={{ marginTop: 44, textAlign: "center" }}>
+            <Link href="/contact" className="lp-btn lp-btn-primary lp-btn-lg">Get in touch →</Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="lp-foot">
+        <div className="lp-foot-bottom" style={{ borderTop: "none", marginTop: 0, justifyContent: "center", gap: 18 }}>
+          <span>© {new Date().getFullYear()} Eydia.ai — Automate · Engage · Grow</span>
+          <span><Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link> · <Link href="/pricing-policy">Pricing</Link> · <Link href="/cancellation-policy">Refund</Link></span>
+        </div>
+      </footer>
     </div>
   );
 }

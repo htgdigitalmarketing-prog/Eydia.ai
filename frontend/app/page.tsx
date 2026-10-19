@@ -293,7 +293,7 @@ export default function Landing() {
           </div>
           <div className="lp-foot-col">
             <h4>Contact us</h4>
-            <p>Email: support@eydia.ai</p>
+            <p>Email: heltogtechnologies@gmail.com</p>
             <p>WhatsApp · Reviews · Leads — one workspace.</p>
             <Link href="/register" className="lp-btn lp-btn-primary" style={{ marginTop: 4 }}>Book Free Demo →</Link>
           </div>
