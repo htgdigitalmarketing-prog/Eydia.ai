@@ -43,8 +43,35 @@ class SystemController extends Controller
             }
         }
 
+        // Run the essential bootstrap seeders (idempotent — safe to re-run):
+        // plans, roles/permissions and the platform super admin. This makes a
+        // fresh no-SSH deploy fully self-serve. Demo data is intentionally NOT
+        // seeded here.
+        foreach ([
+            \Database\Seeders\RolePermissionSeeder::class,
+            \Database\Seeders\PlanSeeder::class,
+            \Database\Seeders\SuperAdminSeeder::class,
+        ] as $seeder) {
+            try {
+                Artisan::call('db:seed', ['--class' => $seeder, '--force' => true]);
+                $output['seed:' . class_basename($seeder)] = trim(Artisan::output()) ?: 'done';
+            } catch (\Throwable $e) {
+                $output['seed:' . class_basename($seeder)] = 'ERROR: ' . $e->getMessage();
+            }
+        }
+
+        // Re-cache config/routes for production speed (optional but recommended).
+        foreach (['config:cache', 'route:cache'] as $command) {
+            try {
+                Artisan::call($command);
+                $output[$command] = trim(Artisan::output()) ?: 'done';
+            } catch (\Throwable $e) {
+                $output[$command] = 'ERROR: ' . $e->getMessage();
+            }
+        }
+
         return $this->ok([
-            'message' => 'Deploy hook finished. Caches cleared and migrations run.',
+            'message' => 'Deploy hook finished. Caches cleared, migrations run, essential seeders applied.',
             'output' => $output,
         ]);
     }
