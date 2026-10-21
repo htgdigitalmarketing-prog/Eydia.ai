@@ -1,7 +1,13 @@
-# Static Next.js export on Hostinger (Apache).
-# Serves real files/folders as-is and falls back to the SPA shell for client
-# routes. Cache policy below prevents the "ChunkLoadError / stale HTML pointing
-# at a build hash that no longer exists" class of bug after a redeploy.
+# Single-domain deploy on Apache (Hostinger): static Next.js export + Laravel API
+# on ONE domain. This file ships in the build (public/ -> out/), so copying the
+# build into public_html always lays down the correct rules.
+#
+#   /api/*  and  /webhooks/*   -> Laravel front controller (index.php)
+#   /_next/*                   -> real build assets (missing chunk = real 404)
+#   any existing file/folder   -> served as-is (all static frontend pages)
+#   everything else            -> the SPA shell (index.html)
+
+DirectoryIndex index.html index.php
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
@@ -11,30 +17,30 @@
   RewriteCond %{HTTPS} !=on
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-  # Never rewrite build assets to the SPA shell: a missing hashed chunk must
-  # return a real 404 (not index.html served as JS, which corrupts the app).
+  # API + webhooks -> Laravel (REQUEST_URI is preserved, so routes still match)
+  RewriteRule ^(api|webhooks)(/|$) index.php [L]
+
+  # Next build assets: serve as-is; a missing hashed chunk must return a real
+  # 404, never the HTML shell served as JS.
   RewriteRule ^_next/ - [L]
 
-  # Serve any existing file or directory as-is
+  # Any real file or directory (static pages, logos, favicon) -> serve as-is
   RewriteCond %{REQUEST_FILENAME} -f [OR]
   RewriteCond %{REQUEST_FILENAME} -d
   RewriteRule ^ - [L]
 
-  # Otherwise fall back to the app shell so client routes never 404
+  # Otherwise -> the app shell so client routes never hard-404
   RewriteRule ^ /index.html [L]
 </IfModule>
 
 <IfModule mod_headers.c>
-  # Content-hashed build assets are immutable — safe to cache for a year.
+  # Content-hashed build assets are immutable — cache for a year.
   <FilesMatch "\.(js|css|woff2?|ttf|eot|svg|png|jpe?g|gif|webp|ico)$">
     Header set Cache-Control "public, max-age=31536000, immutable"
   </FilesMatch>
-
-  # HTML must never be cached: the browser must always fetch fresh HTML so it
-  # references the chunk hashes that actually exist on the server right now.
+  # HTML must always be fresh so it references chunk hashes that exist now.
   <FilesMatch "\.html$">
     Header set Cache-Control "no-cache, no-store, must-revalidate"
     Header set Pragma "no-cache"
-    Header set Expires "0"
   </FilesMatch>
 </IfModule>
