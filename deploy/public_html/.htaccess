@@ -1,0 +1,28 @@
+# Single-domain: static Next.js frontend + Laravel API in one public_html.
+# Serve the frontend home by default; real files/dirs (static site) are served
+# as-is; everything else (e.g. /api/v1/*) goes to Laravel's front controller.
+# NOTE: we intentionally do NOT strip trailing slashes — Next.js export uses
+# trailingSlash:true (route folders like /login/), so Apache must keep them.
+
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # Pass the Authorization header through (JWT / API auth).
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # If the request maps to a real file or directory (the static frontend),
+    # serve it directly.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Otherwise hand it to Laravel (API routes, etc.).
+    RewriteRule ^ index.php [L]
+</IfModule>
