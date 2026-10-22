@@ -120,6 +120,35 @@ class AiFeaturesTest extends TestCase
         $this->assertNotNull($review->fresh()->draft_reply);
     }
 
+    public function test_gbp_overview_returns_rich_dashboard_payload(): void
+    {
+        $owner = $this->ownerWithPlan();
+        $this->actingAs($owner, 'api');
+
+        $location = GbpLocation::create(['name' => 'Test Store', 'tenant_id' => $owner->tenant_id]);
+        GbpReview::create([
+            'tenant_id' => $owner->tenant_id, 'gbp_location_id' => $location->id,
+            'author_name' => 'Asha', 'rating' => 5, 'comment' => 'Great service!',
+            'reviewed_at' => now()->subDays(3),
+        ]);
+        GbpReview::create([
+            'tenant_id' => $owner->tenant_id, 'gbp_location_id' => $location->id,
+            'author_name' => 'Ben', 'rating' => 2, 'comment' => 'Too slow.',
+            'reviewed_at' => now()->subMonths(2),
+        ]);
+
+        $this->getJson('/api/v1/gbp/overview')
+            ->assertOk()
+            ->assertJsonPath('data.stats.total_reviews', 2)
+            ->assertJsonStructure(['data' => [
+                'locations', 'stats' => ['locations', 'total_reviews', 'average_rating', 'unreplied', 'replied', 'rating_distribution'],
+                'health' => ['score', 'grade', 'sub_scores', 'actions'],
+                'summary' => ['reviews', 'avg_rating', 'posts', 'photos', 'social', 'leads', 'credit_balance', 'plan'],
+                'charts' => ['star_dist', 'directory', 'replied', 'unreplied', 'trend_labels', 'trend_avg', 'trend_count', 'trend_resp', 'breakdown', 'avg_response'],
+                'recent_reviews',
+            ]]);
+    }
+
     public function test_gbp_post_caption_generates_text(): void
     {
         $owner = $this->ownerWithPlan();

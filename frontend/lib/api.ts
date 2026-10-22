@@ -934,7 +934,7 @@ export type GbpReviewItem = {
 export type GbpOptimizeResult = {
   source: "ai" | "fallback";
   summary: string;
-  actions: { priority: string; text: string }[];
+  actions: GbpHealthAction[];
   health: GbpHealth;
   credits: number | null;
 };
@@ -950,14 +950,42 @@ export type AiMediaItem = {
 };
 
 export type GbpOverview = {
-  locations: GbpLocationItem[];
+  locations: (GbpLocationItem & { total_reviews?: number; avg_rating?: number })[];
   stats: {
     locations: number;
     total_reviews: number;
     average_rating: number;
     unreplied: number;
+    replied?: number;
     rating_distribution: Record<string, number>;
   };
+  health?: GbpHealth;
+  summary?: {
+    reviews: number;
+    avg_rating: number;
+    posts: number;
+    photos: number;
+    social: number;
+    leads: number;
+    leads_converted: number;
+    ad_spend: number;
+    credit_balance: number;
+    plan: string;
+    last_synced_at: string | null;
+  };
+  charts?: {
+    star_dist: Record<string, number>;
+    directory: { Google: number; Facebook: number; Others: number };
+    replied: number;
+    unreplied: number;
+    trend_labels: string[];
+    trend_avg: (number | null)[];
+    trend_count: (number | null)[];
+    trend_resp: (number | null)[];
+    breakdown: Record<string, number[]>;
+    avg_response: number;
+  };
+  recent_reviews?: GbpReviewItem[];
 };
 
 export type GbpPostItem = {
@@ -996,11 +1024,20 @@ export type GbpInsights = {
   message?: string;
 };
 
+export type GbpHealthAction = {
+  priority: string;
+  title?: string;
+  why?: string;
+  icon?: string;
+  cta?: string;
+  module?: string;
+  text?: string;
+};
 export type GbpHealth = {
   score: number;
   grade: string;
-  sub_scores: { key: string; label: string; score: number; detail: string }[];
-  actions: { priority: string; text: string }[];
+  sub_scores: { key: string; label: string; score: number; detail: string; icon?: string; color?: string }[];
+  actions: GbpHealthAction[];
 };
 
 export type CreditLedgerRow = { id: string; delta: number; balance_after: number; action: string; description: string | null; at: string | null };

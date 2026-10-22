@@ -3,9 +3,15 @@
 namespace App\Modules\Gbp\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdReport;
 use App\Models\GbpLocation;
+use App\Models\GbpPhoto;
+use App\Models\GbpPost;
 use App\Models\GbpReview;
 use App\Models\Integration;
+use App\Models\Lead;
+use App\Models\SocialPost;
+use App\Models\Subscription;
 use App\Modules\Billing\Services\CreditService;
 use App\Modules\Chatbot\Services\AiReplyService;
 use App\Modules\Gbp\Services\GbpHealthService;
@@ -43,28 +49,112 @@ class GbpController extends Controller
 
         return null;
     }
-    /** Dashboard overview: locations + aggregate rating stats. */
-    public function overview(Request $request): JsonResponse
+    /**
+     * Rich dashboard overview — locations, aggregate rating stats, the business
+     * health cockpit, prioritized "what to do next" actions, module summary
+     * cards, analytics chart series (rating breakdown, directory split, replies,
+     * monthly trends) and recent reviews. Mirrors the ReviewFlow overview.
+     */
+    public function overview(Request $request, GbpHealthService $health): JsonResponse
     {
-        $locations = GbpLocation::query()->withCount('reviews')->get();
-        $reviews = GbpReview::query()->get(['rating', 'reply']);
+        $locations = GbpLocation::query()
+            ->withCount('reviews')
+            ->withAvg('reviews as reviews_avg_rating', 'rating')
+            ->get();
+        $reviews = GbpReview::query()->get(['rating', 'reply', 'sentiment', 'reviewed_at', 'replied_at']);
 
         $total = $reviews->count();
         $avg = $total ? round($reviews->avg('rating'), 2) : 0;
+        $replied = $reviews->whereNotNull('reply')->count();
+        $unreplied = $total - $replied;
+
         $dist = [];
         for ($i = 5; $i >= 1; $i--) {
             $dist[$i] = $reviews->where('rating', $i)->count();
         }
 
+        // ---- Monthly trends (last 8 months): labels, avg, count, response, star breakdown ----
+        $trendLabels = $trendAvg = $trendCount = $trendResp = [];
+        $breakdown = [1 => [], 2 => [], 3 => [], 4 => [], 5 => []];
+        foreach (range(7, 0) as $i) {
+            $start = now()->startOfMonth()->subMonths($i);
+            $end = (clone $start)->endOfMonth();
+            $inMonth = $reviews->filter(fn ($r) => $r->reviewed_at && $r->reviewed_at->between($start, $end));
+
+            $trendLabels[] = $start->format('M');
+            $cnt = $inMonth->count();
+            $trendCount[] = $cnt;
+            $trendAvg[] = $cnt ? round($inMonth->avg('rating'), 2) : null;
+            for ($s = 1; $s <= 5; $s++) {
+                $breakdown[$s][] = $inMonth->where('rating', $s)->count();
+            }
+            $rep = $inMonth->filter(fn ($r) => $r->replied_at && $r->reviewed_at);
+            $trendResp[] = $rep->count()
+                ? round($rep->avg(fn ($r) => $r->reviewed_at->diffInHours($r->replied_at)) / 24, 1)
+                : null;
+        }
+
+        $repliedAll = $reviews->filter(fn ($r) => $r->replied_at && $r->reviewed_at);
+        $avgResponse = $repliedAll->count()
+            ? round($repliedAll->avg(fn ($r) => $r->reviewed_at->diffInHours($r->replied_at)) / 24, 1)
+            : 0;
+
+        // ---- Cross-module counts for the summary cards ----
+        $postsCount = GbpPost::query()->count();
+        $photosCount = GbpPhoto::query()->count();
+        $socialCount = SocialPost::query()->count();
+        $leadsCount = Lead::query()->count();
+        $leadsConverted = Lead::query()->where('stage', 'CONVERTED')->count();
+        $adSpend = (float) AdReport::query()->sum('spend');
+
+        $tenantId = $request->user()?->tenant_id;
+        $creditBalance = $tenantId ? $this->credits->balance($tenantId) : 0;
+        $plan = Subscription::query()->with('plan')->first()?->plan?->name ?? 'Starter';
+        $lastSynced = $locations->max('last_synced_at');
+
+        $recent = GbpReview::query()->with('location:id,uuid,name')
+            ->orderByDesc('reviewed_at')->limit(5)->get();
+
         return $this->ok([
-            'locations' => $locations->map(fn (GbpLocation $l) => $this->locationArray($l))->all(),
+            'locations' => $locations->map(fn (GbpLocation $l) => $this->locationArray($l) + [
+                'total_reviews' => (int) ($l->reviews_count ?? 0),
+                'avg_rating' => round((float) ($l->reviews_avg_rating ?? 0), 1),
+            ])->all(),
             'stats' => [
                 'locations' => $locations->count(),
                 'total_reviews' => $total,
                 'average_rating' => $avg,
-                'unreplied' => $reviews->whereNull('reply')->count(),
+                'unreplied' => $unreplied,
+                'replied' => $replied,
                 'rating_distribution' => $dist,
             ],
+            'health' => $health->compute(),
+            'summary' => [
+                'reviews' => $total,
+                'avg_rating' => $avg,
+                'posts' => $postsCount,
+                'photos' => $photosCount,
+                'social' => $socialCount,
+                'leads' => $leadsCount,
+                'leads_converted' => $leadsConverted,
+                'ad_spend' => $adSpend,
+                'credit_balance' => $creditBalance,
+                'plan' => $plan,
+                'last_synced_at' => $lastSynced?->toIso8601String(),
+            ],
+            'charts' => [
+                'star_dist' => $dist,
+                'directory' => ['Google' => $total, 'Facebook' => 0, 'Others' => 0],
+                'replied' => $replied,
+                'unreplied' => $unreplied,
+                'trend_labels' => $trendLabels,
+                'trend_avg' => $trendAvg,
+                'trend_count' => $trendCount,
+                'trend_resp' => $trendResp,
+                'breakdown' => $breakdown,
+                'avg_response' => $avgResponse,
+            ],
+            'recent_reviews' => $recent->map(fn (GbpReview $r) => $this->reviewArray($r))->all(),
         ]);
     }
 
