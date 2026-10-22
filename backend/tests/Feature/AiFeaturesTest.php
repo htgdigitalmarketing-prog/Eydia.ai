@@ -149,6 +149,48 @@ class AiFeaturesTest extends TestCase
             ]]);
     }
 
+    public function test_gbp_offer_post_is_scheduled_with_coupon_and_counts(): void
+    {
+        $owner = $this->ownerWithPlan();
+        $this->actingAs($owner, 'api');
+        $loc = GbpLocation::create(['name' => 'Test Store', 'tenant_id' => $owner->tenant_id]);
+
+        $this->postJson('/api/v1/gbp/posts', [
+            'location' => $loc->uuid,
+            'type' => 'OFFER',
+            'summary' => '20% off all services this week!',
+            'coupon_code' => 'SAVE20',
+            'terms' => 'One per customer.',
+            'event_start' => now()->addDay()->toDateTimeString(),
+            'event_end' => now()->addDays(7)->toDateTimeString(),
+            'schedule_at' => now()->addHours(2)->toDateTimeString(),
+        ])->assertCreated()
+            ->assertJsonPath('data.post.type', 'OFFER')
+            ->assertJsonPath('data.post.status', 'SCHEDULED')
+            ->assertJsonPath('data.post.coupon_code', 'SAVE20');
+
+        $this->getJson('/api/v1/gbp/posts')
+            ->assertOk()
+            ->assertJsonPath('data.counts.total', 1)
+            ->assertJsonPath('data.counts.scheduled', 1)
+            ->assertJsonPath('data.counts.published', 0);
+    }
+
+    public function test_gbp_event_post_defaults_to_draft_without_schedule(): void
+    {
+        $owner = $this->ownerWithPlan();
+        $this->actingAs($owner, 'api');
+        $loc = GbpLocation::create(['name' => 'Test Store', 'tenant_id' => $owner->tenant_id]);
+
+        $this->postJson('/api/v1/gbp/posts', [
+            'location' => $loc->uuid, 'type' => 'EVENT',
+            'summary' => 'Grand opening celebration',
+            'event_start' => now()->addDays(3)->toDateTimeString(),
+        ])->assertCreated()
+            ->assertJsonPath('data.post.type', 'EVENT')
+            ->assertJsonPath('data.post.status', 'DRAFT');
+    }
+
     public function test_gbp_post_caption_generates_text(): void
     {
         $owner = $this->ownerWithPlan();

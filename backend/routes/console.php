@@ -12,6 +12,9 @@ Artisan::command('inspire', function () {
 // Requires Hostinger cron: * * * * * php /path/artisan schedule:run
 Schedule::command('social:publish-due')->everyMinute()->withoutOverlapping();
 
+// Publish scheduled Google Business Profile posts & photos when due.
+Schedule::command('gbp:publish-due')->everyMinute()->withoutOverlapping();
+
 // Finish bulk sends / campaigns whose web worker was killed mid-way.
 Schedule::command('whatsapp:resume-sends')->everyMinute()->withoutOverlapping(30);
 

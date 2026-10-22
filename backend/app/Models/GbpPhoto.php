@@ -18,11 +18,12 @@ class GbpPhoto extends Model
 
     protected $fillable = [
         'tenant_id', 'gbp_location_id', 'google_media_name', 'category',
-        'image_url', 'caption', 'status', 'published_at', 'meta',
+        'image_url', 'caption', 'status', 'published_at', 'scheduled_at', 'meta',
     ];
 
     protected $casts = [
         'published_at' => 'datetime',
+        'scheduled_at' => 'datetime',
         'meta' => 'array',
     ];
 

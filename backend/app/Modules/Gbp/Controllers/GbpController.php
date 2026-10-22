@@ -402,6 +402,25 @@ class GbpController extends Controller
         return $this->ok($health->compute());
     }
 
+    /**
+     * Upload an image for a post or photo (drag & drop / browse). Stored on the
+     * public disk and returned as an absolute URL so the frontend can preview it
+     * and Google can later fetch the bytes when the content is published.
+     */
+    public function uploadImage(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240'],
+        ]);
+
+        $path = $request->file('file')->store('gbp/' . now()->format('Y/m'), 'public');
+
+        return $this->ok([
+            'url' => url(\Illuminate\Support\Facades\Storage::disk('public')->url($path)),
+            'path' => $path,
+        ], 201);
+    }
+
     private function pickLocation(Request $request): ?GbpLocation
     {
         if ($loc = $request->query('location')) {

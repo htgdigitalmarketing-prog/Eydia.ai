@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useUser } from "@/lib/user-context";
 import { AccessDenied, hasFeature } from "@/components/PlanGate";
 import { PageHeader } from "@/components/PageHeader";
@@ -11,15 +11,11 @@ import {
 import { getToken } from "@/lib/auth";
 
 const stars = (n: number) => "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
-const POST_TYPES = ["STANDARD", "EVENT", "OFFER", "ALERT"];
-const CTA_TYPES = ["NONE", "LEARN_MORE", "CALL", "BOOK", "ORDER", "SIGN_UP", "SHOP"];
-const PHOTO_CATS = ["ADDITIONAL", "COVER", "PROFILE", "LOGO", "EXTERIOR", "INTERIOR", "PRODUCT", "AT_WORK", "FOOD_AND_DRINK"];
 
 const TABS = [
   { k: "overview", label: "Overview", icon: "📊" },
   { k: "reviews", label: "Reviews", icon: "⭐" },
-  { k: "posts", label: "Posts", icon: "📝" },
-  { k: "photos", label: "Photos", icon: "🖼️" },
+  { k: "content", label: "Posts & Photos", icon: "📝" },
   { k: "insights", label: "Insights", icon: "📈" },
   { k: "health", label: "Health Score", icon: "🩺" },
 ];
@@ -74,8 +70,7 @@ function GbpDashboard() {
 
       {tab === "overview" && <OverviewTab overview={overview} busy={busy} onSync={sync} onGoTab={setTab} />}
       {tab === "reviews" && <ReviewsTab overview={overview} />}
-      {tab === "posts" && <PostsTab locations={locations} />}
-      {tab === "photos" && <PhotosTab locations={locations} />}
+      {tab === "content" && <PostsPhotosTab locations={locations} />}
       {tab === "insights" && <InsightsTab locations={locations} />}
       {tab === "health" && <HealthTab />}
     </div>
@@ -589,9 +584,12 @@ function ReviewsTab({ overview }: { overview: GbpOverview | null }) {
   );
 }
 
-/* ---------------- Posts ---------------- */
+/* ---------------- Posts & Photos ---------------- */
 const StatusBadge = ({ s }: { s: string }) => {
-  const c = s === "PUBLISHED" ? { bg: "#e7f7ef", fg: "#0a7d47" } : s === "FAILED" ? { bg: "#fdecec", fg: "#c53030" } : { bg: "#eef0ff", fg: "var(--accent-dark)" };
+  const c = s === "PUBLISHED" ? { bg: "#e7f7ef", fg: "#0a7d47" }
+    : s === "FAILED" ? { bg: "#fdecec", fg: "#c53030" }
+    : s === "SCHEDULED" ? { bg: "#fef3e2", fg: "#b45309" }
+    : { bg: "#eef0ff", fg: "var(--accent-dark)" };
   return <span style={{ background: c.bg, color: c.fg, fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999 }}>{s}</span>;
 };
 
@@ -604,171 +602,419 @@ function LocationPicker({ locations, value, onChange }: { locations: GbpLocation
   );
 }
 
-function PostsTab({ locations }: { locations: GbpLocationItem[] }) {
-  const [posts, setPosts] = useState<GbpPostItem[]>([]);
-  const [loc, setLoc] = useState("");
-  const [form, setForm] = useState({ type: "STANDARD", summary: "", image_url: "", cta_type: "NONE", cta_url: "" });
+const PHOTO_CATEGORIES = [
+  { v: "ADDITIONAL", label: "General", icon: "🏷️" },
+  { v: "EXTERIOR", label: "Exterior", icon: "🏢" },
+  { v: "INTERIOR", label: "Interior", icon: "🛋️" },
+  { v: "PRODUCT", label: "Product", icon: "📦" },
+  { v: "FOOD_AND_DRINK", label: "Food", icon: "🍽️" },
+  { v: "TEAMS", label: "Team", icon: "👥" },
+];
+const POST_TABS = [
+  { v: "STANDARD", label: "Update" },
+  { v: "OFFER", label: "Offer" },
+  { v: "EVENT", label: "Event" },
+];
+
+/* Drag & drop / browse image upload, with an Image URL fallback. */
+function ImageDrop({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [drag, setDrag] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const upload = useCallback(async (file: File) => {
+    const t = getToken(); if (!t) return;
+    setBusy(true); setErr(null);
+    try { const r = await api.gbp.uploadImage(t, file); onChange(r.url); }
+    catch (e) { setErr((e as ApiError).message); } finally { setBusy(false); }
+  }, [onChange]);
+
+  return (
+    <div>
+      {value ? (
+        <div style={{ position: "relative" }}>
+          <img src={value} alt="" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)" }} />
+          <button type="button" className="btn-mini danger" style={{ position: "absolute", top: 8, right: 8 }} onClick={() => onChange("")}>✕ Remove</button>
+        </div>
+      ) : (
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) upload(f); }}
+          onClick={() => fileRef.current?.click()}
+          style={{ border: `2px dashed ${drag ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, padding: "26px 16px", textAlign: "center", cursor: "pointer", background: drag ? "var(--bg)" : "transparent" }}>
+          <div style={{ fontSize: 26 }}>📷</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 6 }}>{busy ? "Uploading…" : "Click to upload or drag & drop"}</div>
+          <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>PNG, JPG, WebP or GIF up to 10MB</div>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+        </div>
+      )}
+      {err && <div className="error" style={{ marginTop: 8 }}>{err}</div>}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "8px 0 4px" }}>
+        <div style={{ flex: 1, height: 1, background: "var(--border)" }} /><span className="muted" style={{ fontSize: 11 }}>OR</span><div style={{ flex: 1, height: 1, background: "var(--border)" }} />
+      </div>
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder="https://… (paste a public image URL)" style={inp} />
+    </div>
+  );
+}
+
+/* Add Post modal — Update / Offer / Event, each pushed to Google as a localPost. */
+function PostModal({ locations, seed, onClose, onSaved }:
+  { locations: GbpLocationItem[]; seed?: { type?: string; summary?: string } | null; onClose: () => void; onSaved: () => void }) {
+  const [type, setType] = useState(seed?.type ?? "STANDARD");
+  const [loc, setLoc] = useState(locations[0]?.id ?? "");
+  const [form, setForm] = useState({
+    summary: seed?.summary ?? "", image_url: "", cta_url: "",
+    coupon_code: "", terms: "", event_start: "", event_end: "", schedule_at: "",
+  });
   const [busy, setBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
-
-  useEffect(() => { if (locations.length && !loc) setLoc(locations[0].id); }, [locations, loc]);
-  const load = useCallback(() => { const t = getToken(); if (t) api.gbp.posts(t).then((r) => setPosts(r.posts)).catch(() => {}); }, []);
-  useEffect(() => { load(); }, [load]);
+  const [err, setErr] = useState<string | null>(null);
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   async function generate() {
     const t = getToken(); if (!t) return;
     const topic = (form.summary.trim() || window.prompt("What should this post be about?") || "").trim();
     if (!topic) return;
     setGenBusy(true); setErr(null);
-    try {
-      const r = await api.gbp.generatePost(t, { topic, type: form.type, location: loc || undefined });
-      setForm((f) => ({ ...f, summary: r.text }));
-    } catch (e) { setErr((e as ApiError).message); } finally { setGenBusy(false); }
+    try { const r = await api.gbp.generatePost(t, { topic, type, location: loc || undefined }); set("summary", r.text); }
+    catch (e) { setErr((e as ApiError).message); } finally { setGenBusy(false); }
   }
 
-  async function create(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
     const t = getToken(); if (!t) return;
     if (!loc) { setErr("Add a location first (Sync from Google)."); return; }
     setBusy(true); setErr(null);
     try {
-      await api.gbp.createPost(t, { location: loc, summary: form.summary, type: form.type, image_url: form.image_url || null, cta_type: form.cta_type, cta_url: form.cta_url || null });
-      setForm({ type: "STANDARD", summary: "", image_url: "", cta_type: "NONE", cta_url: "" });
-      load();
+      await api.gbp.createPost(t, {
+        location: loc, summary: form.summary, type,
+        image_url: form.image_url || null,
+        cta_type: form.cta_url ? "LEARN_MORE" : "NONE",
+        cta_url: form.cta_url || null,
+        schedule_at: form.schedule_at || null,
+        coupon_code: type === "OFFER" ? (form.coupon_code || null) : null,
+        terms: type === "OFFER" ? (form.terms || null) : null,
+        event_start: type !== "STANDARD" ? (form.event_start || null) : null,
+        event_end: type !== "STANDARD" ? (form.event_end || null) : null,
+      });
+      onSaved();
     } catch (e2) { setErr((e2 as ApiError).message); } finally { setBusy(false); }
   }
-  async function publish(id: string) { const t = getToken(); if (!t) return; try { await api.gbp.publishPost(t, id); load(); } catch (e) { alert((e as ApiError).message); } }
-  async function remove(id: string) { const t = getToken(); if (!t || !confirm("Delete this post?")) return; try { await api.gbp.deletePost(t, id); load(); } catch (e) { alert((e as ApiError).message); } }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "340px minmax(0,1fr)", gap: 16, alignItems: "start" }}>
-      <form className="panel" onSubmit={create}>
-        <h2 style={{ fontSize: 15, marginTop: 0 }}>New post</h2>
-        {err && <div className="error">{err}</div>}
-        <div className="field"><label>Location</label><LocationPicker locations={locations} value={loc} onChange={setLoc} /></div>
-        <div className="field"><label>Type</label>
-          <select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))} style={inp}>
-            {POST_TYPES.map((t) => <option key={t} value={t}>{t.charAt(0) + t.slice(1).toLowerCase()}</option>)}
-          </select>
+    <div className="msg-info-overlay" onClick={onClose} style={{ zIndex: 200 }}>
+      <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>Add Post</h2>
+          <button className="btn-mini" onClick={onClose}>✕</button>
         </div>
-        <div className="field">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ marginBottom: 0 }}>Post text</label>
-            <button type="button" className="btn-mini" disabled={genBusy} onClick={generate}>{genBusy ? "Writing…" : "✨ Write with AI"}</button>
-          </div>
-          <textarea value={form.summary} onChange={(e) => setForm((f) => ({ ...f, summary: e.target.value }))} required rows={4} maxLength={1500} placeholder="What's new with your business? (or let AI write it)" style={{ ...inp, resize: "vertical", fontFamily: "inherit", marginTop: 6 }} />
+        <div style={{ display: "flex", gap: 6, background: "var(--bg)", padding: 4, borderRadius: 10, marginBottom: 14 }}>
+          {POST_TABS.map((pt) => (
+            <button key={pt.v} type="button" onClick={() => setType(pt.v)}
+              style={{ flex: 1, padding: "8px 0", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                background: type === pt.v ? "var(--accent)" : "transparent", color: type === pt.v ? "#fff" : "var(--muted)" }}>{pt.label}</button>
+          ))}
         </div>
-        <div className="field"><label>Image URL <span className="muted">(optional)</span></label>
-          <input value={form.image_url} onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value }))} placeholder="https://…" style={inp} />
-        </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <div className="field" style={{ flex: 1 }}><label>Button</label>
-            <select value={form.cta_type} onChange={(e) => setForm((f) => ({ ...f, cta_type: e.target.value }))} style={inp}>
-              {CTA_TYPES.map((c) => <option key={c} value={c}>{c === "NONE" ? "None" : c.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase())}</option>)}
-            </select>
-          </div>
-          {form.cta_type !== "NONE" && <div className="field" style={{ flex: 1 }}><label>Button URL</label>
-            <input value={form.cta_url} onChange={(e) => setForm((f) => ({ ...f, cta_url: e.target.value }))} placeholder="https://…" style={inp} /></div>}
-        </div>
-        <button className="btn" disabled={busy}>{busy ? "Saving…" : "Save draft"}</button>
-      </form>
-
-      <div style={{ display: "grid", gap: 10 }}>
-        {posts.map((p) => (
-          <div key={p.id} className="panel" style={{ padding: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 8 }}>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}><StatusBadge s={p.status} /><span className="muted" style={{ fontSize: 12 }}>{p.type} · {p.location?.name}</span></div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {p.status !== "PUBLISHED" && <button className="btn-mini" onClick={() => publish(p.id)}>Publish</button>}
-                <button className="btn-mini danger" onClick={() => remove(p.id)}>Delete</button>
-              </div>
+        <form onSubmit={save}>
+          {locations.length > 1 && <div className="field"><label>Location</label><LocationPicker locations={locations} value={loc} onChange={setLoc} /></div>}
+          <div className="field"><label>Image <span className="muted">(optional)</span></label><ImageDrop value={form.image_url} onChange={(u) => set("image_url", u)} /></div>
+          <div className="field">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label style={{ marginBottom: 0 }}>Description</label>
+              <button type="button" className="btn-mini" disabled={genBusy} onClick={generate}>{genBusy ? "Writing…" : "✨ Generate with AI"}</button>
             </div>
-            {p.image_url && <img src={p.image_url} alt="" style={{ width: "100%", maxHeight: 180, objectFit: "cover", borderRadius: 10, marginBottom: 8 }} />}
-            <p style={{ margin: 0, fontSize: 14 }}>{p.summary}</p>
-            {p.cta_type && <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--accent)" }}>▸ {p.cta_type.replace(/_/g, " ")}{p.cta_url ? ` → ${p.cta_url}` : ""}</div>}
+            <textarea value={form.summary} onChange={(e) => set("summary", e.target.value)} required rows={4} maxLength={1500}
+              placeholder="Describe the update, offer, or event…" style={{ ...inp, resize: "vertical", fontFamily: "inherit", marginTop: 6 }} />
+            <div className="muted" style={{ fontSize: 11, textAlign: "right" }}>{form.summary.length} / 1500</div>
           </div>
-        ))}
-        {posts.length === 0 && <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">No posts yet. Draft one on the left, then Publish to push it to Google.</span></div>}
+          <div className="field"><label>Call to Action URL <span className="muted">(optional)</span></label>
+            <input value={form.cta_url} onChange={(e) => set("cta_url", e.target.value)} placeholder="https://…" style={inp} /></div>
+
+          {type === "OFFER" && <>
+            <div className="field"><label>Coupon Code</label><input value={form.coupon_code} onChange={(e) => set("coupon_code", e.target.value)} placeholder="e.g. SAVE20" style={inp} /></div>
+            <div className="field"><label>Terms &amp; Conditions</label><textarea value={form.terms} onChange={(e) => set("terms", e.target.value)} rows={2} placeholder="Offer terms…" style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} /></div>
+          </>}
+          {type !== "STANDARD" && (
+            <div style={{ display: "flex", gap: 10 }}>
+              <div className="field" style={{ flex: 1 }}><label>Start Date &amp; Time</label><input type="datetime-local" value={form.event_start} onChange={(e) => set("event_start", e.target.value)} style={inp} /></div>
+              <div className="field" style={{ flex: 1 }}><label>End Date &amp; Time</label><input type="datetime-local" value={form.event_end} onChange={(e) => set("event_end", e.target.value)} style={inp} /></div>
+            </div>
+          )}
+          <div className="field"><label>Schedule <span className="muted">(leave blank to publish now)</span></label>
+            <input type="datetime-local" value={form.schedule_at} onChange={(e) => set("schedule_at", e.target.value)} style={inp} /></div>
+
+          {err && <div className="error">{err}</div>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+            <button type="button" className="btn-mini" onClick={onClose}>Cancel</button>
+            <button className="btn" disabled={busy} style={{ width: "auto", padding: "11px 24px" }}>{busy ? "Saving…" : "Save Post"}</button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
-/* ---------------- Photos ---------------- */
-function PhotosTab({ locations }: { locations: GbpLocationItem[] }) {
-  const [photos, setPhotos] = useState<GbpPhotoItem[]>([]);
-  const [loc, setLoc] = useState("");
-  const [form, setForm] = useState({ image_url: "", caption: "", category: "ADDITIONAL" });
-  const [err, setErr] = useState<string | null>(null);
+/* Upload Photo modal — category + caption (with AI) + schedule. */
+function PhotoModal({ locations, onClose, onSaved }: { locations: GbpLocationItem[]; onClose: () => void; onSaved: () => void }) {
+  const [loc, setLoc] = useState(locations[0]?.id ?? "");
+  const [form, setForm] = useState({ image_url: "", caption: "", category: "ADDITIONAL", schedule_at: "" });
   const [busy, setBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
-
-  useEffect(() => { if (locations.length && !loc) setLoc(locations[0].id); }, [locations, loc]);
-  const load = useCallback(() => { const t = getToken(); if (t) api.gbp.photos(t).then((r) => setPhotos(r.photos)).catch(() => {}); }, []);
-  useEffect(() => { load(); }, [load]);
+  const [err, setErr] = useState<string | null>(null);
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   async function genCaption() {
     const t = getToken(); if (!t) return;
     const topic = (form.caption.trim() || window.prompt("What is this photo of?") || "").trim();
     if (!topic) return;
     setGenBusy(true); setErr(null);
-    try {
-      const r = await api.gbp.captionPhoto(t, { topic, location: loc || undefined });
-      setForm((f) => ({ ...f, caption: r.text }));
-    } catch (e) { setErr((e as ApiError).message); } finally { setGenBusy(false); }
+    try { const r = await api.gbp.captionPhoto(t, { topic, location: loc || undefined }); set("caption", r.text); }
+    catch (e) { setErr((e as ApiError).message); } finally { setGenBusy(false); }
   }
 
-  async function create(e: React.FormEvent) {
+  async function save(e: React.FormEvent) {
     e.preventDefault();
     const t = getToken(); if (!t) return;
     if (!loc) { setErr("Add a location first (Sync from Google)."); return; }
+    if (!form.image_url) { setErr("Add a photo (upload or paste an image URL)."); return; }
     setBusy(true); setErr(null);
-    try { await api.gbp.createPhoto(t, { location: loc, image_url: form.image_url, caption: form.caption || null, category: form.category }); setForm({ image_url: "", caption: "", category: "ADDITIONAL" }); load(); }
-    catch (e2) { setErr((e2 as ApiError).message); } finally { setBusy(false); }
+    try {
+      await api.gbp.createPhoto(t, { location: loc, image_url: form.image_url, caption: form.caption || null, category: form.category, schedule_at: form.schedule_at || null });
+      onSaved();
+    } catch (e2) { setErr((e2 as ApiError).message); } finally { setBusy(false); }
   }
-  async function publish(id: string) { const t = getToken(); if (!t) return; try { await api.gbp.publishPhoto(t, id); load(); } catch (e) { alert((e as ApiError).message); } }
-  async function remove(id: string) { const t = getToken(); if (!t || !confirm("Delete this photo?")) return; try { await api.gbp.deletePhoto(t, id); load(); } catch (e) { alert((e as ApiError).message); } }
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "340px minmax(0,1fr)", gap: 16, alignItems: "start" }}>
-      <form className="panel" onSubmit={create}>
-        <h2 style={{ fontSize: 15, marginTop: 0 }}>Add photo</h2>
-        {err && <div className="error">{err}</div>}
-        <div className="field"><label>Location</label><LocationPicker locations={locations} value={loc} onChange={setLoc} /></div>
-        <div className="field"><label>Image URL</label><input value={form.image_url} onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value }))} required placeholder="https://…" style={inp} /></div>
-        <div className="field"><label>Category</label>
-          <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} style={inp}>
-            {PHOTO_CATS.map((c) => <option key={c} value={c}>{c.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase())}</option>)}
+    <div className="msg-info-overlay" onClick={onClose} style={{ zIndex: 200 }}>
+      <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <h2 style={{ margin: 0 }}>Upload Photo</h2>
+          <button className="btn-mini" onClick={onClose}>✕</button>
+        </div>
+        <p className="muted" style={{ fontSize: 12.5, margin: "0 0 12px" }}>Add photos to your Google Business Profile.</p>
+        <form onSubmit={save}>
+          {locations.length > 1 && <div className="field"><label>Location</label><LocationPicker locations={locations} value={loc} onChange={setLoc} /></div>}
+          <div className="field"><label>Photo</label><ImageDrop value={form.image_url} onChange={(u) => set("image_url", u)} /></div>
+          <div className="field"><label>Category <span className="muted">(optional)</span></label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
+              {PHOTO_CATEGORIES.map((c) => (
+                <button key={c.v} type="button" onClick={() => set("category", c.v)}
+                  style={{ padding: "10px 8px", borderRadius: 10, cursor: "pointer", fontSize: 12.5, fontWeight: 600, textAlign: "center",
+                    border: `1px solid ${form.category === c.v ? "var(--accent)" : "var(--border)"}`,
+                    background: form.category === c.v ? "var(--bg)" : "var(--card)", color: form.category === c.v ? "var(--accent)" : "var(--text)" }}>
+                  <div style={{ fontSize: 16 }}>{c.icon}</div>{c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="field">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label style={{ marginBottom: 0 }}>Caption <span className="muted">(optional)</span></label>
+              <button type="button" className="btn-mini" disabled={genBusy} onClick={genCaption}>{genBusy ? "Writing…" : "✨ Generate caption with AI"}</button>
+            </div>
+            <textarea value={form.caption} onChange={(e) => set("caption", e.target.value)} rows={2} maxLength={255} placeholder="Describe this photo…" style={{ ...inp, resize: "vertical", fontFamily: "inherit", marginTop: 6 }} />
+          </div>
+          <div className="field"><label>Schedule <span className="muted">(leave blank to publish now)</span></label>
+            <input type="datetime-local" value={form.schedule_at} onChange={(e) => set("schedule_at", e.target.value)} style={inp} /></div>
+          {err && <div className="error">{err}</div>}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+            <button type="button" className="btn-mini" onClick={onClose}>Cancel</button>
+            <button className="btn" disabled={busy} style={{ width: "auto", padding: "11px 24px" }}>{busy ? "Saving…" : "Save Photo"}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ContentStat({ label, value, icon, bg, fg }: { label: string; value: React.ReactNode; icon: string; bg: string; fg: string }) {
+  return (
+    <div className="panel" style={{ padding: "14px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ width: 40, height: 40, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 18, background: bg, color: fg }}>{icon}</div>
+      <div><div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1 }}>{value}</div><div className="muted" style={{ fontSize: 11.5, textTransform: "uppercase", letterSpacing: ".03em", marginTop: 3 }}>{label}</div></div>
+    </div>
+  );
+}
+
+const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "");
+
+function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
+  const [posts, setPosts] = useState<GbpPostItem[]>([]);
+  const [counts, setCounts] = useState({ total: 0, published: 0, scheduled: 0, draft: 0 });
+  const [photos, setPhotos] = useState<GbpPhotoItem[]>([]);
+  const [sub, setSub] = useState<"posts" | "photos" | "ai">("posts");
+  const [filter, setFilter] = useState<"all" | "PUBLISHED" | "SCHEDULED" | "DRAFT">("all");
+  const [showPost, setShowPost] = useState(false);
+  const [showPhoto, setShowPhoto] = useState(false);
+  const [seed, setSeed] = useState<{ type?: string; summary?: string } | null>(null);
+
+  const loadPosts = useCallback(() => { const t = getToken(); if (t) api.gbp.posts(t).then((r) => { setPosts(r.posts); setCounts(r.counts); }).catch(() => {}); }, []);
+  const loadPhotos = useCallback(() => { const t = getToken(); if (t) api.gbp.photos(t).then((r) => setPhotos(r.photos)).catch(() => {}); }, []);
+  useEffect(() => { loadPosts(); loadPhotos(); }, [loadPosts, loadPhotos]);
+
+  async function publishPost(id: string) { const t = getToken(); if (!t) return; try { await api.gbp.publishPost(t, id); loadPosts(); } catch (e) { alert((e as ApiError).message); } }
+  async function removePost(id: string) { const t = getToken(); if (!t || !confirm("Delete this post?")) return; try { await api.gbp.deletePost(t, id); loadPosts(); } catch (e) { alert((e as ApiError).message); } }
+  async function publishPhoto(id: string) { const t = getToken(); if (!t) return; try { await api.gbp.publishPhoto(t, id); loadPhotos(); } catch (e) { alert((e as ApiError).message); } }
+  async function removePhoto(id: string) { const t = getToken(); if (!t || !confirm("Delete this photo?")) return; try { await api.gbp.deletePhoto(t, id); loadPhotos(); } catch (e) { alert((e as ApiError).message); } }
+
+  const shownPosts = posts.filter((p) =>
+    filter === "all" ? true : filter === "DRAFT" ? (p.status === "DRAFT" || p.status === "FAILED") : p.status === filter);
+
+  const subTabs = [
+    { k: "posts", label: `Posts (${counts.total})` },
+    { k: "photos", label: `Photos & Media (${photos.length})` },
+    { k: "ai", label: "✨ AI Generate" },
+  ] as const;
+  const filters = [
+    { k: "all", label: "All" }, { k: "PUBLISHED", label: "Published" },
+    { k: "SCHEDULED", label: "Scheduled" }, { k: "DRAFT", label: "Draft / Failed" },
+  ] as const;
+
+  return (
+    <div>
+      {/* header actions */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <div>
+          <h2 style={{ fontSize: 18, margin: 0 }}>Posts &amp; Photos</h2>
+          <p className="muted" style={{ fontSize: 13, margin: "2px 0 0" }}>Manage your Google Business Profile posts, photos and media.</p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn-mini" onClick={() => setShowPhoto(true)}>📷 Upload Photo</button>
+          <button className="btn" style={{ width: "auto", padding: "10px 18px" }} onClick={() => { setSeed(null); setShowPost(true); }}>+ Add Post</button>
+        </div>
+      </div>
+
+      {/* stat tiles */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(190px,1fr))", gap: 12, marginBottom: 16 }}>
+        <ContentStat label="Total Posts" value={counts.total} icon="📝" bg="#eef1ff" fg="#4c57d8" />
+        <ContentStat label="Published" value={counts.published} icon="✓" bg="#e7f7ef" fg="#0a7d47" />
+        <ContentStat label="Scheduled" value={counts.scheduled} icon="⏰" bg="#fef3e2" fg="#b45309" />
+        <ContentStat label="Photos" value={photos.length} icon="🖼️" bg="#fdeef4" fg="#db2777" />
+      </div>
+
+      {/* sub-tabs */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        {subTabs.map((s) => (
+          <button key={s.k} onClick={() => setSub(s.k)}
+            style={{ padding: "8px 16px", borderRadius: 999, cursor: "pointer", fontSize: 13, fontWeight: 700, border: "1px solid var(--border)",
+              background: sub === s.k ? "var(--accent)" : "var(--card)", color: sub === s.k ? "#fff" : "var(--muted)" }}>{s.label}</button>
+        ))}
+      </div>
+
+      {/* POSTS */}
+      {sub === "posts" && <>
+        <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+          {filters.map((f) => (
+            <button key={f.k} onClick={() => setFilter(f.k)}
+              style={{ padding: "6px 14px", borderRadius: 999, cursor: "pointer", fontSize: 12.5, fontWeight: 600, border: "none",
+                background: filter === f.k ? "#eef1ff" : "transparent", color: filter === f.k ? "var(--accent)" : "var(--muted)" }}>{f.label}</button>
+          ))}
+        </div>
+        {shownPosts.length === 0 ? (
+          <div className="panel" style={{ padding: 40, textAlign: "center" }}>
+            <div style={{ fontSize: 30 }}>📝</div>
+            <p className="muted" style={{ marginTop: 6 }}>No posts yet. Click “+ Add Post” to create your first update, offer, or event.</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {shownPosts.map((p) => (
+              <div key={p.id} className="panel" style={{ padding: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <StatusBadge s={p.status} />
+                    <span style={{ fontSize: 11, fontWeight: 700, color: "var(--accent)", background: "#eef1ff", padding: "2px 9px", borderRadius: 999 }}>{p.type === "STANDARD" ? "UPDATE" : p.type}</span>
+                    <span className="muted" style={{ fontSize: 12 }}>{p.location?.name}</span>
+                    {p.status === "SCHEDULED" && p.scheduled_at && <span className="muted" style={{ fontSize: 12 }}>⏰ {fmtDate(p.scheduled_at)}</span>}
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {p.status !== "PUBLISHED" && <button className="btn-mini" onClick={() => publishPost(p.id)}>Publish now</button>}
+                    <button className="btn-mini danger" onClick={() => removePost(p.id)}>Delete</button>
+                  </div>
+                </div>
+                {p.image_url && <img src={p.image_url} alt="" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 10, marginBottom: 8 }} />}
+                <p style={{ margin: 0, fontSize: 14, whiteSpace: "pre-wrap" }}>{p.summary}</p>
+                {p.coupon_code && <div style={{ marginTop: 8, fontSize: 13 }}>🎟️ Coupon: <b>{p.coupon_code}</b></div>}
+                {(p.event_start || p.event_end) && <div className="muted" style={{ marginTop: 6, fontSize: 12.5 }}>📅 {fmtDate(p.event_start)}{p.event_end ? ` → ${fmtDate(p.event_end)}` : ""}</div>}
+                {p.terms && <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>Terms: {p.terms}</div>}
+                {p.cta_url && <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--accent)" }}>▸ Learn more → {p.cta_url}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </>}
+
+      {/* PHOTOS */}
+      {sub === "photos" && (
+        photos.length === 0 ? (
+          <div className="panel" style={{ padding: 40, textAlign: "center" }}>
+            <div style={{ fontSize: 30 }}>🖼️</div>
+            <p className="muted" style={{ marginTop: 6 }}>No photos yet. Click “📷 Upload Photo” to add your first one.</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px,1fr))", gap: 12 }}>
+            {photos.map((p) => (
+              <div key={p.id} className="panel" style={{ padding: 10 }}>
+                <img src={p.image_url} alt={p.caption ?? ""} style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }} />
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                  <StatusBadge s={p.status} />
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {p.status !== "PUBLISHED" && <button className="btn-mini" style={{ padding: "4px 8px" }} onClick={() => publishPhoto(p.id)}>Publish</button>}
+                    <button className="btn-mini danger" style={{ padding: "4px 8px" }} onClick={() => removePhoto(p.id)}>✕</button>
+                  </div>
+                </div>
+                <div className="muted" style={{ fontSize: 10.5, marginTop: 6, textTransform: "capitalize" }}>{p.category.replace(/_/g, " ").toLowerCase()}</div>
+                {p.caption && <div style={{ fontSize: 12, marginTop: 2 }}>{p.caption}</div>}
+                {p.status === "SCHEDULED" && p.scheduled_at && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>⏰ {fmtDate(p.scheduled_at)}</div>}
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {/* AI GENERATE */}
+      {sub === "ai" && <AiGenerate locations={locations} onDraft={(s) => { setSeed(s); setShowPost(true); }} />}
+
+      {showPost && <PostModal locations={locations} seed={seed} onClose={() => setShowPost(false)} onSaved={() => { setShowPost(false); setSub("posts"); loadPosts(); }} />}
+      {showPhoto && <PhotoModal locations={locations} onClose={() => setShowPhoto(false)} onSaved={() => { setShowPhoto(false); setSub("photos"); loadPhotos(); }} />}
+    </div>
+  );
+}
+
+/* AI Generate — draft a post body with AI, then open the composer prefilled. */
+function AiGenerate({ locations, onDraft }: { locations: GbpLocationItem[]; onDraft: (s: { type: string; summary: string }) => void }) {
+  const [type, setType] = useState("STANDARD");
+  const [loc, setLoc] = useState(locations[0]?.id ?? "");
+  const [topic, setTopic] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function generate() {
+    const t = getToken(); if (!t) return;
+    if (!topic.trim()) { setErr("Tell the AI what the post is about."); return; }
+    setBusy(true); setErr(null);
+    try { const r = await api.gbp.generatePost(t, { topic: topic.trim(), type, location: loc || undefined }); onDraft({ type, summary: r.text }); }
+    catch (e) { setErr((e as ApiError).message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="panel" style={{ maxWidth: 560 }}>
+      <h2 style={{ fontSize: 16, marginTop: 0 }}>✨ AI post generator</h2>
+      <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>Give a topic and let AI draft the post — then review and publish it.</p>
+      {err && <div className="error">{err}</div>}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="field" style={{ flex: 1, minWidth: 160 }}><label>Post type</label>
+          <select value={type} onChange={(e) => setType(e.target.value)} style={inp}>
+            {POST_TABS.map((pt) => <option key={pt.v} value={pt.v}>{pt.label}</option>)}
           </select>
         </div>
-        <div className="field">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <label style={{ marginBottom: 0 }}>Caption <span className="muted">(optional)</span></label>
-            <button type="button" className="btn-mini" disabled={genBusy} onClick={genCaption}>{genBusy ? "Writing…" : "✨ AI"}</button>
-          </div>
-          <input value={form.caption} onChange={(e) => setForm((f) => ({ ...f, caption: e.target.value }))} style={{ ...inp, marginTop: 6 }} />
-        </div>
-        {form.image_url && <img src={form.image_url} alt="" style={{ width: "100%", borderRadius: 10, marginBottom: 10, maxHeight: 160, objectFit: "cover" }} />}
-        <button className="btn" disabled={busy}>{busy ? "Saving…" : "Save photo"}</button>
-      </form>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px,1fr))", gap: 12 }}>
-        {photos.map((p) => (
-          <div key={p.id} className="panel" style={{ padding: 10 }}>
-            <img src={p.image_url} alt={p.caption ?? ""} style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8 }} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-              <StatusBadge s={p.status} />
-              <div style={{ display: "flex", gap: 4 }}>
-                {p.status !== "PUBLISHED" && <button className="btn-mini" style={{ padding: "4px 8px" }} onClick={() => publish(p.id)}>Publish</button>}
-                <button className="btn-mini danger" style={{ padding: "4px 8px" }} onClick={() => remove(p.id)}>✕</button>
-              </div>
-            </div>
-            {p.caption && <div style={{ fontSize: 12, marginTop: 6 }}>{p.caption}</div>}
-          </div>
-        ))}
-        {photos.length === 0 && <div className="panel" style={{ padding: 28, textAlign: "center", gridColumn: "1/-1" }}><span className="muted">No photos yet. Add one on the left, then Publish to Google.</span></div>}
+        {locations.length > 1 && <div className="field" style={{ flex: 1, minWidth: 160 }}><label>Location</label><LocationPicker locations={locations} value={loc} onChange={setLoc} /></div>}
       </div>
+      <div className="field"><label>What should this post be about?</label>
+        <textarea value={topic} onChange={(e) => setTopic(e.target.value)} rows={3} placeholder="e.g. Diwali discount on all services this week" style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} /></div>
+      <button className="btn" disabled={busy} onClick={generate}>{busy ? "Generating…" : "✨ Generate draft"}</button>
+      <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>Uses AI credits. The draft opens in the composer for review before publishing.</p>
     </div>
   );
 }

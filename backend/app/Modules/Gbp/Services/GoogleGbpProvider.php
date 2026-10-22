@@ -247,6 +247,32 @@ class GoogleGbpProvider
             ]);
         }
 
+        // EVENT and OFFER posts carry an event block (title + schedule window);
+        // OFFER posts additionally carry the coupon/terms in an offer block.
+        $topic = $post['type'] ?? 'STANDARD';
+        if (in_array($topic, ['EVENT', 'OFFER'], true)) {
+            $title = $post['title']
+                ?? (\Illuminate\Support\Str::limit(trim((string) ($post['summary'] ?? '')), 58, '')
+                    ?: ($topic === 'OFFER' ? 'Special offer' : 'Event'));
+            $event = array_filter([
+                'title' => $title,
+                'schedule' => $this->buildSchedule($post['event_start'] ?? null, $post['event_end'] ?? null),
+            ]);
+            if (! empty($event)) {
+                $body['event'] = $event;
+            }
+        }
+        if ($topic === 'OFFER') {
+            $offer = array_filter([
+                'couponCode' => $post['coupon_code'] ?? null,
+                'redeemOnlineUrl' => $post['cta_url'] ?? null,
+                'termsConditions' => $post['terms'] ?? null,
+            ]);
+            if (! empty($offer)) {
+                $body['offer'] = $offer;
+            }
+        }
+
         try {
             $res = $this->client($integration)->post("https://mybusiness.googleapis.com/v4/{$locationName}/localPosts", $body);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
@@ -263,6 +289,40 @@ class GoogleGbpProvider
         }
 
         return $res->json('name');
+    }
+
+    /**
+     * Google localPost event schedule: start/end as Date + TimeOfDay objects.
+     * Returns null when neither bound is given.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function buildSchedule(?string $start, ?string $end): ?array
+    {
+        $part = function (?string $iso): array {
+            if (empty($iso)) {
+                return [];
+            }
+            $d = \Illuminate\Support\Carbon::parse($iso);
+
+            return [
+                'date' => ['year' => (int) $d->year, 'month' => (int) $d->month, 'day' => (int) $d->day],
+                'time' => ['hours' => (int) $d->hour, 'minutes' => (int) $d->minute],
+            ];
+        };
+
+        $s = $part($start);
+        $e = $part($end);
+        if (empty($s) && empty($e)) {
+            return null;
+        }
+
+        return array_filter([
+            'startDate' => $s['date'] ?? null,
+            'startTime' => $s['time'] ?? null,
+            'endDate' => $e['date'] ?? ($s['date'] ?? null),
+            'endTime' => $e['time'] ?? null,
+        ]);
     }
 
     /** Delete a published local post by its Google resource name. */

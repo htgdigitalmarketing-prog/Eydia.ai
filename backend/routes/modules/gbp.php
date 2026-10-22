@@ -24,6 +24,9 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     // Google audit / health score.
     Route::get('/health', [GbpController::class, 'health']);
 
+    // Image upload for posts & photos (drag & drop / browse).
+    Route::post('/upload', [GbpController::class, 'uploadImage']);
+
     // GBP posts (localPosts).
     Route::get('/posts', [GbpPostController::class, 'index']);
     Route::post('/posts/generate', [GbpPostController::class, 'generate']); // AI caption

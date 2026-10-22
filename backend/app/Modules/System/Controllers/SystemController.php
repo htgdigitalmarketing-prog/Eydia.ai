@@ -60,6 +60,15 @@ class SystemController extends Controller
             }
         }
 
+        // Link storage/app/public -> public/storage so uploaded post & photo
+        // images are web-served (idempotent; ignores "already exists").
+        try {
+            Artisan::call('storage:link');
+            $output['storage:link'] = trim(Artisan::output()) ?: 'done';
+        } catch (\Throwable $e) {
+            $output['storage:link'] = 'ERROR: ' . $e->getMessage();
+        }
+
         // Re-cache config/routes for production speed (optional but recommended).
         foreach (['config:cache', 'route:cache'] as $command) {
             try {

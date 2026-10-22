@@ -609,7 +609,18 @@ export const api = {
 
     // GBP posts (localPosts)
     posts: (token: string, location?: string) =>
-      request<{ posts: GbpPostItem[] }>(`/gbp/posts${location ? `?location=${location}` : ""}`, { token }),
+      request<{ posts: GbpPostItem[]; counts: { total: number; published: number; scheduled: number; draft: number } }>(`/gbp/posts${location ? `?location=${location}` : ""}`, { token }),
+    uploadImage: async (token: string, file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${BASE}/gbp/upload`, { method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, body: form });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || (json && json.success === false)) {
+        const err: ApiError = { message: json?.message ?? `Upload failed (${res.status})`, errors: json?.errors, status: res.status };
+        throw err;
+      }
+      return json.data as { url: string; path: string };
+    },
     generatePost: (token: string, body: { topic: string; type?: string; location?: string }) =>
       request<{ text: string; source: string; credits: number | null }>("/gbp/posts/generate", { method: "POST", body, token }),
     createPost: (token: string, body: GbpPostInput) => request<{ post: GbpPostItem }>("/gbp/posts", { method: "POST", body, token }),
@@ -996,11 +1007,22 @@ export type GbpPostItem = {
   image_url: string | null;
   cta_type: string | null;
   cta_url: string | null;
-  status: "DRAFT" | "PUBLISHED" | "FAILED";
+  status: "DRAFT" | "PUBLISHED" | "SCHEDULED" | "FAILED";
   published_at: string | null;
+  scheduled_at: string | null;
   created_at: string | null;
+  title: string | null;
+  coupon_code: string | null;
+  terms: string | null;
+  event_start: string | null;
+  event_end: string | null;
 };
-export type GbpPostInput = { location: string; summary: string; type?: string; image_url?: string | null; cta_type?: string | null; cta_url?: string | null };
+export type GbpPostInput = {
+  location: string; summary: string; type?: string;
+  image_url?: string | null; cta_type?: string | null; cta_url?: string | null;
+  schedule_at?: string | null; title?: string | null; coupon_code?: string | null;
+  terms?: string | null; event_start?: string | null; event_end?: string | null;
+};
 
 export type GbpPhotoItem = {
   id: string;
@@ -1008,11 +1030,12 @@ export type GbpPhotoItem = {
   image_url: string;
   caption: string | null;
   category: string;
-  status: "DRAFT" | "PUBLISHED" | "FAILED";
+  status: "DRAFT" | "PUBLISHED" | "SCHEDULED" | "FAILED";
   published_at: string | null;
+  scheduled_at: string | null;
   created_at: string | null;
 };
-export type GbpPhotoInput = { location: string; image_url: string; caption?: string | null; category?: string };
+export type GbpPhotoInput = { location: string; image_url: string; caption?: string | null; category?: string; schedule_at?: string | null };
 
 export type GbpInsights = {
   connected: boolean;

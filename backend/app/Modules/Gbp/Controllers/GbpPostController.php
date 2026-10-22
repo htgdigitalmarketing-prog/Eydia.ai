@@ -68,7 +68,17 @@ class GbpPostController extends Controller
             $query->whereHas('location', fn ($q) => $q->where('uuid', $loc));
         }
 
-        return $this->ok(['posts' => $query->limit(200)->get()->map(fn (GbpPost $p) => $this->arr($p))->all()]);
+        $posts = $query->limit(200)->get();
+
+        return $this->ok([
+            'posts' => $posts->map(fn (GbpPost $p) => $this->arr($p))->all(),
+            'counts' => [
+                'total' => $posts->count(),
+                'published' => $posts->where('status', 'PUBLISHED')->count(),
+                'scheduled' => $posts->where('status', 'SCHEDULED')->count(),
+                'draft' => $posts->whereIn('status', ['DRAFT', 'FAILED'])->count(),
+            ],
+        ]);
     }
 
     public function store(Request $request): JsonResponse
@@ -80,21 +90,56 @@ class GbpPostController extends Controller
             'image_url' => ['nullable', 'url', 'max:1024'],
             'cta_type' => ['nullable', 'in:NONE,LEARN_MORE,CALL,ORDER,BOOK,SIGN_UP,SHOP'],
             'cta_url' => ['nullable', 'url', 'max:1024'],
+            'schedule_at' => ['nullable', 'date'],
+            // Offer / Event extras (stored in meta)
+            'title' => ['nullable', 'string', 'max:255'],
+            'coupon_code' => ['nullable', 'string', 'max:80'],
+            'terms' => ['nullable', 'string', 'max:5000'],
+            'event_start' => ['nullable', 'date'],
+            'event_end' => ['nullable', 'date', 'after_or_equal:event_start'],
         ]);
+        $type = $data['type'] ?? 'STANDARD';
         $location = GbpLocation::where('uuid', $data['location'])->firstOrFail();
 
         $post = GbpPost::create([
             'tenant_id' => $request->user()->tenant_id,
             'gbp_location_id' => $location->id,
-            'type' => $data['type'] ?? 'STANDARD',
+            'type' => $type,
             'summary' => $data['summary'],
             'image_url' => $data['image_url'] ?? null,
             'cta_type' => ($data['cta_type'] ?? 'NONE') === 'NONE' ? null : $data['cta_type'],
             'cta_url' => $data['cta_url'] ?? null,
-            'status' => 'DRAFT',
+            'status' => $this->statusFor($data['schedule_at'] ?? null),
+            'scheduled_at' => $this->parseDate($data['schedule_at'] ?? null),
+            'meta' => $this->buildMeta($data) ?: null,
         ]);
 
         return $this->ok(['post' => $this->arr($post->load('location'))], 201);
+    }
+
+    /** SCHEDULED when a future publish time is given, otherwise a DRAFT. */
+    private function statusFor(?string $scheduleAt): string
+    {
+        $at = $this->parseDate($scheduleAt);
+
+        return $at && $at->isFuture() ? 'SCHEDULED' : 'DRAFT';
+    }
+
+    private function parseDate(?string $v): ?\Illuminate\Support\Carbon
+    {
+        return ! empty($v) ? \Illuminate\Support\Carbon::parse($v) : null;
+    }
+
+    /** @param array<string,mixed> $data */
+    private function buildMeta(array $data): array
+    {
+        return array_filter([
+            'title' => $data['title'] ?? null,
+            'coupon_code' => $data['coupon_code'] ?? null,
+            'terms' => $data['terms'] ?? null,
+            'event_start' => ($d = $this->parseDate($data['event_start'] ?? null)) ? $d->toIso8601String() : null,
+            'event_end' => ($e = $this->parseDate($data['event_end'] ?? null)) ? $e->toIso8601String() : null,
+        ], fn ($v) => $v !== null && $v !== '');
     }
 
     public function update(Request $request, string $uuid): JsonResponse
@@ -124,12 +169,18 @@ class GbpPostController extends Controller
             return $this->fail('Connect your Google Business Profile to publish posts to Google.', [], 422);
         }
 
+        $meta = $post->meta ?? [];
         $name = $provider->createPost($integration, $post->location->google_location_id, [
             'summary' => $post->summary,
             'type' => $post->type,
             'image_url' => $post->image_url,
             'cta_type' => $post->cta_type,
             'cta_url' => $post->cta_url,
+            'title' => $meta['title'] ?? null,
+            'coupon_code' => $meta['coupon_code'] ?? null,
+            'terms' => $meta['terms'] ?? null,
+            'event_start' => $meta['event_start'] ?? null,
+            'event_end' => $meta['event_end'] ?? null,
         ]);
 
         if (! $name) {
@@ -173,7 +224,13 @@ class GbpPostController extends Controller
             'cta_url' => $p->cta_url,
             'status' => $p->status,
             'published_at' => $p->published_at?->toIso8601String(),
+            'scheduled_at' => $p->scheduled_at?->toIso8601String(),
             'created_at' => $p->created_at?->toIso8601String(),
+            'title' => $p->meta['title'] ?? null,
+            'coupon_code' => $p->meta['coupon_code'] ?? null,
+            'terms' => $p->meta['terms'] ?? null,
+            'event_start' => $p->meta['event_start'] ?? null,
+            'event_end' => $p->meta['event_end'] ?? null,
         ];
     }
 }

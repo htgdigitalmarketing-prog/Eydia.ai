@@ -74,9 +74,12 @@ class GbpPhotoController extends Controller
             'location' => ['required', 'string'],
             'image_url' => ['required', 'url', 'max:1024'],
             'caption' => ['nullable', 'string', 'max:255'],
-            'category' => ['nullable', 'in:COVER,PROFILE,LOGO,EXTERIOR,INTERIOR,PRODUCT,AT_WORK,FOOD_AND_DRINK,ADDITIONAL'],
+            'category' => ['nullable', 'in:COVER,PROFILE,LOGO,EXTERIOR,INTERIOR,PRODUCT,AT_WORK,FOOD_AND_DRINK,TEAMS,ADDITIONAL'],
+            'schedule_at' => ['nullable', 'date'],
         ]);
         $location = GbpLocation::where('uuid', $data['location'])->firstOrFail();
+
+        $scheduledAt = ! empty($data['schedule_at']) ? \Illuminate\Support\Carbon::parse($data['schedule_at']) : null;
 
         $photo = GbpPhoto::create([
             'tenant_id' => $request->user()->tenant_id,
@@ -84,7 +87,8 @@ class GbpPhotoController extends Controller
             'image_url' => $data['image_url'],
             'caption' => $data['caption'] ?? null,
             'category' => $data['category'] ?? 'ADDITIONAL',
-            'status' => 'DRAFT',
+            'status' => ($scheduledAt && $scheduledAt->isFuture()) ? 'SCHEDULED' : 'DRAFT',
+            'scheduled_at' => $scheduledAt,
         ]);
 
         return $this->ok(['photo' => $this->arr($photo->load('location'))], 201);
@@ -135,6 +139,7 @@ class GbpPhotoController extends Controller
             'category' => $p->category,
             'status' => $p->status,
             'published_at' => $p->published_at?->toIso8601String(),
+            'scheduled_at' => $p->scheduled_at?->toIso8601String(),
             'created_at' => $p->created_at?->toIso8601String(),
         ];
     }
