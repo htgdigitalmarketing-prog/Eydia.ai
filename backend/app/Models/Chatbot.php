@@ -17,12 +17,14 @@ class Chatbot extends Model
 
     protected $fillable = [
         'tenant_id', 'whatsapp_phone_number_id', 'name', 'is_active',
-        'welcome_message', 'fallback_message', 'ai_enabled', 'ai_instructions',
-        'followup_enabled', 'followup_message',
+        'welcome_message', 'welcome_buttons', 'is_lead_flow', 'fallback_message',
+        'ai_enabled', 'ai_instructions', 'followup_enabled', 'followup_message',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'is_lead_flow' => 'boolean',
+        'welcome_buttons' => 'array',
         'ai_enabled' => 'boolean',
         'followup_enabled' => 'boolean',
     ];

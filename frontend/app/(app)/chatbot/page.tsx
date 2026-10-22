@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  api, ApiError, ChatbotItem, ChatbotDetail, ChatbotRuleItem, WaNumber, TemplateItem,
+  api, ApiError, ChatbotItem, ChatbotDetail, ChatbotRuleItem, WaNumber, TemplateItem, LeadFlowStatus,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
@@ -37,6 +37,10 @@ export default function ChatbotPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Ready-made GBP lead-automation flow
+  const [leadFlow, setLeadFlow] = useState<LeadFlowStatus | null>(null);
+  const [flowBusy, setFlowBusy] = useState(false);
 
   // Create
   const [showCreate, setShowCreate] = useState(false);
@@ -116,11 +120,33 @@ export default function ChatbotPage() {
     }
   }, []);
 
-  useEffect(() => { loadBots(); }, [loadBots]);
+  const loadLeadFlow = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    try { setLeadFlow(await api.chatbot.leadFlow(token)); } catch { /* non-blocking */ }
+  }, []);
+
+  useEffect(() => { loadBots(); loadLeadFlow(); }, [loadBots, loadLeadFlow]);
 
   function flash(msg: string) {
     setNotice(msg);
-    setTimeout(() => setNotice(null), 3000);
+    setTimeout(() => setNotice(null), 4000);
+  }
+
+  async function installLeadFlow() {
+    const token = getToken();
+    if (!token) return;
+    setFlowBusy(true);
+    setError(null);
+    try {
+      const res = await api.chatbot.installLeadFlow(token);
+      flash(res.message);
+      await Promise.all([loadBots(), loadLeadFlow()]);
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setFlowBusy(false);
+    }
   }
 
   async function createBot(e: React.FormEvent) {
@@ -260,6 +286,8 @@ export default function ChatbotPage() {
 
         {error && <div className="error">{error}</div>}
         {notice && <div className="panel" style={{ background: "#e7f7ef", color: "#0a7d47", marginBottom: 16 }}>{notice}</div>}
+
+        <LeadFlowCard flow={leadFlow} busy={flowBusy} onInstall={installLeadFlow} />
 
         {loading ? (
           <div className="loading-block"><span className="spinner" /><span>Loading…</span></div>
@@ -512,6 +540,51 @@ export default function ChatbotPage() {
           </form>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* One-click "GBP Lead Automation" WhatsApp funnel (from the Eydia lead-flow doc). */
+function LeadFlowCard({ flow, busy, onInstall }: { flow: LeadFlowStatus | null; busy: boolean; onInstall: () => void }) {
+  const steps = flow?.steps ?? [];
+  const installed = flow?.installed;
+  return (
+    <div className="panel" style={{ marginBottom: 16, borderLeft: "4px solid var(--accent)", background: "linear-gradient(120deg, color-mix(in srgb, var(--accent) 7%, var(--card)), var(--card) 60%)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 12 }}>
+          <div style={{ fontSize: 26, lineHeight: 1 }}>⚡</div>
+          <div>
+            <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+              GBP Lead Automation
+              {installed && <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: flow?.active ? "#e7f7ef" : "#eef1f2", color: flow?.active ? "#0a7d47" : "#667781" }}>{flow?.active ? "Active" : "Installed"}</span>}
+            </h3>
+            <p className="muted" style={{ margin: "4px 0 0", fontSize: 13, maxWidth: 560 }}>
+              A ready-made WhatsApp funnel: greets every lead, offers a free Google Business Profile check with tappable buttons, books a demo or sends details, and tags each lead in your CRM — hands off to a human on request.
+            </p>
+          </div>
+        </div>
+        <button className="btn" disabled={busy} onClick={onInstall} style={{ whiteSpace: "nowrap" }}>
+          {busy ? "Installing…" : installed ? "Reinstall / Reset flow" : "⚡ Install flow"}
+        </button>
+      </div>
+      {steps.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 8, marginTop: 14 }}>
+          {steps.map((s, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, background: "var(--card)" }}>
+              <span style={{ width: 22, height: 22, flexShrink: 0, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontSize: 11, fontWeight: 700, display: "grid", placeItems: "center" }}>{i + 1}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>{s.trigger}</div>
+                <div className="muted" style={{ fontSize: 12 }}>{s.action}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {installed && (
+        <p className="muted" style={{ fontSize: 11.5, marginTop: 10 }}>
+          Tip: edit the booking link, pricing and messages anytime by opening the “GBP Lead Automation” chatbot below. Reinstalling resets it to the default flow.
+        </p>
+      )}
     </div>
   );
 }

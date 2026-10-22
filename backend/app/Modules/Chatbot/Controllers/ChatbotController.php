@@ -88,6 +88,41 @@ class ChatbotController extends Controller
         return $this->ok(['chatbot' => new ChatbotResource($chatbot)], 201);
     }
 
+    /**
+     * One-click install of the ready-made "GBP Lead Automation" WhatsApp funnel
+     * (welcome → free GBP check → book demo / send details, with CRM tagging).
+     * Idempotent: re-running refreshes the same flow.
+     */
+    public function installGbpFlow(Request $request, \App\Modules\Chatbot\Services\GbpLeadFlowInstaller $installer): JsonResponse
+    {
+        $this->authorize('whatsapp.manage');
+
+        $bot = $installer->install($request->user()->tenant_id);
+        $bot->load(['phoneNumber', 'rules' => fn ($q) => $q->orderBy('priority')])->loadCount('rules');
+
+        return $this->ok([
+            'chatbot' => new ChatbotResource($bot),
+            'steps' => \App\Modules\Chatbot\Services\GbpLeadFlowInstaller::steps(),
+            'message' => 'GBP Lead Automation flow installed. It is now active on your WhatsApp number(s).',
+        ]);
+    }
+
+    /** Whether the GBP lead-automation flow is installed, plus its step summary. */
+    public function leadFlowStatus(): JsonResponse
+    {
+        $this->authorize('whatsapp.view');
+
+        $bot = Chatbot::where('is_lead_flow', true)->withCount('rules')->first();
+
+        return $this->ok([
+            'installed' => (bool) $bot,
+            'active' => (bool) $bot?->is_active,
+            'id' => $bot?->uuid,
+            'rules' => $bot?->rules_count ?? 0,
+            'steps' => \App\Modules\Chatbot\Services\GbpLeadFlowInstaller::steps(),
+        ]);
+    }
+
     public function update(string $uuid, Request $request): JsonResponse
     {
         $this->authorize('whatsapp.manage');

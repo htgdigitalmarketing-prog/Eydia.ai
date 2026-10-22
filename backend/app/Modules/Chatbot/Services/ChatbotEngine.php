@@ -39,6 +39,13 @@ class ChatbotEngine
             return;
         }
 
+        // A tapped quick-reply/list button arrives as 'interactive' or 'button';
+        // the button's title is already in $body, so treat it like plain text and
+        // let the keyword rules match it (powers the button-driven lead funnel).
+        if (in_array($type, ['interactive', 'button'], true)) {
+            $type = 'text';
+        }
+
         // Handle plain text, and images/PDFs (which the AI can read). Other media
         // types (audio, video, stickers, location) are ignored.
         $isMedia = in_array($type, ['image', 'document'], true);
@@ -86,6 +93,12 @@ class ChatbotEngine
             if ($matched) {
                 Log::info('chatbot: rule matched', ['chatbot' => $chatbot->id, 'keyword' => $matched->keyword]);
                 $this->sendResponse($phone, $to, $matched, $conversation, $contact);
+                $this->applyLeadActions($phone, $contact, $matched);
+            } elseif (! empty($chatbot->welcome_buttons) && $chatbot->welcome_message) {
+                // Button-driven flow: re-show the welcome menu for a first message
+                // or any unrecognized input (covers greetings and spam gracefully).
+                $result = $this->messages->sendButtons($phone, $to, $chatbot->welcome_message, (array) $chatbot->welcome_buttons);
+                $this->recordOutbound($phone, $conversation, $contact, $chatbot->welcome_message, 'interactive', $result);
             } elseif ($chatbot->ai_enabled) {
                 $aiReply = $this->ai->generate($chatbot, $conversation, $body);
                 if ($aiReply) {
@@ -194,7 +207,67 @@ class ChatbotEngine
             $body = \App\Models\Template::bodyText($phone->tenant_id, $rule->template_name) ?: "📄 Template: {$rule->template_name}";
             $this->recordOutbound($phone, $conversation, $contact, $body, 'template', $result);
         } elseif ($rule->response_text) {
-            $this->replyText($phone, $to, $rule->response_text, $conversation, $contact);
+            $buttons = is_array($rule->buttons) ? array_filter($rule->buttons) : [];
+            if ($buttons !== []) {
+                $result = $this->messages->sendButtons($phone, $to, $rule->response_text, $buttons);
+                $this->recordOutbound($phone, $conversation, $contact, $rule->response_text, 'interactive', $result);
+            } else {
+                $this->replyText($phone, $to, $rule->response_text, $conversation, $contact);
+            }
+        }
+    }
+
+    /**
+     * CRM side-effects of a matched funnel rule: upsert a WhatsApp Lead for the
+     * contact, set its pipeline stage and funnel tag, and notify the team when
+     * the lead asks to talk to a human.
+     */
+    private function applyLeadActions(WhatsappPhoneNumber $phone, Contact $contact, ChatbotRule $rule): void
+    {
+        if (! $rule->set_tag && ! $rule->set_stage && ! $rule->notify_agent) {
+            return;
+        }
+
+        $number = $contact->phone ?: ($contact->wa_id ? '+' . ltrim((string) $contact->wa_id, '+') : null);
+
+        if ($number) {
+            try {
+                $lead = \App\Models\Lead::withoutGlobalScopes()->firstOrNew([
+                    'tenant_id' => $phone->tenant_id,
+                    'phone' => $number,
+                ]);
+                if (! $lead->exists) {
+                    $lead->source = 'WHATSAPP';
+                    $lead->name = $contact->name ?: $number;
+                    $lead->stage = 'NEW';
+                }
+                if ($rule->set_stage) {
+                    $lead->stage = $rule->set_stage;
+                }
+                if ($rule->set_tag) {
+                    $meta = $lead->meta ?? [];
+                    $meta['tag'] = $rule->set_tag;
+                    $meta['flow'] = 'gbp_lead_automation';
+                    $lead->meta = $meta;
+                }
+                $lead->last_contacted_at = now();
+                $lead->save();
+            } catch (\Throwable $e) {
+                Log::warning('chatbot: lead tagging failed: ' . $e->getMessage());
+            }
+        }
+
+        if ($rule->notify_agent) {
+            try {
+                app(\App\Modules\Mobile\Services\PushNotificationService::class)->notifyTenant(
+                    $phone->tenant_id,
+                    'Lead wants to talk to a human',
+                    ($contact->name ?: $number ?: 'A lead') . ' asked to talk to your team on WhatsApp.',
+                    ['type' => 'lead_handoff'],
+                );
+            } catch (\Throwable $e) {
+                Log::warning('chatbot: handoff notify failed: ' . $e->getMessage());
+            }
         }
     }
 

@@ -361,6 +361,10 @@ export const api = {
       request<{ rule: ChatbotRuleItem }>(`/chatbots/${botId}/rules/${ruleId}`, { method: "PUT", body, token }),
     deleteRule: (token: string, botId: string, ruleId: string) =>
       request<{ message: string }>(`/chatbots/${botId}/rules/${ruleId}`, { method: "DELETE", token }),
+    leadFlow: (token: string) =>
+      request<LeadFlowStatus>("/chatbots/lead-flow", { token }),
+    installLeadFlow: (token: string) =>
+      request<{ chatbot: ChatbotDetail; steps: LeadFlowStep[]; message: string }>("/chatbots/lead-flow/install", { method: "POST", token }),
   },
 
   agents: {
@@ -1502,17 +1506,26 @@ export type ChatbotRuleItem = {
   keyword: string;
   match_type: string;
   response_text: string | null;
+  buttons?: string[];
   response_type: string;
   template_name: string | null;
+  set_tag?: string | null;
+  set_stage?: string | null;
+  notify_agent?: boolean;
   priority: number;
   is_active: boolean;
 };
+
+export type LeadFlowStep = { trigger: string; action: string };
+export type LeadFlowStatus = { installed: boolean; active: boolean; id: string | null; rules: number; steps: LeadFlowStep[] };
 
 export type ChatbotItem = {
   id: string;
   name: string;
   is_active: boolean;
+  is_lead_flow?: boolean;
   welcome_message: string | null;
+  welcome_buttons?: string[];
   fallback_message: string | null;
   ai_enabled?: boolean;
   ai_instructions?: string | null;

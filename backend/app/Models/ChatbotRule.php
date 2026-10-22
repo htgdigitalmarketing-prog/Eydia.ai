@@ -14,11 +14,14 @@ class ChatbotRule extends Model
 
     protected $fillable = [
         'tenant_id', 'chatbot_id', 'keyword', 'match_type', 'response_text',
-        'response_type', 'template_name', 'priority', 'is_active',
+        'buttons', 'response_type', 'template_name', 'set_tag', 'set_stage',
+        'notify_agent', 'priority', 'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'notify_agent' => 'boolean',
+        'buttons' => 'array',
         'priority' => 'integer',
     ];
 

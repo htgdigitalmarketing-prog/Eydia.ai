@@ -23,6 +23,38 @@ class WhatsAppMessageService extends BaseService
     }
 
     /**
+     * Send an interactive message with up to 3 quick-reply buttons. Falls back
+     * to a plain text message when no valid button is given. WhatsApp limits:
+     * body ≤1024 chars, 3 buttons, each title ≤20 chars.
+     *
+     * @param  array<int,string>  $buttons
+     */
+    public function sendButtons(WhatsappPhoneNumber $phone, string $to, string $body, array $buttons): array
+    {
+        $rows = [];
+        foreach (array_values($buttons) as $i => $title) {
+            $title = trim((string) $title);
+            if ($title === '' || count($rows) >= 3) {
+                continue;
+            }
+            $rows[] = ['type' => 'reply', 'reply' => ['id' => 'btn_' . $i, 'title' => mb_substr($title, 0, 20)]];
+        }
+
+        if ($rows === []) {
+            return $this->sendText($phone, $to, $body);
+        }
+
+        return $this->provider($phone)->sendMessage($phone->phone_number_id, $to, [
+            'type' => 'interactive',
+            'interactive' => [
+                'type' => 'button',
+                'body' => ['text' => mb_substr($body, 0, 1024)],
+                'action' => ['buttons' => $rows],
+            ],
+        ]);
+    }
+
+    /**
      * @param  array  $components  Cloud API template components (body/header/button params)
      */
     public function sendTemplate(WhatsappPhoneNumber $phone, string $to, string $templateName, string $language, array $components = []): array
