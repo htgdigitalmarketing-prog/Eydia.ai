@@ -625,8 +625,10 @@ export const api = {
       }
       return json.data as { url: string; path: string };
     },
-    generatePost: (token: string, body: { topic: string; type?: string; location?: string }) =>
+    generatePost: (token: string, body: { topic: string; type?: string; location?: string; image_url?: string | null }) =>
       request<{ text: string; source: string; credits: number | null }>("/gbp/posts/generate", { method: "POST", body, token }),
+    site: (token: string) => request<{ site: BusinessSiteInfo | null }>("/gbp/site", { token }),
+    generateSite: (token: string) => request<{ site: BusinessSiteInfo; message: string }>("/gbp/site/generate", { method: "POST", token }),
     createPost: (token: string, body: GbpPostInput) => request<{ post: GbpPostItem }>("/gbp/posts", { method: "POST", body, token }),
     updatePost: (token: string, id: string, body: Partial<GbpPostInput>) => request<{ post: GbpPostItem }>(`/gbp/posts/${id}`, { method: "PUT", body, token }),
     publishPost: (token: string, id: string) => request<{ post: GbpPostItem }>(`/gbp/posts/${id}/publish`, { method: "POST", token }),
@@ -1049,6 +1051,15 @@ export type GbpInsights = {
   series: { date: string; value: number }[];
   labels: Record<string, string>;
   message?: string;
+};
+
+export type BusinessSiteInfo = {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+  url: string;
+  published_at: string | null;
 };
 
 export type GbpHealthAction = {

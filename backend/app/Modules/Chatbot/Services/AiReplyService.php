@@ -120,6 +120,34 @@ class AiReplyService
     }
 
     /**
+     * Look at an image/PDF and return a short description for a given
+     * instruction. Chatbot-independent (used by the GBP AI post generator so the
+     * AI can "see" an uploaded file). Returns null when no AI is configured.
+     */
+    public function visionDescribe(string $instruction, string $bytes, string $mime): ?string
+    {
+        $chain = $this->providerChain();
+        if ($chain === [] || (! str_starts_with($mime, 'image/') && $mime !== 'application/pdf')) {
+            return null;
+        }
+
+        foreach ($chain as $provider) {
+            try {
+                $reply = $provider === 'gemini'
+                    ? $this->callGeminiVision('You are a concise visual assistant.', $instruction, $bytes, $mime)
+                    : $this->callAnthropicVision('You are a concise visual assistant.', $instruction, $bytes, $mime);
+                if ($reply) {
+                    return trim($reply);
+                }
+            } catch (\Throwable $e) {
+                Log::warning("AI vision via {$provider} failed: " . $e->getMessage());
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Ordered list of providers to try. The preferred one (AI_PROVIDER) comes
      * first; the other follows as a fallback. Only providers whose key is set are
      * included — so a single configured key still works, and when both are set a

@@ -769,7 +769,7 @@ a:hover { text-decoration: underline; }
 
 /* Message info overlay */
 .msg-info-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; display: grid; place-items: center; }
-.msg-info-panel { background: #fff; border-radius: 14px; padding: 20px; width: 360px; max-width: 90vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,.2); }
+.msg-info-panel { background: #fff; border-radius: 14px; padding: 20px; width: 360px; max-width: 90vw; max-height: 90vh; overflow-y: auto; overflow-x: hidden; box-shadow: 0 8px 30px rgba(0,0,0,.2); }
 
 /* ---- Mobile hamburger toggle ---- */
 .menu-toggle { display: none; }

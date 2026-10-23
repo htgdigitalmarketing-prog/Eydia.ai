@@ -6,7 +6,7 @@ import { AccessDenied, hasFeature } from "@/components/PlanGate";
 import { PageHeader } from "@/components/PageHeader";
 import {
   api, ApiError, GbpConnection, GbpOverview, GbpReviewItem,
-  GbpPostItem, GbpPhotoItem, GbpInsights, GbpHealth, GbpLocationItem, GbpOptimizeResult,
+  GbpPostItem, GbpPhotoItem, GbpInsights, GbpHealth, GbpLocationItem, GbpOptimizeResult, BusinessSiteInfo,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
@@ -16,6 +16,7 @@ const TABS = [
   { k: "overview", label: "Overview", icon: "📊" },
   { k: "reviews", label: "Reviews", icon: "⭐" },
   { k: "content", label: "Posts & Photos", icon: "📝" },
+  { k: "website", label: "Website", icon: "🌐" },
   { k: "insights", label: "Insights", icon: "📈" },
   { k: "health", label: "Health Score", icon: "🩺" },
 ];
@@ -71,6 +72,7 @@ function GbpDashboard() {
       {tab === "overview" && <OverviewTab overview={overview} busy={busy} onSync={sync} onGoTab={setTab} />}
       {tab === "reviews" && <ReviewsTab overview={overview} />}
       {tab === "content" && <PostsPhotosTab locations={locations} />}
+      {tab === "website" && <WebsiteTab hasLocations={locations.length > 0} />}
       {tab === "insights" && <InsightsTab locations={locations} />}
       {tab === "health" && <HealthTab />}
     </div>
@@ -661,11 +663,11 @@ function ImageDrop({ value, onChange }: { value: string; onChange: (url: string)
 
 /* Add Post modal — Update / Offer / Event, each pushed to Google as a localPost. */
 function PostModal({ locations, seed, onClose, onSaved }:
-  { locations: GbpLocationItem[]; seed?: { type?: string; summary?: string } | null; onClose: () => void; onSaved: () => void }) {
+  { locations: GbpLocationItem[]; seed?: { type?: string; summary?: string; image_url?: string } | null; onClose: () => void; onSaved: () => void }) {
   const [type, setType] = useState(seed?.type ?? "STANDARD");
   const [loc, setLoc] = useState(locations[0]?.id ?? "");
   const [form, setForm] = useState({
-    summary: seed?.summary ?? "", image_url: "", cta_url: "",
+    summary: seed?.summary ?? "", image_url: seed?.image_url ?? "", cta_url: "",
     coupon_code: "", terms: "", event_start: "", event_end: "", schedule_at: "",
   });
   const [busy, setBusy] = useState(false);
@@ -705,7 +707,7 @@ function PostModal({ locations, seed, onClose, onSaved }:
 
   return (
     <div className="msg-info-overlay" onClick={onClose} style={{ zIndex: 200 }}>
-      <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
+      <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ width: "min(560px, 94vw)", maxWidth: "94vw" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>Add Post</h2>
           <button className="btn-mini" onClick={onClose}>✕</button>
@@ -737,9 +739,9 @@ function PostModal({ locations, seed, onClose, onSaved }:
             <div className="field"><label>Terms &amp; Conditions</label><textarea value={form.terms} onChange={(e) => set("terms", e.target.value)} rows={2} placeholder="Offer terms…" style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} /></div>
           </>}
           {type !== "STANDARD" && (
-            <div style={{ display: "flex", gap: 10 }}>
-              <div className="field" style={{ flex: 1 }}><label>Start Date &amp; Time</label><input type="datetime-local" value={form.event_start} onChange={(e) => set("event_start", e.target.value)} style={inp} /></div>
-              <div className="field" style={{ flex: 1 }}><label>End Date &amp; Time</label><input type="datetime-local" value={form.event_end} onChange={(e) => set("event_end", e.target.value)} style={inp} /></div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div className="field" style={{ flex: "1 1 150px", minWidth: 0 }}><label>Start Date &amp; Time</label><input type="datetime-local" value={form.event_start} onChange={(e) => set("event_start", e.target.value)} style={{ ...inp, minWidth: 0 }} /></div>
+              <div className="field" style={{ flex: "1 1 150px", minWidth: 0 }}><label>End Date &amp; Time</label><input type="datetime-local" value={form.event_end} onChange={(e) => set("event_end", e.target.value)} style={{ ...inp, minWidth: 0 }} /></div>
             </div>
           )}
           <div className="field"><label>Schedule <span className="muted">(leave blank to publish now)</span></label>
@@ -788,7 +790,7 @@ function PhotoModal({ locations, onClose, onSaved }: { locations: GbpLocationIte
 
   return (
     <div className="msg-info-overlay" onClick={onClose} style={{ zIndex: 200 }}>
-      <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+      <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ width: "min(520px, 94vw)", maxWidth: "94vw" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <h2 style={{ margin: 0 }}>Upload Photo</h2>
           <button className="btn-mini" onClick={onClose}>✕</button>
@@ -848,7 +850,7 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
   const [filter, setFilter] = useState<"all" | "PUBLISHED" | "SCHEDULED" | "DRAFT">("all");
   const [showPost, setShowPost] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
-  const [seed, setSeed] = useState<{ type?: string; summary?: string } | null>(null);
+  const [seed, setSeed] = useState<{ type?: string; summary?: string; image_url?: string } | null>(null);
 
   const loadPosts = useCallback(() => { const t = getToken(); if (t) api.gbp.posts(t).then((r) => { setPosts(r.posts); setCounts(r.counts); }).catch(() => {}); }, []);
   const loadPhotos = useCallback(() => { const t = getToken(); if (t) api.gbp.photos(t).then((r) => setPhotos(r.photos)).catch(() => {}); }, []);
@@ -983,25 +985,28 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
 }
 
 /* AI Generate — draft a post body with AI, then open the composer prefilled. */
-function AiGenerate({ locations, onDraft }: { locations: GbpLocationItem[]; onDraft: (s: { type: string; summary: string }) => void }) {
+function AiGenerate({ locations, onDraft }: { locations: GbpLocationItem[]; onDraft: (s: { type: string; summary: string; image_url?: string }) => void }) {
   const [type, setType] = useState("STANDARD");
   const [loc, setLoc] = useState(locations[0]?.id ?? "");
   const [topic, setTopic] = useState("");
+  const [image, setImage] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function generate() {
     const t = getToken(); if (!t) return;
-    if (!topic.trim()) { setErr("Tell the AI what the post is about."); return; }
+    if (!topic.trim() && !image) { setErr("Add a topic or upload an image for the AI to work from."); return; }
     setBusy(true); setErr(null);
-    try { const r = await api.gbp.generatePost(t, { topic: topic.trim(), type, location: loc || undefined }); onDraft({ type, summary: r.text }); }
-    catch (e) { setErr((e as ApiError).message); } finally { setBusy(false); }
+    try {
+      const r = await api.gbp.generatePost(t, { topic: topic.trim() || "Write a post based on the attached image", type, location: loc || undefined, image_url: image || undefined });
+      onDraft({ type, summary: r.text, image_url: image || undefined });
+    } catch (e) { setErr((e as ApiError).message); } finally { setBusy(false); }
   }
 
   return (
     <div className="panel" style={{ maxWidth: 560 }}>
       <h2 style={{ fontSize: 16, marginTop: 0 }}>✨ AI post generator</h2>
-      <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>Give a topic and let AI draft the post — then review and publish it.</p>
+      <p className="muted" style={{ fontSize: 13, marginTop: -6 }}>Give a topic — or upload a photo and the AI will see it — then review and publish. It auto-uses your connected Google profile.</p>
       {err && <div className="error">{err}</div>}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <div className="field" style={{ flex: 1, minWidth: 160 }}><label>Post type</label>
@@ -1011,10 +1016,94 @@ function AiGenerate({ locations, onDraft }: { locations: GbpLocationItem[]; onDr
         </div>
         {locations.length > 1 && <div className="field" style={{ flex: 1, minWidth: 160 }}><label>Location</label><LocationPicker locations={locations} value={loc} onChange={setLoc} /></div>}
       </div>
+      <div className="field"><label>Reference image <span className="muted">(optional — AI reads it)</span></label><ImageDrop value={image} onChange={setImage} /></div>
       <div className="field"><label>What should this post be about?</label>
         <textarea value={topic} onChange={(e) => setTopic(e.target.value)} rows={3} placeholder="e.g. Diwali discount on all services this week" style={{ ...inp, resize: "vertical", fontFamily: "inherit" }} /></div>
       <button className="btn" disabled={busy} onClick={generate}>{busy ? "Generating…" : "✨ Generate draft"}</button>
       <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>Uses AI credits. The draft opens in the composer for review before publishing.</p>
+    </div>
+  );
+}
+
+/* ---------------- Website generator ---------------- */
+function WebsiteTab({ hasLocations }: { hasLocations: boolean }) {
+  const [site, setSite] = useState<BusinessSiteInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => { const t = getToken(); if (!t) return; api.gbp.site(t).then((r) => setSite(r.site)).catch(() => {}).finally(() => setLoading(false)); }, []);
+
+  async function generate() {
+    const t = getToken(); if (!t) return;
+    setBusy(true); setErr(null);
+    try { const r = await api.gbp.generateSite(t); setSite(r.site); }
+    catch (e) { setErr((e as ApiError).message); } finally { setBusy(false); }
+  }
+  function copyUrl() { if (!site) return; navigator.clipboard?.writeText(site.url); setCopied(true); setTimeout(() => setCopied(false), 1800); }
+
+  if (loading) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Loading…</span></div>;
+
+  const features = [
+    { icon: "🔍", t: "Profile rewrite", s: "SEO with your top keywords" },
+    { icon: "⭐", t: "Live reviews", s: "Your Google reviews, embedded" },
+    { icon: "📊", t: "Health report", s: "Full GBP score & action plan" },
+    { icon: "📞", t: "Call & directions", s: "One-tap buttons for customers" },
+    { icon: "🖼️", t: "Photo gallery", s: "Your published GBP photos" },
+    { icon: "🌐", t: "Live shareable URL", s: "Send it anywhere in seconds" },
+  ];
+
+  return (
+    <div>
+      <div className="panel" style={{ background: "var(--brand-grad)", color: "#fff", padding: "26px 24px", marginBottom: 16, border: "none" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 22, color: "#fff" }}>⚡ Instant Business Website</h2>
+            <p style={{ margin: "6px 0 0", fontSize: 14, opacity: .95, maxWidth: 560 }}>
+              Generate a ready-to-share website from your Google Business Profile — profile, reviews, photos and a full health report — live in seconds.
+            </p>
+          </div>
+          <button className="lph-btn lph-btn-white lph-btn-lg" style={{ background: "#fff", color: "#3a44c0", border: "none", borderRadius: 12, padding: "13px 22px", fontWeight: 700, cursor: "pointer" }}
+            disabled={busy || !hasLocations} onClick={generate}>
+            {busy ? "Generating…" : site ? "↻ Regenerate" : "⚡ Generate my website"}
+          </button>
+        </div>
+      </div>
+
+      {!hasLocations && <div className="panel" style={{ marginBottom: 16, textAlign: "center", padding: 20 }}><span className="muted">Connect your Google Business Profile and Sync a location first, then generate your website.</span></div>}
+      {err && <div className="error">{err}</div>}
+
+      {site && (
+        <div className="panel" style={{ marginBottom: 16, borderLeft: "4px solid var(--green)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--green)", textTransform: "uppercase", letterSpacing: ".04em" }}>● Live</div>
+              <a href={site.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 16, fontWeight: 700, wordBreak: "break-all" }}>{site.url}</a>
+              <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{site.published_at ? `Updated ${new Date(site.published_at).toLocaleString()}` : ""}</div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn-mini" onClick={copyUrl}>{copied ? "✓ Copied" : "Copy link"}</button>
+              <a className="btn-mini" href={site.url} target="_blank" rel="noopener noreferrer">Open ↗</a>
+            </div>
+          </div>
+          <div style={{ marginTop: 14, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", height: 420 }}>
+            <iframe title="Your website" src={site.url} style={{ width: "100%", height: "100%", border: "none" }} />
+          </div>
+        </div>
+      )}
+
+      <div className="panel">
+        <h2 style={{ fontSize: 15, marginTop: 0 }}>What's included</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px,1fr))", gap: 12 }}>
+          {features.map((f) => (
+            <div key={f.t} style={{ display: "flex", gap: 10, padding: "12px 14px", border: "1px solid var(--border)", borderRadius: 12 }}>
+              <span style={{ fontSize: 20 }}>{f.icon}</span>
+              <div><div style={{ fontSize: 13.5, fontWeight: 700 }}>{f.t}</div><div className="muted" style={{ fontSize: 12 }}>{f.s}</div></div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1264,7 +1353,7 @@ function ReplyModal({ review, autoSuggest, onClose, onReplied }: { review: GbpRe
 
   return (
     <div className="msg-info-overlay" onClick={onClose} style={{ zIndex: 200 }}>
-      <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
+      <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ width: "min(520px, 94vw)", maxWidth: "94vw" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h2 style={{ margin: 0 }}>Reply to {review.author_name ?? "review"}</h2>
           <button className="btn-mini" onClick={onClose}>Close</button>

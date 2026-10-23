@@ -33,6 +33,7 @@ class GbpPostController extends Controller
             'topic' => ['required', 'string', 'max:500'],
             'type' => ['nullable', 'in:STANDARD,EVENT,OFFER,ALERT'],
             'location' => ['nullable', 'string'],
+            'image_url' => ['nullable', 'url', 'max:1024'],
         ]);
 
         $tenantId = $request->user()->tenant_id;
@@ -40,13 +41,37 @@ class GbpPostController extends Controller
             return $this->fail('You are out of AI credits (' . $this->credits->cost('ai_caption') . ' needed). Top up or upgrade your plan.', ['credits' => ['insufficient']], 402);
         }
 
-        $business = ! empty($data['location'])
-            ? (GbpLocation::where('uuid', $data['location'])->value('name') ?: 'our business')
-            : (GbpLocation::query()->value('name') ?: 'our business');
+        // Auto-fetch the connected Google Business Profile so the AI writes to the
+        // real business (name, category, rating, location).
+        $location = ! empty($data['location'])
+            ? GbpLocation::where('uuid', $data['location'])->first()
+            : GbpLocation::query()->first();
+        $business = $location?->name ?: 'our business';
+        $facts = [];
+        if ($location?->category) {
+            $facts[] = "category: {$location->category}";
+        }
+        if ($location && (float) $location->rating > 0) {
+            $facts[] = 'rating ' . number_format((float) $location->rating, 1) . "★ ({$location->review_count} reviews)";
+        }
+        if ($location?->address) {
+            $facts[] = "located at {$location->address}";
+        }
+        $factsStr = $facts ? ' Business facts — ' . implode('; ', $facts) . '.' : '';
+
+        // When the user attaches an image, let the AI "see" it and tailor the post.
+        $imageNote = '';
+        if (! empty($data['image_url'])) {
+            $seen = $this->describeUploadedImage($data['image_url']);
+            if ($seen) {
+                $imageNote = ' The user attached an image showing: ' . $seen . ' Write the post to match this image.';
+            }
+        }
+
         $type = $data['type'] ?? 'STANDARD';
 
         $system = 'You write short, engaging Google Business Profile posts (max ~1400 characters, 1 short paragraph + optional 1 line CTA). Plain text, a few tasteful emojis allowed, no markdown or hashtags block.';
-        $user = "Business: {$business}. Post type: {$type}. Topic: {$data['topic']}. Write the post body only.";
+        $user = "Business: {$business}.{$factsStr} Post type: {$type}. Topic: {$data['topic']}.{$imageNote} Write the post body only.";
 
         $text = $this->ai->classify($system, [['role' => 'user', 'content' => $user]]);
         $source = 'ai';
@@ -210,6 +235,30 @@ class GbpPostController extends Controller
         $i = Integration::where('provider', Integration::GOOGLE_GBP)->first();
 
         return $i && $i->isConnected() ? $i : null;
+    }
+
+    /** Fetch an uploaded image and ask the AI what it shows (≤5 MB, images only). */
+    private function describeUploadedImage(string $url): ?string
+    {
+        try {
+            $res = \Illuminate\Support\Facades\Http::timeout(15)->get($url);
+            if (! $res->successful()) {
+                return null;
+            }
+            $bytes = (string) $res->body();
+            $mime = (string) ($res->header('Content-Type') ?: 'image/jpeg');
+            if (strlen($bytes) > 5 * 1024 * 1024 || ! str_starts_with($mime, 'image/')) {
+                return null;
+            }
+
+            return $this->ai->visionDescribe(
+                'In 1–2 short sentences, describe what this business photo shows (products, scene, any visible text/offer).',
+                $bytes,
+                $mime,
+            );
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     private function arr(GbpPost $p): array

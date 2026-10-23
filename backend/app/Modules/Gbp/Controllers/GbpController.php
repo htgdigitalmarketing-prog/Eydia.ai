@@ -4,6 +4,7 @@ namespace App\Modules\Gbp\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\AdReport;
+use App\Models\BusinessSite;
 use App\Models\GbpLocation;
 use App\Models\GbpPhoto;
 use App\Models\GbpPost;
@@ -419,6 +420,43 @@ class GbpController extends Controller
             'url' => url(\Illuminate\Support\Facades\Storage::disk('public')->url($path)),
             'path' => $path,
         ], 201);
+    }
+
+    /**
+     * Auto-generate (or refresh) a public business website + GBP report from the
+     * connected location's data. Returns the live, shareable URL. Section 5 of
+     * the Eydia lead doc — the Grexa-style instant website.
+     */
+    public function generateSite(Request $request, \App\Modules\Gbp\Services\BusinessSiteGenerator $gen): JsonResponse
+    {
+        $location = $this->pickLocation($request);
+        if (! $location) {
+            return $this->fail('Connect your Google Business Profile and sync a location first, then generate your website.', [], 422);
+        }
+
+        $site = $gen->generate($request->user()->tenant_id, $location);
+
+        return $this->ok(['site' => $this->siteArray($site), 'message' => 'Your website is live.']);
+    }
+
+    /** The tenant's current generated website, or null. */
+    public function siteStatus(Request $request): JsonResponse
+    {
+        $site = BusinessSite::query()->latest('published_at')->first();
+
+        return $this->ok(['site' => $site ? $this->siteArray($site) : null]);
+    }
+
+    private function siteArray(BusinessSite $s): array
+    {
+        return [
+            'id' => $s->uuid,
+            'slug' => $s->slug,
+            'title' => $s->title,
+            'status' => $s->status,
+            'url' => \App\Modules\Gbp\Services\BusinessSiteGenerator::url($s),
+            'published_at' => $s->published_at?->toIso8601String(),
+        ];
     }
 
     private function pickLocation(Request $request): ?GbpLocation

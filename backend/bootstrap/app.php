@@ -21,6 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
             Illuminate\Support\Facades\Route::middleware('api')
                 ->prefix('api')
                 ->group(base_path('routes/webhooks.php'));
+
+            // Public business microsites (no api prefix): eydia.in/site/{slug}
+            Illuminate\Support\Facades\Route::group([], base_path('routes/public.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware) {

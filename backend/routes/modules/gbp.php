@@ -27,6 +27,10 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     // Image upload for posts & photos (drag & drop / browse).
     Route::post('/upload', [GbpController::class, 'uploadImage']);
 
+    // Instant business website + GBP report generator (public URL).
+    Route::get('/site', [GbpController::class, 'siteStatus']);
+    Route::post('/site/generate', [GbpController::class, 'generateSite']);
+
     // GBP posts (localPosts).
     Route::get('/posts', [GbpPostController::class, 'index']);
     Route::post('/posts/generate', [GbpPostController::class, 'generate']); // AI caption
