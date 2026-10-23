@@ -1575,7 +1575,7 @@ export type ChatbotRuleItem = {
 };
 
 export type LeadFlowStep = { trigger: string; action: string };
-export type LeadFlowStatus = { installed: boolean; active: boolean; id: string | null; rules: number; steps: LeadFlowStep[] };
+export type LeadFlowStatus = { available?: boolean; installed: boolean; active: boolean; id: string | null; rules: number; steps: LeadFlowStep[] };
 
 export type ChatbotItem = {
   id: string;

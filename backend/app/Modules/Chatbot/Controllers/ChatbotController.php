@@ -93,9 +93,21 @@ class ChatbotController extends Controller
      * (welcome → free GBP check → book demo / send details, with CRM tagging).
      * Idempotent: re-running refreshes the same flow.
      */
+    /** Whether the signed-in user's email is allowed the GBP lead automation. */
+    private function leadFlowAllowed(Request $request): bool
+    {
+        $email = strtolower((string) $request->user()?->email);
+
+        return $email !== '' && in_array($email, (array) config('features.lead_flow_emails', []), true);
+    }
+
     public function installGbpFlow(Request $request, \App\Modules\Chatbot\Services\GbpLeadFlowInstaller $installer): JsonResponse
     {
         $this->authorize('whatsapp.manage');
+
+        if (! $this->leadFlowAllowed($request)) {
+            return $this->fail('This automation is not enabled for your account.', [], 403);
+        }
 
         $bot = $installer->install($request->user()->tenant_id);
         $bot->load(['phoneNumber', 'rules' => fn ($q) => $q->orderBy('priority')])->loadCount('rules');
@@ -108,13 +120,20 @@ class ChatbotController extends Controller
     }
 
     /** Whether the GBP lead-automation flow is installed, plus its step summary. */
-    public function leadFlowStatus(): JsonResponse
+    public function leadFlowStatus(Request $request): JsonResponse
     {
         $this->authorize('whatsapp.view');
+
+        // Only the allowed email(s) can see this automation; everyone else gets
+        // a normal chatbot page (available=false hides the card entirely).
+        if (! $this->leadFlowAllowed($request)) {
+            return $this->ok(['available' => false, 'installed' => false, 'active' => false, 'id' => null, 'rules' => 0, 'steps' => []]);
+        }
 
         $bot = Chatbot::where('is_lead_flow', true)->withCount('rules')->first();
 
         return $this->ok([
+            'available' => true,
             'installed' => (bool) $bot,
             'active' => (bool) $bot?->is_active,
             'id' => $bot?->uuid,

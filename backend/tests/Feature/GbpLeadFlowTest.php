@@ -54,6 +54,7 @@ class GbpLeadFlowTest extends TestCase
     public function test_install_endpoint_creates_the_funnel(): void
     {
         $owner = $this->owner();
+        config(['features.lead_flow_emails' => ['owner@acme.test']]); // allow the test owner
 
         $this->actingAs($owner, 'api')
             ->postJson('/api/v1/chatbots/lead-flow/install')
@@ -71,7 +72,25 @@ class GbpLeadFlowTest extends TestCase
         $this->assertSame(1, Chatbot::withoutGlobalScopes()->where('tenant_id', $owner->tenant_id)->where('is_lead_flow', true)->count());
         $this->assertSame(6, ChatbotRule::withoutGlobalScopes()->where('chatbot_id', $bot->id)->count());
 
-        $this->getJson('/api/v1/chatbots/lead-flow')->assertOk()->assertJsonPath('data.installed', true);
+        $this->getJson('/api/v1/chatbots/lead-flow')->assertOk()
+            ->assertJsonPath('data.available', true)
+            ->assertJsonPath('data.installed', true);
+    }
+
+    public function test_automation_is_gated_to_allowed_emails(): void
+    {
+        config(['features.lead_flow_emails' => ['heltogtechnologies@gmail.com']]);
+        $owner = $this->owner(); // owner@acme.test — not allowed
+
+        $this->actingAs($owner, 'api')
+            ->getJson('/api/v1/chatbots/lead-flow')
+            ->assertOk()
+            ->assertJsonPath('data.available', false)
+            ->assertJsonPath('data.installed', false);
+
+        $this->actingAs($owner, 'api')
+            ->postJson('/api/v1/chatbots/lead-flow/install')
+            ->assertStatus(403);
     }
 
     public function test_button_tap_replies_and_tags_the_lead(): void

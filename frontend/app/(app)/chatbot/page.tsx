@@ -287,7 +287,7 @@ export default function ChatbotPage() {
         {error && <div className="error">{error}</div>}
         {notice && <div className="panel" style={{ background: "#e7f7ef", color: "#0a7d47", marginBottom: 16 }}>{notice}</div>}
 
-        <LeadFlowCard flow={leadFlow} busy={flowBusy} onInstall={installLeadFlow} />
+        {leadFlow?.available && <LeadFlowCard flow={leadFlow} busy={flowBusy} onInstall={installLeadFlow} />}
 
         {loading ? (
           <div className="loading-block"><span className="spinner" /><span>Loading…</span></div>
