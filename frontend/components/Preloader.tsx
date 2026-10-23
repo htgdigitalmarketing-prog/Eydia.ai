@@ -6,8 +6,12 @@
 export function Preloader({ label = "Loading…" }: { label?: string }) {
   return (
     <div className="preloader">
-      <img src="/eydia-logo-white.png" alt="Eydia.ai Automate · Engage · Grow" className="preloader-logo" />
-      <div className="spinner spinner-lg" />
+      <div className="preloader-glow" />
+      {/* Full-colour logo on the light theme; white logo in dark mode — the
+          correct one always reads clearly against the background. */}
+      <img src="/eydia-logo.png" alt="Eydia.ai Automate · Engage · Grow" className="preloader-logo preloader-logo-light" />
+      <img src="/eydia-logo-white.png" alt="" aria-hidden className="preloader-logo preloader-logo-dark" />
+      <div className="preloader-spin" />
       <div className="preloader-text">{label}</div>
     </div>
   );

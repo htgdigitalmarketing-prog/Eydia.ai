@@ -632,26 +632,54 @@ a:hover { text-decoration: underline; }
   color: var(--muted);
 }
 
-/* Full-screen branded preloader (app shell while the session loads). */
+/* Full-screen branded preloader (app shell while the session loads). Uses the
+   theme tokens so the logo always reads clearly (light by default, dark toggle). */
 .preloader {
+  position: relative;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 22px;
-  background: radial-gradient(900px 500px at 50% 30%, rgba(59,130,246,.18), transparent 60%),
-              linear-gradient(135deg, #0a0e27 0%, #10152e 60%, #1a1f54 100%);
+  gap: 24px;
+  background: var(--bg);
   animation: preloaderFade .25s ease;
+  overflow: hidden;
+}
+/* Soft brand-gradient glow behind the logo. */
+.preloader-glow {
+  position: absolute;
+  width: 620px; height: 620px; max-width: 120vw; max-height: 120vw;
+  border-radius: 50%;
+  background:
+    radial-gradient(42% 42% at 42% 40%, rgba(22,182,242,.28), transparent 70%),
+    radial-gradient(44% 44% at 64% 60%, rgba(173,23,230,.24), transparent 72%),
+    radial-gradient(50% 50% at 50% 50%, rgba(33,96,239,.22), transparent 70%);
+  filter: blur(26px);
+  animation: preloaderPulse 2.4s ease-in-out infinite;
+  pointer-events: none;
 }
 .preloader-logo {
-  width: 300px;
-  max-width: 72vw;
+  position: relative;
+  width: 280px;
+  max-width: 70vw;
   height: auto;
-  border-radius: 14px;
-  animation: preloaderPulse 1.4s ease-in-out infinite;
+  animation: preloaderPulse 1.8s ease-in-out infinite;
 }
-.preloader-text { color: rgba(255,255,255,.72); font-size: 14px; letter-spacing: .2px; }
+.preloader-logo-dark { display: none; }
+:root[data-theme="dark"] .preloader-logo-light { display: none; }
+:root[data-theme="dark"] .preloader-logo-dark { display: block; }
+/* Brand-gradient ring spinner. */
+.preloader-spin {
+  position: relative;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #16b6f2, #2160ef, #6a22f0, #ad17e6, #16b6f2);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  animation: spin .8s linear infinite;
+}
+.preloader-text { color: var(--muted); font-size: 14px; font-weight: 600; letter-spacing: .2px; }
 
 /* Inbox */
 .inbox-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
