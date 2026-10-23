@@ -235,10 +235,11 @@ class BillingController extends Controller
     /** @return array{0:int,1:int,2:int,3:int} [base, gstRate, tax, total] in paise. */
     private function amounts(Plan $plan): array
     {
-        $base = (int) round($plan->price * 100);
-        $rate = (int) InvoiceSetting::current()->gst_rate;
-        $tax = (int) round($base * $rate / 100);
-        return [$base, $rate, $tax, $base + $tax];
+        // Plan price is GST-INCLUSIVE — the displayed price is what the customer
+        // pays; the base/GST split is derived from it.
+        $g = \App\Support\Gst::inclusivePaise((float) $plan->price, (int) InvoiceSetting::current()->gst_rate);
+
+        return [$g['base'], $g['rate'], $g['tax'], $g['total']];
     }
 
     /** Create a paid/free invoice snapshotting seller + customer + GST. */

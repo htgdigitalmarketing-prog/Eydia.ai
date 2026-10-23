@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
 class PlanController extends Controller
 {
     /** Suggested keys the UI offers, but the super admin may add any key. */
-    public const LIMIT_KEYS = ['max_agents', 'max_contacts', 'max_campaigns', 'max_chatbots', 'max_templates', 'max_locations', 'max_leads', 'max_keywords'];
+    public const LIMIT_KEYS = ['ai_credits', 'max_agents', 'max_contacts', 'max_campaigns', 'max_chatbots', 'max_templates', 'max_locations', 'max_leads', 'max_keywords'];
     // dash_* keys control which of the three dashboards (WhatsApp, Google
     // Reviews/GBP, Lead Management) a plan unlocks. The rest are per-dashboard
     // feature toggles (incl. the ported ReviewFlow extras: seo, ads, invoicing).
@@ -156,6 +156,11 @@ class PlanController extends Controller
 
     private function planArray(Plan $p): array
     {
+        $rate = (int) \App\Models\InvoiceSetting::current()->gst_rate;
+        $g = \App\Support\Gst::inclusive((float) $p->price, $rate);
+        $features = $p->features ?? [];
+        $modules = count(array_filter($features, fn ($v) => $v === true || $v === 1 || $v === '1'));
+
         return [
             'id' => $p->uuid,
             'name' => $p->name,
@@ -163,9 +168,14 @@ class PlanController extends Controller
             'description' => $p->description,
             'billing_period' => $p->billing_period,
             'price' => (float) $p->price,
+            'base' => $g['base'],
+            'gst' => $g['tax'],
+            'gst_rate' => $rate,
             'currency' => $p->currency,
+            'credits' => (int) ($p->limit('ai_credits') ?? 0),
+            'modules' => $modules,
             'limits' => (object) ($p->limits ?? []),
-            'features' => (object) ($p->features ?? []),
+            'features' => (object) $features,
             'is_active' => $p->is_active,
             'is_public' => $p->is_public,
             'sort_order' => $p->sort_order,

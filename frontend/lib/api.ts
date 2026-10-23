@@ -416,6 +416,11 @@ export const api = {
 
   credits: {
     get: (token: string) => request<CreditsInfo>("/credits", { token }),
+    packs: (token: string) => request<{ balance: number; packs: CreditPackClient[] }>("/credits/packs", { token }),
+    orderPack: (token: string, id: string) =>
+      request<{ order_id: string; amount: number; subtotal: number; tax: number; gst_rate: number; currency: string; key_id: string; pack: CreditPackClient }>(`/credits/packs/${id}/order`, { method: "POST", token }),
+    confirmPack: (token: string, body: { pack_id: string; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
+      request<{ message: string; balance: number }>("/credits/packs/confirm", { method: "POST", body, token }),
   },
 
   admin: {
@@ -455,6 +460,16 @@ export const api = {
       request<{ settings: InvoiceSettings }>("/admin/settings", { token }),
     updateSettings: (token: string, body: Partial<InvoiceSettings>) =>
       request<{ settings: InvoiceSettings; message: string }>("/admin/settings", { method: "PUT", body, token }),
+
+    creditPacks: (token: string) => request<{ packs: AdminCreditPack[] }>("/admin/credit-packs", { token }),
+    createCreditPack: (token: string, body: CreditPackInput) =>
+      request<{ pack: AdminCreditPack }>("/admin/credit-packs", { method: "POST", body, token }),
+    updateCreditPack: (token: string, id: string, body: CreditPackInput) =>
+      request<{ pack: AdminCreditPack }>(`/admin/credit-packs/${id}`, { method: "PUT", body, token }),
+    toggleCreditPack: (token: string, id: string) =>
+      request<{ pack: AdminCreditPack }>(`/admin/credit-packs/${id}/toggle`, { method: "POST", token }),
+    removeCreditPack: (token: string, id: string) =>
+      request<{ message: string }>(`/admin/credit-packs/${id}`, { method: "DELETE", token }),
   },
 
   assistant: {
@@ -1170,6 +1185,11 @@ export type AdminPlan = {
   description: string | null;
   billing_period: string;
   price: number;
+  base?: number;
+  gst?: number;
+  gst_rate?: number;
+  credits?: number;
+  modules?: number;
   currency: string;
   limits: Record<string, number>;
   features: Record<string, boolean>;
@@ -1178,6 +1198,20 @@ export type AdminPlan = {
   sort_order: number;
   subscribers: number;
 };
+
+export type AdminCreditPack = {
+  id: string;
+  name: string;
+  credits: number;
+  price: number;
+  gst_rate: number;
+  base: number;
+  gst: number;
+  sort_order: number;
+  is_active: boolean;
+};
+export type CreditPackInput = { name: string; credits: number; price: number; gst_rate?: number; sort_order?: number; is_active?: boolean };
+export type CreditPackClient = { id: string; name: string; credits: number; price: number; gst_rate: number; base: number; gst: number };
 
 export type WaNumber = {
   id: string;

@@ -7,6 +7,11 @@ use Illuminate\Support\Facades\Route;
 // AI credit balance + usage ledger (reachable without an active plan).
 Route::get('/credits', [CreditController::class, 'index']);
 
+// Buyable credit packs + Razorpay top-up.
+Route::get('/credits/packs', [CreditController::class, 'packs']);
+Route::post('/credits/packs/{uuid}/order', [CreditController::class, 'orderPack']);
+Route::post('/credits/packs/confirm', [CreditController::class, 'confirmPack']);
+
 Route::prefix('billing')->group(function () {
     Route::get('/', [BillingController::class, 'overview']);
     Route::get('/plans', [BillingController::class, 'plans']);

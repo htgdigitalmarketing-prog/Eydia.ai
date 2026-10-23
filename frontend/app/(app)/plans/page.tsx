@@ -8,9 +8,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadingBlock } from "@/components/Preloader";
 
 const LIMIT_LABELS: Record<string, string> = {
+  ai_credits: "AI credits / month",
   max_agents: "Max agents", max_contacts: "Max contacts", max_campaigns: "Max campaigns",
   max_chatbots: "Max chatbots", max_templates: "Max templates",
-  max_locations: "Max GBP locations", max_leads: "Max leads",
+  max_locations: "Max GBP locations", max_leads: "Max leads", max_keywords: "Max keywords",
 };
 const FEATURE_LABELS: Record<string, string> = {
   dash_whatsapp: "WhatsApp Marketing", dash_gbp: "Google Reviews / GBP", dash_leads: "Lead Management",
@@ -165,8 +166,14 @@ export default function PlansPage() {
                 <h3 style={{ margin: 0 }}>{p.name}</h3>
                 <span style={{ background: p.is_active ? "#e7f7ef" : "#eef1f2", color: p.is_active ? "#0a7d47" : "#667781", padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700 }}>{p.is_active ? "Active" : "Off"}</span>
               </div>
-              <div style={{ fontSize: 22, fontWeight: 800, margin: "6px 0" }}>
-                ₹{p.price.toLocaleString("en-IN")}<span className="muted" style={{ fontSize: 13, fontWeight: 400 }}> / {p.billing_period === "yearly" ? "yr" : "mo"}</span>
+              <div style={{ fontSize: 22, fontWeight: 800, margin: "6px 0 2px" }}>
+                ₹{p.price.toLocaleString("en-IN")}<span className="muted" style={{ fontSize: 13, fontWeight: 400 }}> / {p.billing_period === "yearly" ? "yr" : "mo"} incl. GST</span>
+              </div>
+              <div style={{ background: "var(--bg)", borderRadius: 10, padding: "10px 12px", margin: "8px 0", fontSize: 12.5, display: "grid", gap: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span className="muted">Base Price</span><strong>₹{(p.base ?? p.price).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span className="muted">GST ({p.gst_rate ?? 18}%)</span><strong>₹{(p.gst ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span className="muted">Credits / month</span><strong style={{ color: "var(--accent)" }}>{(p.credits ?? 0).toLocaleString("en-IN")}</strong></div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}><span className="muted">Module Access</span><strong>{p.modules ?? 0} modules</strong></div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4, margin: "8px 0 10px" }}>
                 {DASHBOARD_KEYS.map((k) => (
@@ -177,7 +184,7 @@ export default function PlansPage() {
                 ))}
               </div>
               <div style={{ fontSize: 13, color: "#54656f", display: "grid", gap: 3, marginBottom: 10 }}>
-                {limitKeys.map((k) => <div key={k}>{label(LIMIT_LABELS, k)}: <strong>{showLimit(p.limits[k])}</strong></div>)}
+                {limitKeys.filter((k) => k !== "ai_credits").map((k) => <div key={k}>{label(LIMIT_LABELS, k)}: <strong>{showLimit(p.limits[k])}</strong></div>)}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
                 {featureKeys.filter((k) => !DASHBOARD_KEYS.includes(k)).filter((k) => p.features[k]).map((k) => (

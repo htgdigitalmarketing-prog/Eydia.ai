@@ -24,6 +24,7 @@ export const COMMON_NAV: NavItem[] = [
 export const ACCOUNT_NAV: NavItem[] = [
   { label: "Team", href: "/team", icon: "👥", perm: "team.view" },
   { label: "Invoicing", href: "/invoicing", icon: "🧾", feature: "invoicing" },
+  { label: "Buy Credits", href: "/buy-credits", icon: "⚡" },
   { label: "Billing", href: "/billing", icon: "₹", perm: "billing.view" },
   { label: "Support", href: "/support", icon: "🎫" },
   { label: "Profile", href: "/profile", icon: "👤" },
@@ -77,6 +78,7 @@ export const SUPER_ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: "▤" },
   { label: "Companies", href: "/companies", icon: "🏢" },
   { label: "Plans", href: "/plans", icon: "💳" },
+  { label: "Credit Packs", href: "/credit-packs", icon: "⚡" },
   { label: "Payments", href: "/payments", icon: "₹" },
   { label: "Settings", href: "/settings", icon: "⚙" },
   { label: "Support", href: "/support", icon: "🎫" },

@@ -50,6 +50,7 @@ class SystemController extends Controller
         foreach ([
             \Database\Seeders\RolePermissionSeeder::class,
             \Database\Seeders\PlanSeeder::class,
+            \Database\Seeders\CreditPackSeeder::class,
             \Database\Seeders\SuperAdminSeeder::class,
         ] as $seeder) {
             try {
