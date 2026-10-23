@@ -191,7 +191,7 @@ class AiReplyService
      * `data:` URI (base64) the caller can store/display, or null when no Gemini
      * key is set or the call fails — so callers can fall back to a placeholder.
      */
-    public function generateImage(string $prompt): ?string
+    public function generateImage(string $prompt, ?string $refBytes = null, ?string $refMime = null): ?string
     {
         $apiKey = config('services.gemini.key');
         if (! $apiKey) {
@@ -201,11 +201,18 @@ class AiReplyService
         $model = config('services.gemini.image_model', 'gemini-2.5-flash-image');
         $url = self::GEMINI_ENDPOINT . $model . ':generateContent?key=' . urlencode($apiKey);
 
+        // When a reference image is given, include it so the model edits/builds
+        // on it (image-to-image) rather than generating purely from text.
+        $parts = [['text' => $prompt]];
+        if ($refBytes !== null && $refMime !== null && str_starts_with($refMime, 'image/')) {
+            $parts[] = ['inline_data' => ['mime_type' => $refMime, 'data' => base64_encode($refBytes)]];
+        }
+
         try {
-            $res = Http::timeout(60)->post($url, [
+            $res = Http::timeout(90)->post($url, [
                 'contents' => [[
                     'role' => 'user',
-                    'parts' => [['text' => $prompt]],
+                    'parts' => $parts,
                 ]],
             ]);
         } catch (\Throwable $e) {

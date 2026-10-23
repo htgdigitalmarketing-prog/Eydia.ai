@@ -484,13 +484,26 @@ export const api = {
       ),
   },
 
-  // ---- AI Media generation (text-to-image) ----
+  // ---- AI Media generation (text-to-image, optional reference image) ----
   aiMedia: {
     list: (token: string) => request<{ media: AiMediaItem[] }>("/ai-media", { token }),
-    generate: (token: string, prompt: string) =>
-      request<{ media: AiMediaItem; source: string; credits: number | null }>(
-        "/ai-media", { method: "POST", body: { prompt }, token }
-      ),
+    generate: async (token: string, prompt: string, image?: File | null) => {
+      if (!image) {
+        return request<{ media: AiMediaItem; source: string; credits: number | null }>(
+          "/ai-media", { method: "POST", body: { prompt }, token }
+        );
+      }
+      const form = new FormData();
+      form.append("prompt", prompt);
+      form.append("image", image);
+      const res = await fetch(`${BASE}/ai-media`, { method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, body: form });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || (json && json.success === false)) {
+        const err: ApiError = { message: json?.message ?? `Generation failed (${res.status})`, errors: json?.errors, status: res.status };
+        throw err;
+      }
+      return json.data as { media: AiMediaItem; source: string; credits: number | null };
+    },
     remove: (token: string, id: string) =>
       request<{ message: string }>(`/ai-media/${id}`, { method: "DELETE", token }),
   },

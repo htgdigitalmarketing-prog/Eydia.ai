@@ -33,6 +33,7 @@ class AiMediaController extends Controller
     {
         $data = $request->validate([
             'prompt' => ['required', 'string', 'max:1000'],
+            'image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
         ]);
 
         $tenantId = $request->user()->tenant_id;
@@ -44,7 +45,15 @@ class AiMediaController extends Controller
             );
         }
 
-        $image = $this->ai->generateImage($data['prompt']);
+        // Optional reference image — the AI "sees" it and builds on it.
+        $refBytes = $refMime = null;
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $refBytes = file_get_contents($file->getRealPath());
+            $refMime = $file->getMimeType();
+        }
+
+        $image = $this->ai->generateImage($data['prompt'], $refBytes, $refMime);
         $source = $image ? 'ai' : 'fallback';
         if (! $image) {
             $image = $this->placeholder($data['prompt']);

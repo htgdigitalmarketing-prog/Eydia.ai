@@ -46,8 +46,10 @@ class CreditService
     }
 
     /**
-     * Get (or create) the tenant's wallet, applying a monthly reset to the plan
-     * allowance when the period has rolled over.
+     * Get (or create) the tenant's wallet. Credits do NOT reset monthly — a plan
+     * grants its credits once, they persist as they are spent, and running out
+     * means buying a top-up pack. Upgrading to a bigger plan adds the extra
+     * credits one time.
      */
     public function walletFor(int $tenantId): CreditWallet
     {
@@ -55,24 +57,29 @@ class CreditService
         $wallet = CreditWallet::withoutGlobalScopes()->firstOrNew(['tenant_id' => $tenantId]);
 
         if (! $wallet->exists) {
-            $wallet->fill(['balance' => $allowance, 'monthly_allowance' => $allowance, 'reset_at' => now()->addMonth()]);
+            $wallet->fill(['balance' => $allowance, 'monthly_allowance' => $allowance, 'reset_at' => null]);
             $wallet->save();
-            $this->log($wallet, null, $allowance, 'monthly_reset', 'Initial plan allowance');
+            if ($allowance > 0) {
+                $this->log($wallet, null, $allowance, 'plan_credits', 'Granted from your plan');
+            }
 
             return $wallet;
         }
 
-        // Keep the stored allowance in sync with the current plan.
-        if ($wallet->monthly_allowance !== $allowance) {
+        // Plan changed since last seen. On an upgrade, add the extra credits once
+        // (never reset or reduce the balance). monthly_allowance tracks the plan
+        // size for display only.
+        if ((int) $wallet->monthly_allowance !== $allowance) {
+            $extra = $allowance - (int) $wallet->monthly_allowance;
             $wallet->monthly_allowance = $allowance;
-            $wallet->save();
-        }
-
-        if ($wallet->reset_at === null || $wallet->reset_at->isPast()) {
-            $wallet->balance = $allowance;
-            $wallet->reset_at = now()->addMonth();
-            $wallet->save();
-            $this->log($wallet, null, $allowance, 'monthly_reset', 'Monthly credit reset');
+            if ($extra > 0) {
+                $wallet->balance += $extra;
+                $wallet->reset_at = null;
+                $wallet->save();
+                $this->log($wallet, null, $extra, 'plan_credits', 'Added from plan upgrade');
+            } else {
+                $wallet->save();
+            }
         }
 
         return $wallet;

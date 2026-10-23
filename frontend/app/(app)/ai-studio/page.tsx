@@ -42,6 +42,8 @@ export default function AiStudioPage() {
 function ImagesTab() {
   const [media, setMedia] = useState<AiMediaItem[]>([]);
   const [prompt, setPrompt] = useState("");
+  const [refImage, setRefImage] = useState<File | null>(null);
+  const [refPreview, setRefPreview] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,17 +65,23 @@ function ImagesTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  function pickRef(file: File | null) {
+    setRefImage(file);
+    setRefPreview(file ? URL.createObjectURL(file) : "");
+  }
+
   async function generate(e: React.FormEvent) {
     e.preventDefault();
     const token = getToken();
-    if (!token || !prompt.trim()) return;
+    if (!token || (!prompt.trim() && !refImage)) return;
     setBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const res = await api.aiMedia.generate(token, prompt.trim());
+      const res = await api.aiMedia.generate(token, prompt.trim() || "Recreate and enhance this image as a polished marketing visual", refImage);
       setMedia((m) => [res.media, ...m]);
       setPrompt("");
+      pickRef(null);
       setNotice(res.source === "fallback"
         ? "AI image model isn't configured — showing a placeholder. No credits were charged."
         : `Image generated.${res.credits != null ? ` ${res.credits} credits left.` : ""}`);
@@ -114,8 +122,25 @@ function ImagesTab() {
               style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", resize: "vertical" }}
             />
           </div>
-          <button className="btn" style={{ width: "auto", padding: "9px 18px" }} disabled={busy || !prompt.trim()}>
-            {busy ? "Generating…" : "Generate image"}
+          <div className="field" style={{ marginBottom: 10 }}>
+            <label>Reference image <span className="muted">(optional — the AI sees it and builds on it)</span></label>
+            {refPreview ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <img src={refPreview} alt="reference" style={{ width: 92, height: 92, objectFit: "cover", borderRadius: 10, border: "1px solid var(--border)" }} />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, maxWidth: 240, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{refImage?.name}</div>
+                  <button type="button" className="btn-mini danger" style={{ marginTop: 6 }} onClick={() => pickRef(null)}>Remove</button>
+                </div>
+              </div>
+            ) : (
+              <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, border: "2px dashed var(--border)", borderRadius: 10, padding: "16px", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--muted)" }}>
+                <span style={{ fontSize: 18 }}>🖼️</span> Click to upload a photo (PNG / JPG / WebP, up to 10MB)
+                <input type="file" accept="image/*" hidden onChange={(e) => pickRef(e.target.files?.[0] ?? null)} />
+              </label>
+            )}
+          </div>
+          <button className="btn" style={{ width: "auto", padding: "9px 18px" }} disabled={busy || (!prompt.trim() && !refImage)}>
+            {busy ? "Generating…" : refImage ? "Generate from image" : "Generate image"}
           </button>
         </form>
       </div>

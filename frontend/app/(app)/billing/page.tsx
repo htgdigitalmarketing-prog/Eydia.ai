@@ -380,7 +380,8 @@ const ACTION_LABELS: Record<string, string> = {
   ai_chat: "AI assistant reply", ai_review_reply: "AI review reply", ai_keyword_gen: "Keyword generation",
   ai_rank_check: "Rank check", ai_competitor: "Competitor analysis", ai_audit: "Google audit",
   ai_optimize: "One-click optimize", ai_media_generate: "AI image generation",
-  topup: "Top-up", admin_topup: "Admin top-up", monthly_reset: "Monthly reset",
+  topup: "Top-up", admin_topup: "Admin top-up", monthly_reset: "Plan credits",
+  plan_credits: "Plan credits", purchase: "Credit pack purchase",
 };
 
 function CreditsPanel() {
@@ -397,14 +398,12 @@ function CreditsPanel() {
     <div className="panel" style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
         <h2 style={{ margin: 0 }}>⚡ AI Credits</h2>
-        <span className="muted" style={{ fontSize: 12.5 }}>
-          {info.reset_at ? `Resets ${new Date(info.reset_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}` : ""}
-        </span>
+        <a href="/buy-credits" className="btn-mini">⚡ Buy more</a>
       </div>
 
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, margin: "10px 0 6px" }}>
         <span style={{ fontSize: 34, fontWeight: 800 }}>{info.balance.toLocaleString("en-IN")}</span>
-        <span className="muted">/ {info.allowance?.toLocaleString("en-IN")} this month</span>
+        <span className="muted">credits left</span>
       </div>
       <div style={{ height: 8, background: "var(--bg)", borderRadius: 999, marginBottom: 14 }}>
         <div style={{ width: `${pct}%`, height: "100%", background: "var(--brand-grad)", borderRadius: 999 }} />
