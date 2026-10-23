@@ -170,9 +170,30 @@ export default function Landing() {
           </div>
 
           <div className="lph-hero-visual">
-            <div className="lph-badge lph-badge-tr">⭐ <b>4.8</b> Avg Rating<span>Across 12 locations</span></div>
-            <div className="lph-badge lph-badge-bl">💬 WhatsApp Auto-Reply<span>98% response rate</span></div>
-            <DashboardMock />
+            <div className="lph-hero-glow" />
+            <div className="lph-stage">
+              <DashboardMock />
+
+              {/* 3D floating channel cards — Google · Meta · Leads */}
+              <div className="lph-chip lph-chip-google">
+                <span className="lph-chip-ic" style={{ background: "#fff" }}>
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.4-.2-2H12v3.8h5.9a5 5 0 0 1-2.2 3.3v2.7h3.5c2-1.9 3.3-4.7 3.3-7.8Z"/><path fill="#34A853" d="M12 23c3 0 5.4-1 7.2-2.7l-3.5-2.7c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.5H2.2v2.8A11 11 0 0 0 12 23Z"/><path fill="#FBBC05" d="M5.8 14.2a6.6 6.6 0 0 1 0-4.2V7.2H2.2a11 11 0 0 0 0 9.8l3.6-2.8Z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3 .6 4.2 1.7l3.1-3.1A11 11 0 0 0 2.2 7.2l3.6 2.8C6.7 7.3 9.1 5.4 12 5.4Z"/></svg>
+                </span>
+                <div><div className="lph-chip-t">Google Reviews</div><div className="lph-chip-s">4.8★ · +126 this month</div></div>
+              </div>
+
+              <div className="lph-chip lph-chip-meta">
+                <span className="lph-chip-ic" style={{ background: "linear-gradient(135deg,#25D366,#128C7E)" }}>
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="#fff" aria-hidden><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.4-.7-2.9-1.1-4.7-4-4.9-4.2-.1-.2-1.1-1.5-1.1-2.8 0-1.3.7-2 .9-2.3.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.6c-.2.2-.3.4-.2.7.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.6-.1l.8-1c.2-.2.4-.2.6-.1l1.9.9c.3.1.5.2.5.4.1.2.1.9-.1 1.5Z"/></svg>
+                </span>
+                <div><div className="lph-chip-t">Meta &amp; WhatsApp</div><div className="lph-chip-s">98% auto-reply rate</div></div>
+              </div>
+
+              <div className="lph-chip lph-chip-leads">
+                <span className="lph-chip-ic" style={{ background: "linear-gradient(135deg,#7b2ff7,#b000f0)" }}>🎯</span>
+                <div><div className="lph-chip-t">Leads captured</div><div className="lph-chip-s">1,240 · +34% this week</div></div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
