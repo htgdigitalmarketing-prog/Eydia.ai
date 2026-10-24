@@ -24,6 +24,7 @@ class ChatbotEngine
     public function __construct(
         private readonly WhatsAppMessageService $messages,
         private readonly AiReplyService $ai,
+        private readonly LeadFlowAutomation $leadFlow,
     ) {}
 
     public function handleInbound(
@@ -34,6 +35,14 @@ class ChatbotEngine
         ?string $body,
         ?Message $message = null
     ): void {
+        // Any inbound message is a fresh reply, so the pending lead-flow nudge/
+        // drip for this chat is dropped — the clock resets (marketing doc §3).
+        try {
+            $this->leadFlow->onCustomerReply($conversation);
+        } catch (\Throwable $e) {
+            Log::warning('chatbot: lead-flow reply reset failed: ' . $e->getMessage());
+        }
+
         if ($conversation->assigned_agent_id) {
             Log::info('chatbot: skipped — chat is assigned to an agent', ['conversation' => $conversation->id]);
             return;
@@ -94,6 +103,7 @@ class ChatbotEngine
                 Log::info('chatbot: rule matched', ['chatbot' => $chatbot->id, 'keyword' => $matched->keyword]);
                 $this->sendResponse($phone, $to, $matched, $conversation, $contact);
                 $this->applyLeadActions($phone, $contact, $matched);
+                $this->leadFlow->scheduleForBranch($phone, $conversation, $contact, $chatbot, $matched);
             } elseif (! empty($chatbot->welcome_buttons) && $chatbot->welcome_message) {
                 // Button-driven flow: re-show the welcome menu for a first message
                 // or any unrecognized input (covers greetings and spam gracefully).

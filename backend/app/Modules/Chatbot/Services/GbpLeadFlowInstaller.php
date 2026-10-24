@@ -35,7 +35,10 @@ class GbpLeadFlowInstaller
                 'welcome_message' => "Hi 👋 I'm the Eydia assistant. I can check your Google Business Profile for free in about 30 seconds. What would you like to do?",
                 'welcome_buttons' => ['Check GBP score', 'See pricing', 'Talk to a human'],
                 'ai_enabled' => false,
-                'followup_enabled' => true,
+                // The funnel runs its own, better-targeted drip (24h nudge → 3-day
+                // drip → 2-day / 14-day re-engagement, via LeadFlowAutomation), so
+                // the generic 6h/12h nudge is left off to avoid double-messaging.
+                'followup_enabled' => false,
                 'followup_message' => "Still want your free Google Business Profile score? Just reply with your business name and city 👇",
             ])->save();
 
@@ -113,7 +116,11 @@ class GbpLeadFlowInstaller
             ['trigger' => 'Book free demo', 'action' => 'Sends the booking link → stage Appointment, tags Demo Booked'],
             ['trigger' => 'Just send details', 'action' => 'Sends overview + pricing, nurtures → tags Info Sent — Nurture'],
             ['trigger' => 'Not now', 'action' => 'Polite close, re-engages later → tags Cold'],
-            ['trigger' => 'No reply', 'action' => 'Automated nudge follow-up asks for their business name'],
+            ['trigger' => 'No reply after qualifying', 'action' => 'Auto nudge at 24h, then a long-term drip at 3 days'],
+            ['trigger' => 'Details sent, still quiet', 'action' => 'Auto "did you get a chance to look?" follow-up at 2 days'],
+            ['trigger' => 'Cold lead', 'action' => 'Auto re-engagement with a fresh hook at 14 days'],
+            ['trigger' => 'Demo booked', 'action' => 'Auto pre-demo reminder so they show up'],
+            ['trigger' => 'Any customer reply', 'action' => 'Resets the clock — pending nudges auto-cancel'],
         ];
     }
 }
