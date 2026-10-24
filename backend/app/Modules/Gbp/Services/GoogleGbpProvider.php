@@ -224,6 +224,38 @@ class GoogleGbpProvider
     }
 
     /**
+     * Patch editable Business Information fields on a Google location.
+     *
+     * @param  string  $locationName  the Google resource, e.g. "locations/123"
+     * @param  array   $body          a Location body with only the changed fields
+     * @param  string  $updateMask    comma-separated field paths to update
+     */
+    public function updateLocation(Integration $integration, string $locationName, array $body, string $updateMask): bool
+    {
+        $this->lastError = null;
+        $name = str_starts_with($locationName, 'locations/') ? $locationName : "locations/{$locationName}";
+        $url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$name}?" . http_build_query(['updateMask' => $updateMask]);
+
+        try {
+            $res = $this->client($integration)->patch($url, $body);
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            Log::warning('GBP updateLocation timed out: ' . $e->getMessage());
+            $this->lastError = 'Google took too long to respond. Try again in a moment.';
+
+            return false;
+        }
+
+        if (! $res->successful()) {
+            Log::warning('GBP updateLocation failed: ' . $res->status() . ' ' . $res->body());
+            $this->lastError = $this->describeFailure($res);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * Publish a local post to a location (GBP v4 localPosts).
      * $post: ['summary','type','image_url'?,'cta_type'?,'cta_url'?].
      *

@@ -60,6 +60,7 @@ export const DASHBOARD_GROUPS: DashboardGroup[] = [
     key: "dash_gbp", label: "Google Reviews / GBP", icon: "⭐", home: "/gbp",
     items: [
       { label: "Reviews", href: "/gbp", icon: "⭐" },
+      { label: "Business Info", href: "/gbp-profile", icon: "🏢" },
       { label: "SEO", href: "/seo", icon: "🔎", feature: "seo" },
       { label: "AI Studio", href: "/ai-studio", icon: "✨" },
     ],

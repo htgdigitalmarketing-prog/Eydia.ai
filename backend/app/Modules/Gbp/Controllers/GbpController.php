@@ -459,6 +459,83 @@ class GbpController extends Controller
         ];
     }
 
+    /**
+     * The editable Business Information profile (About / Contact / Location /
+     * Hours / More attributes) plus the review-share card, for the primary (or
+     * ?location=) connected location.
+     */
+    public function profile(Request $request, \App\Modules\Gbp\Services\GbpProfileService $profiles): JsonResponse
+    {
+        $location = $this->pickLocation($request);
+
+        return $this->ok([
+            'profile' => $profiles->toArray($location),
+            'connected' => (bool) $this->connectedIntegration(),
+            'attribute_groups' => \App\Modules\Gbp\Services\GbpProfileService::ATTRIBUTE_GROUPS,
+        ]);
+    }
+
+    /**
+     * Save Business Information edits. Always persists to Eydia (which powers the
+     * generated site, reports and review sharing); when Google is connected and
+     * the location is linked, also patches the live Google Business Profile.
+     */
+    public function updateProfile(Request $request, \App\Modules\Gbp\Services\GbpProfileService $profiles, GoogleGbpProvider $provider): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'category' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'description' => ['sometimes', 'nullable', 'string', 'max:4000'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'chat_url' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'website' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'address' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'service_area' => ['sometimes', 'array'],
+            'service_area.*' => ['string', 'max:255'],
+            'labels' => ['sometimes', 'array'],
+            'labels.*' => ['string', 'max:255'],
+            'opening_date' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'review_url' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'hours' => ['sometimes', 'array'],
+            'hours.*.day' => ['required_with:hours', 'string'],
+            'hours.*.open' => ['nullable', 'string', 'max:5'],
+            'hours.*.close' => ['nullable', 'string', 'max:5'],
+            'hours.*.closed' => ['nullable', 'boolean'],
+            'special_hours' => ['sometimes', 'array'],
+            'attributes' => ['sometimes', 'array'],
+        ]);
+
+        $location = $this->pickLocation($request)
+            ?? new GbpLocation(['tenant_id' => $request->user()->tenant_id, 'name' => $data['name'] ?? 'My Business']);
+        if (! $location->exists) {
+            $location->tenant_id = $request->user()->tenant_id;
+        }
+
+        $location = $profiles->apply($location, $data);
+
+        // Best-effort live push to Google when the listing is connected & linked.
+        $syncedToGoogle = false;
+        $syncMessage = null;
+        $integration = $this->connectedIntegration();
+        if ($integration && $location->google_location_id) {
+            $patch = $profiles->googlePatch($data);
+            if ($patch['mask'] !== '') {
+                $syncedToGoogle = $provider->updateLocation($integration, $location->google_location_id, $patch['body'], $patch['mask']);
+                if (! $syncedToGoogle) {
+                    $syncMessage = $provider->getLastError() ?? 'Saved in Eydia, but Google did not accept the update.';
+                }
+            }
+        }
+
+        return $this->ok([
+            'profile' => $profiles->toArray($location),
+            'synced_to_google' => $syncedToGoogle,
+            'message' => $syncedToGoogle
+                ? 'Business information saved and pushed to Google.'
+                : ($syncMessage ?? 'Business information saved.'),
+        ]);
+    }
+
     private function pickLocation(Request $request): ?GbpLocation
     {
         if ($loc = $request->query('location')) {

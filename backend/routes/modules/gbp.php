@@ -17,6 +17,10 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     // One-click AI optimization of the profile.
     Route::post('/optimize', [GbpController::class, 'optimize']);
 
+    // Business Information editor (About / Contact / Location / Hours / More).
+    Route::get('/profile', [GbpController::class, 'profile']);
+    Route::put('/profile', [GbpController::class, 'updateProfile']);
+
     // Business insights (performance metrics) + CSV export.
     Route::get('/insights', [GbpController::class, 'insights']);
     Route::get('/insights/export', [GbpController::class, 'insightsCsv']);

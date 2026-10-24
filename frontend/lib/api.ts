@@ -631,6 +631,14 @@ export const api = {
     optimize: (token: string) => request<GbpOptimizeResult>("/gbp/optimize", { method: "POST", token }),
     sync: (token: string) => request<{ synced: number; message: string }>("/gbp/sync", { method: "POST", token }),
 
+    // Business Information editor (About / Contact / Location / Hours / More)
+    profile: (token: string, location?: string) =>
+      request<{ profile: GbpProfile; connected: boolean; attribute_groups: string[] }>(
+        `/gbp/profile${location ? `?location=${location}` : ""}`, { token }),
+    updateProfile: (token: string, body: Partial<GbpProfile>) =>
+      request<{ profile: GbpProfile; synced_to_google: boolean; message: string }>(
+        "/gbp/profile", { method: "PUT", body, token }),
+
     // Business insights + Google audit / health score
     insights: (token: string, days = 30, location?: string) => {
       const qs = new URLSearchParams({ days: String(days) });
@@ -1572,6 +1580,30 @@ export type ChatbotRuleItem = {
   notify_agent?: boolean;
   priority: number;
   is_active: boolean;
+};
+
+export type GbpHours = { day: string; open: string; close: string; closed: boolean };
+export type GbpProfile = {
+  id: string | null;
+  name: string;
+  category: string;
+  description: string;
+  phone: string;
+  chat_url: string;
+  website: string;
+  address: string;
+  service_area: string[];
+  hours: GbpHours[];
+  special_hours: { date?: string; open?: string; close?: string; closed?: boolean }[];
+  attributes: Record<string, string[]>;
+  opening_date: string;
+  labels: string[];
+  review_url: string;
+  share: { whatsapp: string; email: string; facebook: string };
+  rating: number;
+  review_count: number;
+  is_verified: boolean;
+  google_location_id: string | null;
 };
 
 export type LeadFlowStep = { trigger: string; action: string };
