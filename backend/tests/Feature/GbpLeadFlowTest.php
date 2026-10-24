@@ -65,12 +65,12 @@ class GbpLeadFlowTest extends TestCase
 
         $this->assertSame(1, Chatbot::withoutGlobalScopes()->where('tenant_id', $owner->tenant_id)->where('is_lead_flow', true)->count());
         $bot = Chatbot::withoutGlobalScopes()->where('tenant_id', $owner->tenant_id)->first();
-        $this->assertSame(6, ChatbotRule::withoutGlobalScopes()->where('chatbot_id', $bot->id)->count());
+        $this->assertSame(11, ChatbotRule::withoutGlobalScopes()->where('chatbot_id', $bot->id)->count());
 
-        // Idempotent re-install keeps exactly one flow with 6 rules.
+        // Idempotent re-install keeps exactly one flow with the same rule set.
         app(GbpLeadFlowInstaller::class)->install($owner->tenant_id);
         $this->assertSame(1, Chatbot::withoutGlobalScopes()->where('tenant_id', $owner->tenant_id)->where('is_lead_flow', true)->count());
-        $this->assertSame(6, ChatbotRule::withoutGlobalScopes()->where('chatbot_id', $bot->id)->count());
+        $this->assertSame(11, ChatbotRule::withoutGlobalScopes()->where('chatbot_id', $bot->id)->count());
 
         $this->getJson('/api/v1/chatbots/lead-flow')->assertOk()
             ->assertJsonPath('data.available', true)

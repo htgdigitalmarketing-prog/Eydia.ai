@@ -135,6 +135,63 @@ class LeadFlowAutomationTest extends TestCase
         $this->assertNotNull($this->pending('cold_reengage'));
     }
 
+    public function test_typed_scenarios_route_to_the_right_branch_and_drip(): void
+    {
+        // Price objection — ROI branch, not the plain price list.
+        app(ChatbotEngine::class)->handleInbound($this->phone, $this->contact->fresh(), $this->conversation->fresh(), 'text', 'honestly this looks too expensive for us');
+        $this->assertNotNull($this->pending('objection_followup'));
+
+        // Already using a competitor.
+        app(ChatbotEngine::class)->handleInbound($this->phone, $this->contact->fresh(), $this->conversation->fresh(), 'text', "we're already using Grexa for this");
+        $this->assertNotNull($this->pending('competitor_followup'));
+
+        // Referral — fast track.
+        app(ChatbotEngine::class)->handleInbound($this->phone, $this->contact->fresh(), $this->conversation->fresh(), 'text', 'I was referred by a friend');
+        $this->assertNotNull($this->pending('referral_reminder'));
+
+        // Reschedule / no-show.
+        app(ChatbotEngine::class)->handleInbound($this->phone, $this->contact->fresh(), $this->conversation->fresh(), 'text', 'sorry I missed my demo, can we reschedule');
+        $this->assertNotNull($this->pending('rebook_reminder'));
+    }
+
+    public function test_multi_location_hands_off_and_tags_enterprise(): void
+    {
+        app(ChatbotEngine::class)->handleInbound($this->phone, $this->contact->fresh(), $this->conversation->fresh(), 'text', 'we have multiple locations across the city');
+
+        $lead = \App\Models\Lead::withoutGlobalScopes()->where('tenant_id', $this->tid)->where('phone', '+919812300055')->first();
+        $this->assertNotNull($lead);
+        $this->assertSame('Enterprise Lead', $lead->meta['tag'] ?? null);
+        // A handoff branch pauses the drip — nothing left pending.
+        $this->assertSame(0, LeadFlowTask::withoutGlobalScopes()->where('status', 'pending')->count());
+    }
+
+    public function test_marking_a_lead_won_schedules_the_review_cadence(): void
+    {
+        // Give the lead-flow bot a WhatsApp lead tied to this conversation.
+        $lead = \App\Models\Lead::withoutGlobalScopes()->create([
+            'tenant_id' => $this->tid, 'name' => 'Ravi', 'phone' => '+919812300055',
+            'source' => 'WHATSAPP', 'stage' => 'APPOINTMENT',
+        ]);
+
+        app(LeadFlowAutomation::class)->scheduleForLeadStage($lead->fresh()->forceFill(['stage' => 'CONVERTED']));
+
+        $task = LeadFlowTask::withoutGlobalScopes()->where('kind', 'review_ask')->where('status', 'pending')->first();
+        $this->assertNotNull($task, 'a 30-day review/referral ask should be scheduled');
+        $this->assertEqualsWithDelta(now()->addDays(30)->timestamp, $task->due_at->timestamp, 180);
+    }
+
+    public function test_leadflow_status_exposes_the_playbook_to_the_allowed_email(): void
+    {
+        config(['features.lead_flow_emails' => ['owner@acme.test']]);
+        $owner = User::withoutGlobalScopes()->where('email', 'owner@acme.test')->first();
+
+        $this->actingAs($owner, 'api')
+            ->getJson('/api/v1/chatbots/lead-flow')
+            ->assertOk()
+            ->assertJsonPath('data.available', true)
+            ->assertJsonStructure(['data' => ['playbook' => ['scenarios', 'cadence', 'marketing', 'ads', 'competitive']]]);
+    }
+
     public function test_scheduler_sends_due_tasks_and_records_them(): void
     {
         $this->tap('Check GBP score');

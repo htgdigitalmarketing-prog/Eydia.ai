@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
-  api, ApiError, ChatbotItem, ChatbotDetail, ChatbotRuleItem, WaNumber, TemplateItem, LeadFlowStatus,
+  api, ApiError, ChatbotItem, ChatbotDetail, ChatbotRuleItem, WaNumber, TemplateItem, LeadFlowStatus, LeadPlaybook,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
@@ -288,6 +288,7 @@ export default function ChatbotPage() {
         {notice && <div className="panel" style={{ background: "#e7f7ef", color: "#0a7d47", marginBottom: 16 }}>{notice}</div>}
 
         {leadFlow?.available && <LeadFlowCard flow={leadFlow} busy={flowBusy} onInstall={installLeadFlow} />}
+        {leadFlow?.available && leadFlow.playbook && <LeadPlaybookCard playbook={leadFlow.playbook} />}
 
         {loading ? (
           <div className="loading-block"><span className="spinner" /><span>Loading…</span></div>
@@ -585,6 +586,171 @@ function LeadFlowCard({ flow, busy, onInstall }: { flow: LeadFlowStatus | null; 
           Tip: edit the booking link, pricing and messages anytime by opening the “GBP Lead Automation” chatbot below. Reinstalling resets it to the default flow.
         </p>
       )}
+    </div>
+  );
+}
+
+/** Section wrapper: a collapsible block inside the playbook card. */
+function PlaybookSection({ icon, title, subtitle, children, open = false }: {
+  icon: string; title: string; subtitle?: string; children: ReactNode; open?: boolean;
+}) {
+  return (
+    <details open={open} style={{ border: "1px solid var(--border)", borderRadius: 12, background: "var(--card)", marginTop: 10 }}>
+      <summary style={{ cursor: "pointer", listStyle: "none", padding: "12px 14px", display: "flex", alignItems: "center", gap: 10, fontWeight: 700 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <span>{title}</span>
+        {subtitle && <span className="muted" style={{ fontWeight: 500, fontSize: 12 }}>· {subtitle}</span>}
+        <span className="muted" style={{ marginLeft: "auto", fontSize: 12 }}>▾</span>
+      </summary>
+      <div style={{ padding: "0 14px 14px" }}>{children}</div>
+    </details>
+  );
+}
+
+const PB_TH: CSSProperties = { textAlign: "left", padding: "7px 10px", fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4, color: "var(--muted, #667781)", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" };
+const PB_TD: CSSProperties = { padding: "8px 10px", fontSize: 12.5, borderBottom: "1px solid var(--border)", verticalAlign: "top" };
+
+/** The full lead playbook (marketing doc §4–§8) — gated to the lead-flow account. */
+function LeadPlaybookCard({ playbook }: { playbook: LeadPlaybook }) {
+  return (
+    <div className="panel" style={{ marginBottom: 16, borderLeft: "4px solid var(--brand-grad-end, #ad17e6)" }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <div style={{ fontSize: 24, lineHeight: 1 }}>📘</div>
+        <div>
+          <h3 style={{ margin: 0 }}>Lead Playbook</h3>
+          <p className="muted" style={{ margin: "4px 0 0", fontSize: 13, maxWidth: 620 }}>
+            Every scenario, the CRM pipeline &amp; follow-up cadence, how to present it in marketing, ad creatives and the competitive landscape — the full strategy behind the automation above.
+          </p>
+        </div>
+      </div>
+
+      {/* §4 — Lead management scenarios */}
+      <PlaybookSection icon="🧭" title="Lead scenarios" subtitle={`${playbook.scenarios.length} branches`} open>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 640 }}>
+            <thead><tr>
+              <th style={PB_TH}>Scenario</th><th style={PB_TH}>Trigger</th><th style={PB_TH}>Automated response</th><th style={PB_TH}>CRM tag</th>
+            </tr></thead>
+            <tbody>
+              {playbook.scenarios.map((s, i) => (
+                <tr key={i}>
+                  <td style={{ ...PB_TD, fontWeight: 600, whiteSpace: "nowrap" }}>
+                    {s.scenario}
+                    <span title={s.auto ? "Automated" : "Manual / human"} style={{ marginLeft: 6, fontSize: 10 }}>{s.auto ? "🤖" : "🧑"}</span>
+                  </td>
+                  <td style={{ ...PB_TD, color: "var(--muted, #667781)" }}>{s.trigger}</td>
+                  <td style={PB_TD}>{s.response}</td>
+                  <td style={PB_TD}><span style={{ fontSize: 11.5, fontWeight: 700, padding: "2px 8px", borderRadius: 999, background: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)", whiteSpace: "nowrap" }}>{s.tag}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>🤖 handled automatically by the WhatsApp funnel · 🧑 flagged for a human on your team</p>
+      </PlaybookSection>
+
+      {/* §5 — CRM pipeline & cadence */}
+      <PlaybookSection icon="📈" title="CRM pipeline & follow-up cadence">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center", marginBottom: 12 }}>
+          {playbook.pipeline.map((p, i) => (
+            <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 999, border: "1px solid var(--border)", background: "var(--card)" }}>{p}</span>
+              {i < playbook.pipeline.length - 1 && <span className="muted">→</span>}
+            </span>
+          ))}
+        </div>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
+            <thead><tr><th style={PB_TH}>Stage</th><th style={PB_TH}>Follow-up timing</th><th style={PB_TH}>Channel</th></tr></thead>
+            <tbody>
+              {playbook.cadence.map((c, i) => (
+                <tr key={i}>
+                  <td style={{ ...PB_TD, fontWeight: 600, whiteSpace: "nowrap" }}>{c.stage}</td>
+                  <td style={PB_TD}>{c.timing}</td>
+                  <td style={{ ...PB_TD, whiteSpace: "nowrap" }}>{c.channel}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Remarketing triggers (feed ads back into WhatsApp)</div>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {playbook.remarketing.map((r, i) => <li key={i} style={{ fontSize: 12.5, marginBottom: 4 }}>{r}</li>)}
+          </ul>
+        </div>
+      </PlaybookSection>
+
+      {/* §6 — Marketing presentation */}
+      <PlaybookSection icon="🎯" title="How to present it in marketing">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Landing page structure</div>
+            <ol style={{ margin: 0, paddingLeft: 18 }}>
+              {playbook.marketing.landing.map((l, i) => <li key={i} style={{ fontSize: 12.5, marginBottom: 4 }}>{l}</li>)}
+            </ol>
+          </div>
+          <div>
+            <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Sales / demo pitch flow</div>
+            <ol style={{ margin: 0, paddingLeft: 18 }}>
+              {playbook.marketing.pitch.map((p, i) => <li key={i} style={{ fontSize: 12.5, marginBottom: 4 }}>{p}</li>)}
+            </ol>
+          </div>
+        </div>
+        <p style={{ fontSize: 12.5, marginTop: 12, padding: "10px 12px", borderRadius: 10, background: "color-mix(in srgb, var(--accent) 7%, transparent)" }}>
+          <strong>Trust, everywhere:</strong> {playbook.marketing.trust}
+        </p>
+      </PlaybookSection>
+
+      {/* §7 — Sample ad creatives */}
+      <PlaybookSection icon="📣" title="Sample ad creatives">
+        <div style={{ fontSize: 12.5, fontWeight: 700, margin: "0 0 8px" }}>Meta (Facebook / Instagram) — Click to WhatsApp</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 10 }}>
+          {playbook.ads.meta.map((a, i) => (
+            <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 12, background: "var(--card)" }}>
+              <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: "var(--accent)" }}>{a.angle}</span>
+              <div style={{ fontSize: 13.5, fontWeight: 700, margin: "4px 0 6px" }}>{a.headline}</div>
+              <div className="muted" style={{ fontSize: 12 }}>{a.text}</div>
+              <div style={{ marginTop: 8, fontSize: 11, fontWeight: 700, color: "#0a7d47" }}>→ Send Message</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, margin: "14px 0 6px" }}>Google Search — headlines</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+          {playbook.ads.google.map((g, i) => (
+            <span key={i} style={{ fontSize: 12, padding: "4px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)" }}>{g}</span>
+          ))}
+        </div>
+        <ul style={{ margin: "12px 0 0", paddingLeft: 18 }}>
+          {playbook.ads.notes.map((n, i) => <li key={i} className="muted" style={{ fontSize: 12, marginBottom: 4 }}>{n}</li>)}
+        </ul>
+      </PlaybookSection>
+
+      {/* §8 — Competitive landscape */}
+      <PlaybookSection icon="⚔️" title="Competitive landscape">
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 680 }}>
+            <thead><tr>{playbook.competitive.columns.map((c, i) => (
+              <th key={i} style={{ ...PB_TH, ...(i === 1 ? { color: "var(--accent)" } : {}) }}>{c}</th>
+            ))}</tr></thead>
+            <tbody>
+              {playbook.competitive.rows.map((row, i) => (
+                <tr key={i}>
+                  {row.map((cell, j) => (
+                    <td key={j} style={{ ...PB_TD, ...(j === 0 ? { fontWeight: 600, whiteSpace: "nowrap" } : {}), ...(j === 1 ? { background: "color-mix(in srgb, var(--accent) 6%, transparent)" } : {}) }}>{cell}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>Takeaways for Eydia.ai</div>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            {playbook.competitive.takeaways.map((t, i) => <li key={i} style={{ fontSize: 12.5, marginBottom: 4 }}>{t}</li>)}
+          </ul>
+        </div>
+      </PlaybookSection>
     </div>
   );
 }

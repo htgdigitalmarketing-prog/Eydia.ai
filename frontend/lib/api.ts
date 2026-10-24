@@ -1575,7 +1575,20 @@ export type ChatbotRuleItem = {
 };
 
 export type LeadFlowStep = { trigger: string; action: string };
-export type LeadFlowStatus = { available?: boolean; installed: boolean; active: boolean; id: string | null; rules: number; steps: LeadFlowStep[] };
+export type LeadPlaybook = {
+  scenarios: { scenario: string; trigger: string; response: string; tag: string; auto: boolean }[];
+  pipeline: string[];
+  cadence: { stage: string; timing: string; channel: string }[];
+  remarketing: string[];
+  marketing: { landing: string[]; pitch: string[]; trust: string };
+  ads: {
+    meta: { angle: string; headline: string; text: string }[];
+    google: string[];
+    notes: string[];
+  };
+  competitive: { columns: string[]; rows: string[][]; takeaways: string[] };
+};
+export type LeadFlowStatus = { available?: boolean; installed: boolean; active: boolean; id: string | null; rules: number; steps: LeadFlowStep[]; playbook?: LeadPlaybook };
 
 export type ChatbotItem = {
   id: string;

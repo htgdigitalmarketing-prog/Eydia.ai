@@ -139,6 +139,7 @@ class ChatbotController extends Controller
             'id' => $bot?->uuid,
             'rules' => $bot?->rules_count ?? 0,
             'steps' => \App\Modules\Chatbot\Services\GbpLeadFlowInstaller::steps(),
+            'playbook' => \App\Modules\Chatbot\Services\GbpLeadFlowInstaller::playbook(),
         ]);
     }
 

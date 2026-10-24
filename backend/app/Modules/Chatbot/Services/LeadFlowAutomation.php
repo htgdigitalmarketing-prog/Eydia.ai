@@ -58,20 +58,84 @@ class LeadFlowAutomation
             return;
         }
 
-        // Each branch owns its kinds — re-taking a branch refreshes its tasks.
-        $kinds = array_map(fn ($t) => $t['kind'], $plan);
-        $this->cancelPending($conversation, $kinds);
-
         $lead = $this->leadFor($phone->tenant_id, $contact);
+        $this->queue($plan, $phone->tenant_id, $conversation->id, $contact->id, $phone->id, $lead?->id);
+    }
+
+    /**
+     * Schedule the post-sale cadence when a rep moves a lead to Won or Lost in
+     * the CRM (marketing doc §5): a Won lead gets a review + referral ask at 30
+     * days, a Lost lead a 90-day win-back. Only fires for a tenant that actually
+     * runs the lead-flow funnel (keeps it to the gated account) and whose lead
+     * has a WhatsApp conversation to reach.
+     */
+    public function scheduleForLeadStage(Lead $lead): void
+    {
+        $plan = $this->planForStage((string) $lead->stage);
+        if ($plan === []) {
+            return;
+        }
+
+        $hasFunnel = Chatbot::withoutGlobalScopes()
+            ->where('tenant_id', $lead->tenant_id)->where('is_lead_flow', true)->exists();
+        if (! $hasFunnel || ! $lead->phone) {
+            return;
+        }
+
+        $contact = Contact::withoutGlobalScopes()
+            ->where('tenant_id', $lead->tenant_id)
+            ->where(function ($q) use ($lead) {
+                $q->where('phone', $lead->phone)->orWhere('wa_id', ltrim($lead->phone, '+'));
+            })
+            ->first();
+        if (! $contact) {
+            return;
+        }
+
+        $conversation = Conversation::withoutGlobalScopes()
+            ->where('tenant_id', $lead->tenant_id)
+            ->where('contact_id', $contact->id)
+            ->orderByDesc('last_message_at')
+            ->first();
+        if (! $conversation) {
+            return;
+        }
+
+        $phoneId = $conversation->whatsapp_phone_number_id
+            ?? WhatsappPhoneNumber::withoutGlobalScopes()->where('tenant_id', $lead->tenant_id)->value('id');
+
+        // Tag the lead for the CRM, then queue the cadence.
+        $meta = $lead->meta ?? [];
+        $meta['tag'] = $lead->stage === 'CONVERTED' ? 'Customer' : 'Lost';
+        $meta['flow'] = 'gbp_lead_automation';
+        $lead->forceFill(['meta' => $meta])->saveQuietly();
+
+        $this->queue($plan, $lead->tenant_id, $conversation->id, $contact->id, $phoneId, $lead->id);
+    }
+
+    /** Create the drip tasks for a plan, cancelling any pending of the same kinds first. */
+    private function queue(array $plan, int $tenantId, int $conversationId, int $contactId, ?int $phoneId, ?int $leadId): void
+    {
+        if ($plan === []) {
+            return;
+        }
+
+        // Each branch/stage owns its kinds — re-taking it refreshes those tasks.
+        $kinds = array_map(fn ($t) => $t['kind'], $plan);
+        LeadFlowTask::withoutGlobalScopes()
+            ->where('conversation_id', $conversationId)
+            ->where('status', LeadFlowTask::STATUS_PENDING)
+            ->whereIn('kind', $kinds)
+            ->update(['status' => LeadFlowTask::STATUS_CANCELLED]);
 
         foreach ($plan as $t) {
             try {
                 LeadFlowTask::withoutGlobalScopes()->create([
-                    'tenant_id' => $phone->tenant_id,
-                    'conversation_id' => $conversation->id,
-                    'contact_id' => $contact->id,
-                    'whatsapp_phone_number_id' => $phone->id,
-                    'lead_id' => $lead?->id,
+                    'tenant_id' => $tenantId,
+                    'conversation_id' => $conversationId,
+                    'contact_id' => $contactId,
+                    'whatsapp_phone_number_id' => $phoneId,
+                    'lead_id' => $leadId,
                     'kind' => $t['kind'],
                     'body' => $t['body'],
                     'buttons' => $t['buttons'] ?? null,
@@ -230,14 +294,48 @@ class LeadFlowAutomation
                 ['kind' => 'nudge', 'in' => 24 * 60, 'body' => "Still want your free Google Business Profile score? 🔍 Just reply with your business name and city and our team will prepare it for you."],
                 ['kind' => 'drip', 'in' => 3 * 24 * 60, 'body' => "Quick one 👋 businesses in your area are getting more calls just by fixing a few Google Business Profile gaps. Want us to run your free check? Reply with your business name to start.", 'buttons' => ['Check GBP score', 'Book free demo']],
             ],
+            // Warm lead (details/pricing sent): Day 2 nudge → Day 5 case study → Day 10 last offer.
             'Info Sent — Nurture' => [
                 ['kind' => 'info_followup', 'in' => 2 * 24 * 60, 'body' => "Hi 🙂 did you get a chance to look at the overview and pricing I sent? Happy to answer any questions — or I can book you a quick 15-min demo.", 'buttons' => ['Book free demo', 'Talk to a human']],
+                ['kind' => 'case_study', 'in' => 5 * 24 * 60, 'body' => "Quick proof 📈 a business near you went from barely showing up on Maps to a steady stream of calls after we fixed their profile. Want us to run your free check and show what's possible for you?", 'buttons' => ['Check GBP score', 'Book free demo']],
+                ['kind' => 'last_offer', 'in' => 10 * 24 * 60, 'body' => "Last nudge from me 🙌 we're offering a discounted first month + free onboarding this week. Want me to set you up, or book a quick demo first?", 'buttons' => ['Book free demo', 'See pricing']],
             ],
             'Cold' => [
                 ['kind' => 'cold_reengage', 'in' => 14 * 24 * 60, 'body' => "Hi again 👋 we recently helped a local business go from 3 photos and a broken call button to a steady stream of calls from Google. Want your free Business Profile check now?", 'buttons' => ['Check GBP score', 'See pricing']],
             ],
             'Demo Booked' => [
                 ['kind' => 'demo_reminder', 'in' => 22 * 60, 'body' => "Reminder 📅 your free Eydia demo is coming up. We'll walk through your live Google Business Profile audit and exactly how to get more calls. See you there! If you need to reschedule, just reply here."],
+            ],
+            'No-show — Rebook' => [
+                ['kind' => 'rebook_reminder', 'in' => 24 * 60, 'body' => "Still keen to see your free Google Business Profile audit? 🙂 Want me to grab you another slot — any time works.", 'buttons' => ['Book free demo', 'Talk to a human']],
+            ],
+            'Objection — Price' => [
+                ['kind' => 'objection_followup', 'in' => 24 * 60, 'body' => "Just so it's clear 💡 one missed call a week from a broken listing usually costs more than the whole plan. We can start you on the lighter Starter plan with no lock-in. Want a quick demo on your own profile first?", 'buttons' => ['Book free demo', 'See pricing']],
+            ],
+            'Competitive' => [
+                ['kind' => 'competitor_followup', 'in' => 2 * 24 * 60, 'body' => "Still happy to run that free side-by-side audit whenever you like 👍 the big difference: when something breaks on Google, you get a human team that's fixed it for 10 years — not just software. Want us to check your profile?", 'buttons' => ['Check GBP score', 'Book free demo']],
+            ],
+            'Referral — Fast Track' => [
+                ['kind' => 'referral_reminder', 'in' => 24 * 60, 'body' => "Your fast-track demo slot is still open 🙌 pick any time that suits you and we'll walk through your live Google profile together.", 'buttons' => ['Book free demo']],
+            ],
+            default => [],
+        };
+    }
+
+    /**
+     * The post-sale cadence for a CRM pipeline stage (marketing doc §5).
+     * CONVERTED ≈ Customer (won), LOST ≈ Lost.
+     *
+     * @return array<int, array{kind:string, in:int, body:string, buttons?:array}>
+     */
+    private function planForStage(string $stage): array
+    {
+        return match ($stage) {
+            'CONVERTED' => [
+                ['kind' => 'review_ask', 'in' => 30 * 24 * 60, 'body' => "You've been with us a month now 🎉 if Eydia's helped bring in more calls, a quick Google review would mean the world — and if you know another business owner who'd benefit, we'd love an intro. Thank you! 🙏"],
+            ],
+            'LOST' => [
+                ['kind' => 'winback', 'in' => 90 * 24 * 60, 'body' => "Hi 👋 it's been a while! Google keeps changing how local businesses get found and we've shipped a lot since we last spoke. Want a fresh free check on your Business Profile — no strings?", 'buttons' => ['Check GBP score', 'See pricing']],
             ],
             default => [],
         };

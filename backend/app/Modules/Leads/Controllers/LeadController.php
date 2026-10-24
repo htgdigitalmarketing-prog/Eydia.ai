@@ -100,7 +100,9 @@ class LeadController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
+        $before = $lead->stage;
         $lead->update($data);
+        $this->onStageChange($lead, $before);
 
         return $this->ok(['lead' => $this->leadArray($lead->fresh('agent'))]);
     }
@@ -113,13 +115,33 @@ class LeadController extends Controller
             'stage' => ['required', Rule::in(Lead::STAGES)],
         ]);
 
+        $before = $lead->stage;
         $lead->update([
             'stage' => $data['stage'],
             'last_contacted_at' => in_array($data['stage'], ['CONTACTED', 'FOLLOW_UP', 'APPOINTMENT'], true)
                 ? now() : $lead->last_contacted_at,
         ]);
+        $this->onStageChange($lead, $before);
 
         return $this->ok(['lead' => $this->leadArray($lead->fresh('agent'))]);
+    }
+
+    /**
+     * When a lead is newly marked Won or Lost, kick off its post-sale WhatsApp
+     * cadence (review + referral ask / 90-day win-back). No-op unless the tenant
+     * runs the GBP lead-flow funnel and the lead has a WhatsApp conversation.
+     */
+    private function onStageChange(Lead $lead, ?string $before): void
+    {
+        if ($lead->stage === $before || ! in_array($lead->stage, ['CONVERTED', 'LOST'], true)) {
+            return;
+        }
+
+        try {
+            app(\App\Modules\Chatbot\Services\LeadFlowAutomation::class)->scheduleForLeadStage($lead);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('lead-flow: stage cadence failed: ' . $e->getMessage());
+        }
     }
 
     public function destroy(string $uuid): JsonResponse
