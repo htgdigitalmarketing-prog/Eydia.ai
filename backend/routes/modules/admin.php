@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Admin\Controllers\AiSettingsController;
 use App\Modules\Admin\Controllers\CompanyController;
 use App\Modules\Admin\Controllers\CreditPackController;
 use App\Modules\Admin\Controllers\PlanController;
@@ -36,4 +37,9 @@ Route::prefix('admin')->middleware('super_admin')->group(function () {
 
     Route::get('/settings', [SettingsController::class, 'show']);
     Route::put('/settings', [SettingsController::class, 'update']);
+
+    // AI provider configuration (select provider + key + model, activate, test).
+    Route::get('/ai-settings', [AiSettingsController::class, 'show']);
+    Route::put('/ai-settings', [AiSettingsController::class, 'update']);
+    Route::post('/ai-settings/test', [AiSettingsController::class, 'test']);
 });

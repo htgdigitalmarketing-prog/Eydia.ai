@@ -461,6 +461,15 @@ export const api = {
     updateSettings: (token: string, body: Partial<InvoiceSettings>) =>
       request<{ settings: InvoiceSettings; message: string }>("/admin/settings", { method: "PUT", body, token }),
 
+    // AI provider configuration (select provider + key + model, activate, test)
+    aiSettings: (token: string) =>
+      request<{ ai: AiSettings }>("/admin/ai-settings", { token }),
+    updateAiSettings: (token: string, body: AiSettingsUpdate) =>
+      request<{ ai: AiSettings; message: string }>("/admin/ai-settings", { method: "PUT", body, token }),
+    testAiProvider: (token: string, provider: string) =>
+      request<{ result: { ok: boolean; message?: string; sample?: string; model?: string } }>(
+        "/admin/ai-settings/test", { method: "POST", body: { provider }, token }),
+
     creditPacks: (token: string) => request<{ packs: AdminCreditPack[] }>("/admin/credit-packs", { token }),
     createCreditPack: (token: string, body: CreditPackInput) =>
       request<{ pack: AdminCreditPack }>("/admin/credit-packs", { method: "POST", body, token }),
@@ -1711,6 +1720,20 @@ export type BillingDetails = {
   phone: string;
   address: string;
   gstin?: string;
+};
+
+export type AiProviderInfo = { has_key: boolean; key_source: "saved" | "env" | "none"; key_last4: string | null; model: string; model_default: string };
+export type AiSettings = {
+  is_active: boolean;
+  active_provider: string | null;
+  effective_provider: string | null;
+  providers: Record<"gemini" | "anthropic" | "openai", AiProviderInfo>;
+};
+export type AiSettingsUpdate = {
+  is_active?: boolean;
+  active_provider?: string | null;
+  gemini_model?: string; anthropic_model?: string; openai_model?: string;
+  gemini_api_key?: string; anthropic_api_key?: string; openai_api_key?: string;
 };
 
 export type InvoiceSettings = {

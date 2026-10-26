@@ -58,6 +58,14 @@ return [
         'image_model' => env('GEMINI_IMAGE_MODEL', 'gemini-2.5-flash-image'),
     ],
 
+    // OpenAI (chat + image). Usually set from Settings → AI Provider (DB), with
+    // these env vars as the fallback. image_model: gpt-image-1 or dall-e-3.
+    'openai' => [
+        'key'         => env('OPENAI_API_KEY'),
+        'model'       => env('OPENAI_MODEL', 'gpt-4o-mini'),
+        'image_model' => env('OPENAI_IMAGE_MODEL', 'gpt-image-1'),
+    ],
+
     // Mobile push. Expo needs no key; legacy FCM needs FCM_SERVER_KEY.
     'fcm' => [
         'key' => env('FCM_SERVER_KEY'),
