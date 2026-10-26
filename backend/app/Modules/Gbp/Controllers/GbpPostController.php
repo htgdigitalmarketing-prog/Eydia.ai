@@ -86,6 +86,88 @@ class GbpPostController extends Controller
         return $this->ok(['text' => trim($text), 'source' => $source, 'credits' => $tenantId ? $this->credits->balance($tenantId) : null]);
     }
 
+    /**
+     * AI content plan: generate a batch of varied posts for the business and
+     * schedule them, spread out by a cadence. Optionally generates + attaches an
+     * AI image per post. Credit-gated (one 'ai_caption' for the plan, plus one
+     * 'ai_media_generate' per image). The posts land as SCHEDULED and the
+     * existing scheduler publishes them when due (to Google, once connected).
+     */
+    public function autoPlan(Request $request, \App\Modules\Gbp\Services\GbpAiService $ai): JsonResponse
+    {
+        $data = $request->validate([
+            'location' => ['nullable', 'string'],
+            'count' => ['nullable', 'integer', 'min:1', 'max:8'],
+            'cadence_days' => ['nullable', 'integer', 'min:1', 'max:30'],
+            'start_at' => ['nullable', 'date'],
+            'with_images' => ['sometimes', 'boolean'],
+            'keywords' => ['sometimes', 'array'],
+            'keywords.*' => ['string', 'max:120'],
+        ]);
+
+        $location = ! empty($data['location'])
+            ? GbpLocation::where('uuid', $data['location'])->first()
+            : GbpLocation::query()->first();
+        if (! $location) {
+            return $this->fail('Add your business information first, then generate a content plan.', [], 422);
+        }
+
+        $tenantId = $request->user()->tenant_id;
+        if ($tenantId && ! $this->credits->canAfford($tenantId, 'ai_caption')) {
+            return $this->fail('You are out of AI credits. Top up or upgrade your plan to continue.', ['credits' => ['insufficient']], 402);
+        }
+
+        $count = $data['count'] ?? 4;
+        $ideas = $ai->planPosts($location, $count, $data['keywords'] ?? []);
+        if ($ideas === []) {
+            return $this->fail('AI is not configured yet (set GEMINI_API_KEY or ANTHROPIC_API_KEY in the backend .env).', [], 422);
+        }
+        // One AI call planned the whole batch — charge once.
+        $this->credits->deduct($tenantId, $request->user()->id, 'ai_caption', 'AI content plan (' . count($ideas) . ' posts)');
+
+        $cadence = $data['cadence_days'] ?? 3;
+        $start = (! empty($data['start_at']) ? \Illuminate\Support\Carbon::parse($data['start_at']) : now()->addDay())
+            ->copy()->setTime(10, 0);
+        $wantImages = (bool) ($data['with_images'] ?? false);
+
+        $created = [];
+        foreach ($ideas as $i => $idea) {
+            $imageUrl = null;
+            if ($wantImages && $tenantId && $this->credits->canAfford($tenantId, 'ai_media_generate')) {
+                $imageUrl = $ai->generatePostImage(
+                    "Professional, photorealistic marketing image for a Google Business Profile post. "
+                    . "Business: {$location->name}" . ($location->category ? " ({$location->category})" : '') . '. '
+                    . 'Theme: ' . ($idea['title'] ?: $idea['summary']) . '. Clean, modern, bright, no text overlay.'
+                );
+                if ($imageUrl) {
+                    $this->credits->deduct($tenantId, $request->user()->id, 'ai_media_generate', 'AI post image');
+                }
+            }
+
+            $post = GbpPost::create([
+                'tenant_id' => $tenantId,
+                'gbp_location_id' => $location->id,
+                'type' => $idea['type'],
+                'summary' => $idea['summary'],
+                'image_url' => $imageUrl,
+                'status' => 'SCHEDULED',
+                'scheduled_at' => $start->copy()->addDays($i * $cadence),
+                'meta' => $idea['title'] !== '' ? ['title' => $idea['title']] : null,
+            ]);
+
+            $created[] = $this->arr($post->load('location'));
+        }
+
+        return $this->ok([
+            'posts' => $created,
+            'created' => count($created),
+            'with_images' => $wantImages,
+            'source' => 'ai',
+            'credits' => $tenantId ? $this->credits->balance($tenantId) : null,
+            'message' => count($created) . ' posts generated and scheduled.',
+        ], 201);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $query = GbpPost::query()->with('location:id,uuid,name')->latest();

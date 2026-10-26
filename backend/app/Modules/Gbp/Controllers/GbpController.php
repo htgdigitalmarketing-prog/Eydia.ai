@@ -536,6 +536,41 @@ class GbpController extends Controller
         ]);
     }
 
+    /**
+     * Rewrite the business "from the business" description, optimised for local
+     * SEO, from the saved profile (+ optional target keywords). Returns the draft
+     * for the user to review and save — it does not overwrite anything itself.
+     */
+    public function aiRewriteProfile(Request $request, \App\Modules\Gbp\Services\GbpAiService $ai): JsonResponse
+    {
+        $data = $request->validate([
+            'location' => ['nullable', 'string'],
+            'keywords' => ['sometimes', 'array'],
+            'keywords.*' => ['string', 'max:120'],
+        ]);
+
+        $location = $this->pickLocation($request);
+        if (! $location) {
+            return $this->fail('Add your business information first, then let AI optimise it.', [], 422);
+        }
+        if ($blocked = $this->guardCredits($request, 'ai_caption')) {
+            return $blocked;
+        }
+
+        $description = $ai->rewriteDescription($location, $data['keywords'] ?? []);
+        if (! $description) {
+            return $this->fail('AI is not configured yet (set GEMINI_API_KEY or ANTHROPIC_API_KEY in the backend .env).', [], 422);
+        }
+
+        $this->credits->deduct($request->user()->tenant_id, $request->user()->id, 'ai_caption', 'AI SEO rewrite: business description');
+
+        return $this->ok([
+            'description' => $description,
+            'source' => 'ai',
+            'credits' => $this->credits->balance($request->user()->tenant_id),
+        ]);
+    }
+
     private function pickLocation(Request $request): ?GbpLocation
     {
         if ($loc = $request->query('location')) {

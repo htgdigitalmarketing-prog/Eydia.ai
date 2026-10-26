@@ -191,6 +191,18 @@ class GbpProfileService
         return preg_match('/^\d{1,2}:\d{2}$/', trim($t)) ? trim($t) : '09:00';
     }
 
+    /** Best-effort city from a free-form address ("…, Sector 19, Noida, UP 201301, India" → "Noida"). */
+    public static function cityFromAddress(?string $address): ?string
+    {
+        if (! $address) {
+            return null;
+        }
+        $parts = array_values(array_filter(array_map('trim', explode(',', $address))));
+        $n = count($parts);
+        // Skip the country + "state PIN" tail: the city is usually two before the end.
+        return $n >= 3 ? ($parts[$n - 3] ?? null) : ($parts[0] ?? null);
+    }
+
     /** The public "write a review" link — stored override, or derived from the listing. */
     private function reviewUrl(?GbpLocation $l): string
     {

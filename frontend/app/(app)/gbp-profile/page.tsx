@@ -37,6 +37,7 @@ function Editor() {
   const [notice, setNotice] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
 
   const load = useCallback(async () => {
     const token = getToken(); if (!token) return;
@@ -73,6 +74,17 @@ function Editor() {
       setNotice(res.message);
     } catch (e) { setError((e as ApiError).message ?? "Save failed."); }
     finally { setSaving(false); }
+  }
+
+  async function aiRewrite() {
+    const token = getToken(); if (!token || !form) return;
+    setAiBusy(true); setError(null); setNotice(null);
+    try {
+      const res = await api.gbp.aiRewriteProfile(token, {});
+      set("description", res.description);
+      setNotice("AI rewrote your description for SEO. Review it and click Save to keep it.");
+    } catch (e) { setError((e as ApiError).message ?? "AI rewrite failed."); }
+    finally { setAiBusy(false); }
   }
 
   function copyLink() {
@@ -133,10 +145,16 @@ function Editor() {
               <input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. VezetoLMS" /></div>
             <div className="field"><label>Primary category</label>
               <input value={form.category} onChange={(e) => set("category", e.target.value)} placeholder="e.g. Software company" /></div>
-            <div className="field"><label>From the business (description)</label>
+            <div className="field">
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+                <label style={{ margin: 0 }}>From the business (description)</label>
+                <button className="btn-mini" type="button" onClick={aiRewrite} disabled={aiBusy} title="Let AI rewrite this optimised for local SEO">
+                  {aiBusy ? "✨ Rewriting…" : "✨ Rewrite for SEO"}
+                </button>
+              </div>
               <textarea rows={5} value={form.description} onChange={(e) => set("description", e.target.value)}
                 placeholder="Tell customers what makes your business unique…" />
-              <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>{form.description.length}/750 recommended</div></div>
+              <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>{form.description.length}/750 recommended · AI uses your name, category, city &amp; highlights</div></div>
             <div className="field"><label>Opening date</label>
               <input value={form.opening_date} onChange={(e) => set("opening_date", e.target.value)} placeholder="YYYY-MM-DD" /></div>
           </>

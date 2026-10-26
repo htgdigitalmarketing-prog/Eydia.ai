@@ -42,6 +42,17 @@ class SeoController extends Controller
 
     public function overview(Request $request): JsonResponse
     {
+        // Prefill the SEO tools from the connected Business Profile so the user
+        // doesn't retype their business name, city and industry every time.
+        $primary = GbpLocation::query()->first();
+        $context = $primary ? [
+            'business' => $primary->name,
+            'city' => ($primary->meta['service_area'][0] ?? null)
+                ?: \App\Modules\Gbp\Services\GbpProfileService::cityFromAddress($primary->address),
+            'industry' => $primary->category,
+            'location_id' => $primary->uuid,
+        ] : null;
+
         return $this->ok([
             'keywords' => SeoKeyword::count(),
             'competitors' => SeoCompetitor::count(),
@@ -49,6 +60,7 @@ class SeoController extends Controller
             'ai_configured' => $this->ai->configured(),
             'locations' => GbpLocation::get(['uuid', 'name'])
                 ->map(fn ($l) => ['id' => $l->uuid, 'name' => $l->name])->all(),
+            'context' => $context,
         ]);
     }
 

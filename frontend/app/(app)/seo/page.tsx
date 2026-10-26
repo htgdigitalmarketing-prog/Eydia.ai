@@ -51,18 +51,26 @@ function SeoDashboard() {
         ))}
       </div>
 
-      {tab === "keywords" && <KeywordsTab locations={overview?.locations ?? []} onChange={loadOverview} />}
+      {tab === "keywords" && <KeywordsTab locations={overview?.locations ?? []} context={overview?.context ?? null} onChange={loadOverview} />}
       {tab === "competitors" && <CompetitorsTab locations={overview?.locations ?? []} onChange={loadOverview} />}
-      {tab === "ideas" && <IdeasTab />}
+      {tab === "ideas" && <IdeasTab context={overview?.context ?? null} />}
     </div>
   );
 }
 
-function KeywordsTab({ locations, onChange }: { locations: { id: string; name: string }[]; onChange: () => void }) {
+type SeoContext = { business: string; city: string | null; industry: string | null; location_id: string } | null;
+
+function KeywordsTab({ locations, context, onChange }: { locations: { id: string; name: string }[]; context: SeoContext; onChange: () => void }) {
   const [keywords, setKeywords] = useState<SeoKeywordItem[]>([]);
   const [form, setForm] = useState({ keyword: "", city: "", location_id: "" });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Autofill the city & location from the connected Business Profile.
+  useEffect(() => {
+    if (!context) return;
+    setForm((f) => (f.city || f.location_id) ? f : { ...f, city: context.city ?? "", location_id: context.location_id ?? "" });
+  }, [context]);
   const [result, setResult] = useState<{ kw: string; r: SeoRankResult } | null>(null);
 
   const load = useCallback(() => {
@@ -226,12 +234,20 @@ function CompetitorsTab({ locations, onChange }: { locations: { id: string; name
   );
 }
 
-function IdeasTab() {
+function IdeasTab({ context }: { context: SeoContext }) {
   const [form, setForm] = useState({ business: "", city: "", industry: "" });
   const [groups, setGroups] = useState<{ theme: string; keywords: string[] }[] | null>(null);
   const [source, setSource] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Prefill from the connected Business Profile so the user can just hit Generate.
+  useEffect(() => {
+    if (!context) return;
+    setForm((f) => (f.business || f.city) ? f : {
+      business: context.business ?? "", city: context.city ?? "", industry: context.industry ?? "",
+    });
+  }, [context]);
 
   async function generate(e: React.FormEvent) {
     e.preventDefault();

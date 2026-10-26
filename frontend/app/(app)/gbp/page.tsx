@@ -851,6 +851,7 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
   const [showPost, setShowPost] = useState(false);
   const [showPhoto, setShowPhoto] = useState(false);
   const [seed, setSeed] = useState<{ type?: string; summary?: string; image_url?: string } | null>(null);
+  const [planning, setPlanning] = useState(false);
 
   const loadPosts = useCallback(() => { const t = getToken(); if (t) api.gbp.posts(t).then((r) => { setPosts(r.posts); setCounts(r.counts); }).catch(() => {}); }, []);
   const loadPhotos = useCallback(() => { const t = getToken(); if (t) api.gbp.photos(t).then((r) => setPhotos(r.photos)).catch(() => {}); }, []);
@@ -860,6 +861,17 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
   async function removePost(id: string) { const t = getToken(); if (!t || !confirm("Delete this post?")) return; try { await api.gbp.deletePost(t, id); loadPosts(); } catch (e) { alert((e as ApiError).message); } }
   async function publishPhoto(id: string) { const t = getToken(); if (!t) return; try { await api.gbp.publishPhoto(t, id); loadPhotos(); } catch (e) { alert((e as ApiError).message); } }
   async function removePhoto(id: string) { const t = getToken(); if (!t || !confirm("Delete this photo?")) return; try { await api.gbp.deletePhoto(t, id); loadPhotos(); } catch (e) { alert((e as ApiError).message); } }
+  async function autoPlan() {
+    const t = getToken(); if (!t) return;
+    if (!confirm("Let AI generate 4 posts from your business profile and schedule them (one every 3 days)? Uses AI credits.")) return;
+    setPlanning(true);
+    try {
+      const r = await api.gbp.autoPlanPosts(t, { count: 4, cadence_days: 3 });
+      setSub("posts"); setFilter("SCHEDULED"); loadPosts();
+      alert(r.message || `${r.created} posts scheduled.`);
+    } catch (e) { alert((e as ApiError).message); }
+    finally { setPlanning(false); }
+  }
 
   const shownPosts = posts.filter((p) =>
     filter === "all" ? true : filter === "DRAFT" ? (p.status === "DRAFT" || p.status === "FAILED") : p.status === filter);
@@ -882,7 +894,8 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
           <h2 style={{ fontSize: 18, margin: 0 }}>Posts &amp; Photos</h2>
           <p className="muted" style={{ fontSize: 13, margin: "2px 0 0" }}>Manage your Google Business Profile posts, photos and media.</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <button className="btn-mini" onClick={autoPlan} disabled={planning} title="AI generates several posts from your profile and schedules them">{planning ? "✨ Planning…" : "✨ AI content plan"}</button>
           <button className="btn-mini" onClick={() => setShowPhoto(true)}>📷 Upload Photo</button>
           <button className="btn" style={{ width: "auto", padding: "10px 18px" }} onClick={() => { setSeed(null); setShowPost(true); }}>+ Add Post</button>
         </div>

@@ -638,6 +638,14 @@ export const api = {
     updateProfile: (token: string, body: Partial<GbpProfile>) =>
       request<{ profile: GbpProfile; synced_to_google: boolean; message: string }>(
         "/gbp/profile", { method: "PUT", body, token }),
+    // AI: rewrite the business description for local SEO.
+    aiRewriteProfile: (token: string, body: { keywords?: string[]; location?: string }) =>
+      request<{ description: string; source: string; credits: number | null }>(
+        "/gbp/profile/ai-rewrite", { method: "POST", body, token }),
+    // AI: generate a batch of posts and schedule them.
+    autoPlanPosts: (token: string, body: { count?: number; cadence_days?: number; start_at?: string; with_images?: boolean; keywords?: string[]; location?: string }) =>
+      request<{ posts: GbpPostItem[]; created: number; with_images: boolean; credits: number | null; message: string }>(
+        "/gbp/posts/auto-plan", { method: "POST", body, token }),
 
     // Business insights + Google audit / health score
     insights: (token: string, days = 30, location?: string) => {
@@ -789,6 +797,7 @@ export type SeoOverview = {
   checks_this_month: number;
   ai_configured: boolean;
   locations: { id: string; name: string }[];
+  context?: { business: string; city: string | null; industry: string | null; location_id: string } | null;
 };
 export type SeoKeywordItem = {
   id: string;

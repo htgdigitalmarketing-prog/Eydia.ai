@@ -20,6 +20,8 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     // Business Information editor (About / Contact / Location / Hours / More).
     Route::get('/profile', [GbpController::class, 'profile']);
     Route::put('/profile', [GbpController::class, 'updateProfile']);
+    // AI: rewrite the business description for local SEO.
+    Route::post('/profile/ai-rewrite', [GbpController::class, 'aiRewriteProfile']);
 
     // Business insights (performance metrics) + CSV export.
     Route::get('/insights', [GbpController::class, 'insights']);
@@ -38,6 +40,7 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     // GBP posts (localPosts).
     Route::get('/posts', [GbpPostController::class, 'index']);
     Route::post('/posts/generate', [GbpPostController::class, 'generate']); // AI caption
+    Route::post('/posts/auto-plan', [GbpPostController::class, 'autoPlan']); // AI batch + schedule
     Route::post('/posts', [GbpPostController::class, 'store']);
     Route::put('/posts/{uuid}', [GbpPostController::class, 'update']);
     Route::post('/posts/{uuid}/publish', [GbpPostController::class, 'publish']);
