@@ -4,7 +4,7 @@ export default function PrivacyPolicy() {
       <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 8 }}>Privacy Policy</h1>
       <p style={{ color: "#666", marginBottom: 32 }}>Last updated: September 12, 2026</p>
 
-      <p>Eydia.ai (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates the Pizi platform (the &quot;Service&quot;). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service.</p>
+      <p>Eydia.ai (&quot;we&quot;, &quot;us&quot;, or &quot;our&quot;) operates the Eydia platform at eydia.in (the &quot;Service&quot;). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service.</p>
 
       <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>Information we collect</h2>
       <ul>

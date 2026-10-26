@@ -4,11 +4,11 @@ export default function TermsAndConditions() {
       <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 8 }}>Terms and Conditions</h1>
       <p style={{ color: "#666", marginBottom: 32 }}>Last updated: September 12, 2026</p>
 
-      <p>Welcome to Pizi, a WhatsApp automation platform operated Automate · Engage · Grow (&quot;Company&quot;, &quot;we&quot;, &quot;us&quot;). By accessing or using the Service at frontend.heltog.com and its associated APIs, you agree to be bound by these Terms.</p>
+      <p>Welcome to Eydia, a Google Business Profile &amp; WhatsApp automation platform operated by Eydia.ai (&quot;Company&quot;, &quot;we&quot;, &quot;us&quot;). By accessing or using the Service at eydia.in and its associated APIs, you agree to be bound by these Terms.</p>
 
       <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>1. Definitions</h2>
       <ul>
-        <li><strong>Service</strong> — the Pizi platform including the web application, APIs, and all related features.</li>
+        <li><strong>Service</strong> — the Eydia platform including the web application, APIs, and all related features.</li>
         <li><strong>User / You</strong> — any individual or business entity that creates an account on the Service.</li>
         <li><strong>Subscription</strong> — a paid plan that grants access to specific features and usage limits.</li>
       </ul>

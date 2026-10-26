@@ -283,7 +283,7 @@ class SeoController extends Controller
         return [
             'source' => 'fallback',
             'rank' => null,
-            'summary' => 'Configure an AI provider (or a Places API key) for a real ranking check.',
+            'summary' => 'Configure an AI provider (set GEMINI_API_KEY or ANTHROPIC_API_KEY in the backend .env) for a real ranking check.',
             'tips' => ['Keep your Business Profile complete', 'Collect and reply to reviews', 'Post weekly on Google', 'Use the keyword in your description'],
         ];
     }

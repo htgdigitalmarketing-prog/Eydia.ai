@@ -5,7 +5,7 @@ export default function PricingPolicy() {
       <p style={{ color: "#666", marginBottom: 32 }}>Last updated: September 12, 2026</p>
 
       <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>Subscription plans</h2>
-      <p>Pizi offers multiple subscription plans designed for businesses of different sizes. Each plan includes a defined set of features and usage limits (contacts, campaigns, agents, templates, chatbots). Plan details and pricing are displayed on the Billing page within the application after login.</p>
+      <p>Eydia offers multiple subscription plans designed for businesses of different sizes. Each plan includes a defined set of features and usage limits (contacts, campaigns, agents, templates, chatbots). Plan details and pricing are displayed on the Billing page within the application after login.</p>
 
       <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>Billing cycle</h2>
       <p>Subscriptions are billed on a monthly basis from the date of purchase. Payments are charged at the beginning of each billing cycle.</p>
@@ -20,7 +20,7 @@ export default function PricingPolicy() {
       <p>We reserve the right to modify pricing at any time. Existing subscribers will be notified at least 30 days before any price change takes effect. Price changes will apply from the next billing cycle after notification.</p>
 
       <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>WhatsApp messaging costs</h2>
-      <p>Meta charges separately for WhatsApp template messages based on recipient country and template category. These charges are in addition to the platform subscription fee and are managed through Meta&apos;s own billing (payment method added in Meta Business Suite). Pizi does not charge any additional markup on Meta&apos;s messaging fees.</p>
+      <p>Meta charges separately for WhatsApp template messages based on recipient country and template category. These charges are in addition to the platform subscription fee and are managed through Meta&apos;s own billing (payment method added in Meta Business Suite). Eydia does not charge any additional markup on Meta&apos;s messaging fees.</p>
 
       <h2 style={{ fontSize: 20, fontWeight: 600, marginTop: 32 }}>Free trial</h2>
       <p>New accounts may receive a free trial or starter plan with limited features. No payment is required during the trial period. After the trial, you must subscribe to a paid plan to continue using premium features.</p>
