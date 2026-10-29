@@ -84,6 +84,43 @@ class GbpAiService
         return array_slice($out, 0, $count);
     }
 
+    /** An owner's reply to a customer review, in the chosen tone. Null when AI is off. */
+    public function replyToReview(GbpLocation $location, int $rating, ?string $comment, string $tone): ?string
+    {
+        $business = $location->name ?: 'our business';
+        $system = "You are the owner of \"{$business}\" replying to a Google review. "
+            . "Write ONE short reply (2–3 sentences), {$tone} in tone. Thank the customer, be specific and human, "
+            . 'never robotic. For a negative review, apologise sincerely and offer to make it right. Plain text only.';
+        $user = $rating . '-star review'
+            . ($comment ? ": \"{$comment}\"" : ' (no comment).')
+            . ' Write the owner\'s reply.';
+
+        $text = $this->ai->classify($system, [['role' => 'user', 'content' => $user]]);
+
+        return $text ? trim($text) : null;
+    }
+
+    /**
+     * A natural, first-person review a customer could post, from their star
+     * rating and a few words about their experience. Used by the QR review-assist
+     * page. Null when AI is unavailable.
+     */
+    public function customerReview(GbpLocation $location, int $rating, ?string $notes): ?string
+    {
+        $business = $location->name ?: 'this business';
+        $cat = $location->category ? " ({$location->category})" : '';
+        $system = 'You help a happy customer put their experience into words for a Google review. '
+            . 'Write it in the FIRST PERSON as the customer, 2–3 sentences, warm, specific and genuine, '
+            . 'matching the star rating. Plain text only, no quotes, no hashtags, no emojis unless natural.';
+        $user = "Business: {$business}{$cat}. Rating the customer gave: {$rating}/5."
+            . ($notes ? " What they mentioned: \"{$notes}\"." : '')
+            . ' Write the review as the customer would.';
+
+        $text = $this->ai->classify($system, [['role' => 'user', 'content' => $user]]);
+
+        return $text ? trim($text) : null;
+    }
+
     /** Generate an image for a post and host it on the public disk; returns a URL or null. */
     public function generatePostImage(string $prompt): ?string
     {

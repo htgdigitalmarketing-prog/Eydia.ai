@@ -17,9 +17,9 @@ DirectoryIndex index.html index.php
   RewriteCond %{HTTPS} !=on
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
-  # API, webhooks + public business microsites -> Laravel (REQUEST_URI is
-  # preserved, so routes still match)
-  RewriteRule ^(api|webhooks|site)(/|$) index.php [L]
+  # API, webhooks + public business microsites + QR review-assist pages ->
+  # Laravel (REQUEST_URI is preserved, so routes still match)
+  RewriteRule ^(api|webhooks|site|review)(/|$) index.php [L]
 
   # Next build assets: serve as-is; a missing hashed chunk must return a real
   # 404, never the HTML shell served as JS.

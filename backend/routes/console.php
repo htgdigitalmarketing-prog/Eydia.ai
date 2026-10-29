@@ -27,3 +27,6 @@ Schedule::command('workflows:run')->everyMinute()->withoutOverlapping();
 // Send the GBP Lead Automation's due drip follow-ups (24h nudge → 3-day drip,
 // 2-day info follow-up, 14-day cold re-engagement, pre-demo reminder).
 Schedule::command('chatbot:lead-flow-run')->everyFiveMinutes()->withoutOverlapping(20);
+
+// Run enabled GBP automations: AI review replies + keep the post queue topped up.
+Schedule::command('gbp:run-automations')->hourly()->withoutOverlapping(30);

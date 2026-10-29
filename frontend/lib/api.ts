@@ -656,6 +656,11 @@ export const api = {
       request<{ posts: GbpPostItem[]; created: number; with_images: boolean; credits: number | null; message: string }>(
         "/gbp/posts/auto-plan", { method: "POST", body, token }),
 
+    // Automation control centre (ON/OFF toggles + cadence + QR review-assist).
+    automation: (token: string) => request<GbpAutomationResponse>("/gbp/automation", { token }),
+    updateAutomation: (token: string, body: Partial<GbpAutomationSettings>) =>
+      request<GbpAutomationResponse & { message: string }>("/gbp/automation", { method: "PUT", body, token }),
+
     // Business insights + Google audit / health score
     insights: (token: string, days = 30, location?: string) => {
       const qs = new URLSearchParams({ days: String(days) });
@@ -1622,6 +1627,25 @@ export type GbpProfile = {
   review_count: number;
   is_verified: boolean;
   google_location_id: string | null;
+};
+
+export type GbpAutomationSettings = {
+  auto_review_replies: boolean;
+  auto_posts: boolean;
+  auto_photos: boolean;
+  qr_review_assist: boolean;
+  reply_tone: string;
+  post_frequency_days: number;
+  post_queue_target: number;
+  last_run_at: string | null;
+};
+export type GbpAutomationResponse = {
+  automation: GbpAutomationSettings;
+  business: string | null;
+  has_location: boolean;
+  review_url: string | null;
+  assist_url: string | null;
+  assist_url_preview: string | null;
 };
 
 export type LeadFlowStep = { trigger: string; action: string };

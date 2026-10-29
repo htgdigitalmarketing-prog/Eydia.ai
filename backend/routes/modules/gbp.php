@@ -23,6 +23,10 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     // AI: rewrite the business description for local SEO.
     Route::post('/profile/ai-rewrite', [GbpController::class, 'aiRewriteProfile']);
 
+    // Automation control centre (ON/OFF switches + cadence + QR review-assist).
+    Route::get('/automation', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'show']);
+    Route::put('/automation', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'update']);
+
     // Business insights (performance metrics) + CSV export.
     Route::get('/insights', [GbpController::class, 'insights']);
     Route::get('/insights/export', [GbpController::class, 'insightsCsv']);
