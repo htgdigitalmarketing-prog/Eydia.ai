@@ -98,5 +98,7 @@ class GbpAiFeaturesTest extends TestCase
         // Spread by the cadence: second post is 3 days after the first.
         $this->assertSame(3, (int) $posts[0]->scheduled_at->diffInDays($posts[1]->scheduled_at));
         $this->assertContains('OFFER', $posts->pluck('type')->all());
+        // Every generated post carries SEO hashtags.
+        $this->assertTrue($posts->every(fn ($p) => str_contains($p->summary, '#')));
     }
 }

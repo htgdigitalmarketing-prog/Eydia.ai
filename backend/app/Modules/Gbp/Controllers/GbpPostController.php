@@ -45,7 +45,7 @@ class GbpPostController extends Controller
         // real business (name, category, rating, location).
         $location = ! empty($data['location'])
             ? GbpLocation::where('uuid', $data['location'])->first()
-            : GbpLocation::query()->first();
+            : GbpLocation::visible()->orderByDesc('review_count')->first();
         $business = $location?->name ?: 'our business';
         $facts = [];
         if ($location?->category) {
@@ -70,7 +70,8 @@ class GbpPostController extends Controller
 
         $type = $data['type'] ?? 'STANDARD';
 
-        $system = 'You write short, engaging Google Business Profile posts (max ~1400 characters, 1 short paragraph + optional 1 line CTA). Plain text, a few tasteful emojis allowed, no markdown or hashtags block.';
+        $system = 'You write short, engaging Google Business Profile posts (max ~1400 characters, 1 short paragraph + optional 1 line CTA). '
+            . 'Plain text, no markdown, a few tasteful emojis allowed, and END with a final line of 3–5 relevant, SEO-friendly local hashtags.';
         $user = "Business: {$business}.{$factsStr} Post type: {$type}. Topic: {$data['topic']}.{$imageNote} Write the post body only.";
 
         $text = $this->ai->classify($system, [['role' => 'user', 'content' => $user]]);
@@ -83,7 +84,16 @@ class GbpPostController extends Controller
             $this->credits->deduct($tenantId, $request->user()->id, 'ai_caption', 'AI GBP post caption');
         }
 
-        return $this->ok(['text' => trim($text), 'source' => $source, 'credits' => $tenantId ? $this->credits->balance($tenantId) : null]);
+        // Guarantee SEO hashtags on the caption (append when the model left them out).
+        $text = trim((string) $text);
+        if ($location && ! str_contains($text, '#')) {
+            $tags = app(\App\Modules\Gbp\Services\GbpAiService::class)->hashtagsFor($location);
+            if ($tags !== '') {
+                $text .= "\n\n" . $tags;
+            }
+        }
+
+        return $this->ok(['text' => $text, 'source' => $source, 'credits' => $tenantId ? $this->credits->balance($tenantId) : null]);
     }
 
     /**
@@ -107,7 +117,7 @@ class GbpPostController extends Controller
 
         $location = ! empty($data['location'])
             ? GbpLocation::where('uuid', $data['location'])->first()
-            : GbpLocation::query()->first();
+            : GbpLocation::visible()->orderByDesc('review_count')->first();
         if (! $location) {
             return $this->fail('Add your business information first, then generate a content plan.', [], 422);
         }

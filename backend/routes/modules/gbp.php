@@ -17,6 +17,9 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     // One-click AI optimization of the profile.
     Route::post('/optimize', [GbpController::class, 'optimize']);
 
+    // Hide / restore a synced location (an agency Google account can manage many).
+    Route::post('/locations/{uuid}/hidden', [GbpController::class, 'setLocationHidden']);
+
     // Business Information editor (About / Contact / Location / Hours / More).
     Route::get('/profile', [GbpController::class, 'profile']);
     Route::put('/profile', [GbpController::class, 'updateProfile']);

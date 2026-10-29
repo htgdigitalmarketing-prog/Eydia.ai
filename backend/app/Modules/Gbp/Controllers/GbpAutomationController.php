@@ -46,7 +46,7 @@ class GbpAutomationController extends Controller
     private function primaryLocation(GbpAutomation $automation): ?GbpLocation
     {
         $location = $automation->location
-            ?: GbpLocation::query()->orderByDesc('review_count')->first();
+            ?: GbpLocation::visible()->orderByDesc('review_count')->first();
 
         if ($location && $automation->gbp_location_id !== $location->id) {
             $automation->forceFill(['gbp_location_id' => $location->id])->saveQuietly();

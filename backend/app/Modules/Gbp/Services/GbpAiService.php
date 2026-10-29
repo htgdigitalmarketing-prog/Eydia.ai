@@ -58,17 +58,23 @@ class GbpAiService
         $system = 'You plan Google Business Profile content. Return ONLY JSON.';
         $user = "Create {$count} varied Google Business Profile posts for this business." . $this->facts($location) . $kw
             . ' Mix the post types (STANDARD updates, OFFER, EVENT). Each summary must be under 700 characters, '
-            . 'engaging, plain text, a few tasteful emojis allowed, no hashtags. '
-            . 'Return {"posts":[{"title":"short label","type":"STANDARD|OFFER|EVENT","summary":"the post body"}]}.';
+            . 'engaging, plain text, a few tasteful emojis allowed, and MUST end with a final line of 3–5 relevant, '
+            . 'SEO-friendly local hashtags (based on the business, its category and city), e.g. "#CityService #LocalBusiness". '
+            . 'Return {"posts":[{"title":"short label","type":"STANDARD|OFFER|EVENT","summary":"the post body incl. hashtags"}]}.';
 
         $parsed = $this->json($system, $user, 1400);
         $posts = is_array($parsed) && ! empty($parsed['posts']) && is_array($parsed['posts']) ? $parsed['posts'] : [];
 
+        $tags = $this->hashtagsFor($location);
         $out = [];
         foreach ($posts as $p) {
             $summary = trim((string) ($p['summary'] ?? ''));
             if ($summary === '') {
                 continue;
+            }
+            // Guarantee SEO hashtags even if the model left them out.
+            if ($tags !== '' && ! str_contains($summary, '#')) {
+                $summary .= "\n\n" . $tags;
             }
             $type = strtoupper((string) ($p['type'] ?? 'STANDARD'));
             if (! in_array($type, ['STANDARD', 'OFFER', 'EVENT', 'ALERT'], true)) {
@@ -82,6 +88,27 @@ class GbpAiService
         }
 
         return array_slice($out, 0, $count);
+    }
+
+    /** 3–5 SEO-friendly hashtags built from the business name, category and city. */
+    public function hashtagsFor(GbpLocation $location): string
+    {
+        $meta = $location->meta ?? [];
+        $city = ($meta['service_area'][0] ?? null) ?: GbpProfileService::cityFromAddress($location->address);
+
+        $tags = [];
+        foreach ([$location->category, $location->name, $city] as $source) {
+            $slug = preg_replace('/[^A-Za-z0-9]/', '', (string) $source);
+            if ($slug !== '') {
+                $tags[] = '#' . $slug;
+            }
+        }
+        if ($city) {
+            $tags[] = '#' . preg_replace('/[^A-Za-z0-9]/', '', $city) . 'Business';
+        }
+        $tags[] = '#LocalBusiness';
+
+        return implode(' ', array_slice(array_values(array_unique($tags)), 0, 5));
     }
 
     /** An owner's reply to a customer review, in the chosen tone. Null when AI is off. */

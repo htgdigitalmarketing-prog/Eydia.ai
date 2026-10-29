@@ -39,7 +39,7 @@ class GbpPhotoController extends Controller
 
         $business = ! empty($data['location'])
             ? (GbpLocation::where('uuid', $data['location'])->value('name') ?: 'our business')
-            : (GbpLocation::query()->value('name') ?: 'our business');
+            : (GbpLocation::visible()->orderByDesc('review_count')->value('name') ?: 'our business');
 
         $system = 'You write a single short, friendly caption (max 255 characters) for a Google Business Profile photo. Plain text, at most one emoji, no hashtags.';
         $user = "Business: {$business}. Photo is about: {$data['topic']}. Write the caption only.";

@@ -44,7 +44,7 @@ class SeoController extends Controller
     {
         // Prefill the SEO tools from the connected Business Profile so the user
         // doesn't retype their business name, city and industry every time.
-        $primary = GbpLocation::query()->first();
+        $primary = GbpLocation::visible()->orderByDesc('review_count')->first();
         $context = $primary ? [
             'business' => $primary->name,
             'city' => ($primary->meta['service_area'][0] ?? null)

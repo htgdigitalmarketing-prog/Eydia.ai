@@ -69,7 +69,7 @@ function GbpDashboard() {
         ))}
       </div>
 
-      {tab === "overview" && <OverviewTab overview={overview} busy={busy} onSync={sync} onGoTab={setTab} />}
+      {tab === "overview" && <OverviewTab overview={overview} busy={busy} onSync={sync} onGoTab={setTab} onReload={loadOverview} />}
       {tab === "reviews" && <ReviewsTab overview={overview} />}
       {tab === "content" && <PostsPhotosTab locations={locations} />}
       {tab === "website" && <WebsiteTab hasLocations={locations.length > 0} />}
@@ -169,8 +169,14 @@ function StackedBars({ labels, series, max }:
 
 const STAR_COLORS: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#f59e0b", 4: "#84cc16", 5: "#22c55e" };
 
-function OverviewTab({ overview, busy, onSync, onGoTab }:
-  { overview: GbpOverview | null; busy: boolean; onSync: () => void; onGoTab: (k: string) => void }) {
+function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
+  { overview: GbpOverview | null; busy: boolean; onSync: () => void; onGoTab: (k: string) => void; onReload: () => void }) {
+  const [showHidden, setShowHidden] = useState(false);
+  async function setHidden(id: string, hidden: boolean) {
+    const t = getToken(); if (!t) return;
+    try { await api.gbp.setLocationHidden(t, id, hidden); onReload(); }
+    catch (e) { alert((e as ApiError).message); }
+  }
   if (!overview) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Loading your dashboard…</span></div>;
 
   const s = overview.stats;
@@ -179,6 +185,7 @@ function OverviewTab({ overview, busy, onSync, onGoTab }:
   const charts = overview.charts;
   const recent = overview.recent_reviews ?? [];
   const locs = overview.locations ?? [];
+  const hidden = overview.hidden_locations ?? [];
   const total = s.total_reviews;
   const avg = s.average_rating;
   const replied = charts?.replied ?? s.replied ?? 0;
@@ -383,9 +390,19 @@ function OverviewTab({ overview, busy, onSync, onGoTab }:
 
       {/* Accounts & locations */}
       <div className="panel">
-        <h2 style={{ fontSize: 15 }}>Your Accounts &amp; Locations</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <h2 style={{ fontSize: 15, margin: 0 }}>Your Accounts &amp; Locations</h2>
+          {hidden.length > 0 && (
+            <button className="btn-mini" onClick={() => setShowHidden((v) => !v)}>
+              {showHidden ? "Hide" : "Show"} hidden ({hidden.length})
+            </button>
+          )}
+        </div>
+        <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+          Showing the locations you manage here. Hide the ones your Google account can access but you don&apos;t want on this dashboard.
+        </p>
         {locs.length === 0 ? (
-          <p className="muted" style={{ fontSize: 13 }}>No locations yet. Connect Google and Sync to pull your business locations.</p>
+          <p className="muted" style={{ fontSize: 13 }}>No visible locations. {hidden.length > 0 ? "Un-hide one below, or " : ""}Connect Google and Sync to pull your business locations.</p>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 12 }}>
             {locs.map((l) => (
@@ -396,12 +413,28 @@ function OverviewTab({ overview, busy, onSync, onGoTab }:
                 </div>
                 <div style={{ fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</div>
                 <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.address ?? "—"}</div>
-                <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", alignItems: "center" }}>
                   <div><b style={{ fontSize: 16 }}>{(l.avg_rating ?? l.rating ?? 0).toFixed(1)}</b><div className="muted" style={{ fontSize: 11 }}>★ Rating</div></div>
                   <div><b style={{ fontSize: 16 }}>{l.total_reviews ?? l.review_count ?? 0}</b><div className="muted" style={{ fontSize: 11 }}>Reviews</div></div>
+                  <button className="btn-mini" style={{ marginLeft: "auto" }} title="Hide this location from your dashboard" onClick={() => setHidden(l.id, true)}>Hide</button>
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {showHidden && hidden.length > 0 && (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px dashed var(--border)" }}>
+            <div className="muted" style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Hidden locations</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {hidden.map((h) => (
+                <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 10 }}>
+                  <span style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.name}</span>
+                  <span className="muted" style={{ fontSize: 11.5 }}>{h.review_count} reviews</span>
+                  <button className="btn-mini" onClick={() => setHidden(h.id, false)}>Un-hide</button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

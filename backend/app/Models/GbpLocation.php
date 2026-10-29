@@ -18,16 +18,23 @@ class GbpLocation extends Model
 
     protected $fillable = [
         'tenant_id', 'google_location_id', 'name', 'address', 'phone', 'website',
-        'category', 'rating', 'review_count', 'is_verified', 'last_synced_at', 'meta',
+        'category', 'rating', 'review_count', 'is_verified', 'is_hidden', 'last_synced_at', 'meta',
     ];
 
     protected $casts = [
         'rating' => 'decimal:2',
         'review_count' => 'integer',
         'is_verified' => 'boolean',
+        'is_hidden' => 'boolean',
         'last_synced_at' => 'datetime',
         'meta' => 'array',
     ];
+
+    /** Only locations the tenant chose to manage here (not hidden). */
+    public function scopeVisible($query)
+    {
+        return $query->where('is_hidden', false);
+    }
 
     public function reviews(): HasMany
     {

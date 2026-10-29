@@ -58,11 +58,19 @@ class GbpController extends Controller
      */
     public function overview(Request $request, GbpHealthService $health): JsonResponse
     {
-        $locations = GbpLocation::query()
+        // Only the locations the tenant chose to manage here drive the dashboard;
+        // hidden ones (e.g. other businesses the connected Google account can
+        // access) are listed separately so they can be un-hidden.
+        $locations = GbpLocation::visible()
             ->withCount('reviews')
             ->withAvg('reviews as reviews_avg_rating', 'rating')
             ->get();
-        $reviews = GbpReview::query()->get(['rating', 'reply', 'sentiment', 'reviewed_at', 'replied_at']);
+        $visibleIds = $locations->pluck('id');
+        $hidden = GbpLocation::query()->where('is_hidden', true)
+            ->get(['id', 'uuid', 'name', 'review_count', 'is_hidden']);
+
+        $reviews = GbpReview::query()->whereIn('gbp_location_id', $visibleIds)
+            ->get(['rating', 'reply', 'sentiment', 'reviewed_at', 'replied_at']);
 
         $total = $reviews->count();
         $avg = $total ? round($reviews->avg('rating'), 2) : 0;
@@ -113,13 +121,17 @@ class GbpController extends Controller
         $plan = Subscription::query()->with('plan')->first()?->plan?->name ?? 'Starter';
         $lastSynced = $locations->max('last_synced_at');
 
-        $recent = GbpReview::query()->with('location:id,uuid,name')
+        $recent = GbpReview::query()->whereIn('gbp_location_id', $visibleIds)
+            ->with('location:id,uuid,name')
             ->orderByDesc('reviewed_at')->limit(5)->get();
 
         return $this->ok([
             'locations' => $locations->map(fn (GbpLocation $l) => $this->locationArray($l) + [
                 'total_reviews' => (int) ($l->reviews_count ?? 0),
                 'avg_rating' => round((float) ($l->reviews_avg_rating ?? 0), 1),
+            ])->all(),
+            'hidden_locations' => $hidden->map(fn (GbpLocation $l) => [
+                'id' => $l->uuid, 'name' => $l->name, 'review_count' => (int) $l->review_count,
             ])->all(),
             'stats' => [
                 'locations' => $locations->count(),
@@ -276,7 +288,7 @@ class GbpController extends Controller
         }
 
         $report = $health->compute();
-        $business = GbpLocation::query()->value('name') ?: 'this business';
+        $business = GbpLocation::visible()->value('name') ?: 'this business';
         $subScores = collect($report['sub_scores'])
             ->map(fn ($s) => "{$s['label']}: {$s['detail']} ({$s['score']}/100)")
             ->implode('; ');
@@ -577,7 +589,9 @@ class GbpController extends Controller
             return GbpLocation::where('uuid', $loc)->first();
         }
 
-        return GbpLocation::query()->first();
+        // Prefer a managed (visible) location; fall back to any if all are hidden.
+        return GbpLocation::visible()->orderByDesc('review_count')->first()
+            ?? GbpLocation::query()->first();
     }
 
     /** The tenant's live Google Business Profile connection, or null. */
@@ -600,8 +614,19 @@ class GbpController extends Controller
             'rating' => (float) $l->rating,
             'review_count' => $l->review_count,
             'is_verified' => $l->is_verified,
+            'is_hidden' => (bool) $l->is_hidden,
             'last_synced_at' => $l->last_synced_at?->toIso8601String(),
         ];
+    }
+
+    /** Hide or un-hide a location so only the ones the tenant wants drive the dashboard. */
+    public function setLocationHidden(Request $request, string $uuid): JsonResponse
+    {
+        $data = $request->validate(['hidden' => ['required', 'boolean']]);
+        $location = GbpLocation::where('uuid', $uuid)->firstOrFail();
+        $location->update(['is_hidden' => $data['hidden']]);
+
+        return $this->ok(['message' => $data['hidden'] ? 'Location hidden.' : 'Location restored.']);
     }
 
     private function reviewArray(GbpReview $r): array

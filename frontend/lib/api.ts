@@ -656,6 +656,10 @@ export const api = {
       request<{ posts: GbpPostItem[]; created: number; with_images: boolean; credits: number | null; message: string }>(
         "/gbp/posts/auto-plan", { method: "POST", body, token }),
 
+    // Hide / restore a synced location (keep only the ones you manage).
+    setLocationHidden: (token: string, id: string, hidden: boolean) =>
+      request<{ message: string }>(`/gbp/locations/${id}/hidden`, { method: "POST", body: { hidden }, token }),
+
     // Automation control centre (ON/OFF toggles + cadence + QR review-assist).
     automation: (token: string) => request<GbpAutomationResponse>("/gbp/automation", { token }),
     updateAutomation: (token: string, body: Partial<GbpAutomationSettings>) =>
@@ -990,7 +994,10 @@ export type GbpLocationItem = {
   rating: number;
   review_count: number;
   is_verified: boolean;
+  is_hidden?: boolean;
   last_synced_at: string | null;
+  total_reviews?: number;
+  avg_rating?: number;
 };
 
 export type GbpReviewItem = {
@@ -1027,6 +1034,7 @@ export type AiMediaItem = {
 
 export type GbpOverview = {
   locations: (GbpLocationItem & { total_reviews?: number; avg_rating?: number })[];
+  hidden_locations?: { id: string; name: string; review_count: number }[];
   stats: {
     locations: number;
     total_reviews: number;
