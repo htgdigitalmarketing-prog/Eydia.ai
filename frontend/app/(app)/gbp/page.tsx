@@ -172,6 +172,7 @@ const STAR_COLORS: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#f
 function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
   { overview: GbpOverview | null; busy: boolean; onSync: () => void; onGoTab: (k: string) => void; onReload: () => void }) {
   const [showHidden, setShowHidden] = useState(false);
+  const [locQuery, setLocQuery] = useState("");
   async function setHidden(id: string, hidden: boolean) {
     const t = getToken(); if (!t) return;
     try { await api.gbp.setLocationHidden(t, id, hidden); onReload(); }
@@ -196,8 +197,12 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
   const health = overview.health;
   const charts = overview.charts;
   const recent = overview.recent_reviews ?? [];
-  const locs = overview.locations ?? [];
-  const hidden = overview.hidden_locations ?? [];
+  const allLocs = overview.locations ?? [];
+  const allHidden = overview.hidden_locations ?? [];
+  const lq = locQuery.trim().toLowerCase();
+  const locMatch = (s?: string | null) => (s ?? "").toLowerCase().includes(lq);
+  const locs = lq ? allLocs.filter((l) => locMatch(l.name) || locMatch(l.address)) : allLocs;
+  const hidden = lq ? allHidden.filter((h) => locMatch(h.name)) : allHidden;
   const total = s.total_reviews;
   const avg = s.average_rating;
   const replied = charts?.replied ?? s.replied ?? 0;
@@ -404,14 +409,20 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
       <div className="panel">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <h2 style={{ fontSize: 15, margin: 0 }}>Your Accounts &amp; Locations</h2>
-          {hidden.length > 0 && (
-            <button className="btn-mini" onClick={() => setShowHidden((v) => !v)}>
-              {showHidden ? "Hide" : "Show"} hidden ({hidden.length})
-            </button>
-          )}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {(allLocs.length + allHidden.length) > 4 && (
+              <input value={locQuery} onChange={(e) => setLocQuery(e.target.value)} placeholder="🔍 Search locations…"
+                style={{ padding: "7px 12px", border: "1px solid var(--border)", borderRadius: 9, fontSize: 13, minWidth: 200 }} />
+            )}
+            {allHidden.length > 0 && (
+              <button className="btn-mini" onClick={() => setShowHidden((v) => !v)}>
+                {showHidden ? "Hide" : "Show"} hidden ({allHidden.length})
+              </button>
+            )}
+          </div>
         </div>
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-          Showing the locations you manage here. Hide the ones your Google account can access but you don&apos;t want on this dashboard.
+          Showing the locations you manage here. Use <strong>Only this</strong> on your business to focus the whole dashboard (reviews, insights) on it, and hide the rest.
         </p>
         {locs.length === 0 ? (
           <p className="muted" style={{ fontSize: 13 }}>No visible locations. {hidden.length > 0 ? "Un-hide one below, or " : ""}Connect Google and Sync to pull your business locations.</p>

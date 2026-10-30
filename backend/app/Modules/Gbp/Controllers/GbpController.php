@@ -177,6 +177,10 @@ class GbpController extends Controller
 
         if ($loc = $request->query('location')) {
             $query->whereHas('location', fn ($q) => $q->where('uuid', $loc));
+        } else {
+            // Default to the locations the tenant manages here, so after narrowing
+            // to one business its reviews are all that show (not every location).
+            $query->whereHas('location', fn ($q) => $q->visible());
         }
         if ($request->query('unreplied')) {
             $query->whereNull('reply');
