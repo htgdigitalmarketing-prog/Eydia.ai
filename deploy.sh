@@ -69,7 +69,11 @@ cd "$SRC/frontend"
 if command -v npm >/dev/null 2>&1; then
     say "Frontend: building static export (next build → out/)"
     npm ci
-    npm run build
+    rm -rf out
+    # LIGHT_BUILD=1 trims worker processes so the build fits shared-hosting
+    # (CloudLinux) process limits. A non-zero exit from a post-export worker
+    # cleanup crash (EPERM/EAGAIN) is tolerated — we verify out/index.html below.
+    LIGHT_BUILD=1 npm run build || true
 fi
 if [ -f "$SRC/frontend/out/index.html" ]; then
     say "Frontend: syncing out/ into $WEB"
