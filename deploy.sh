@@ -24,6 +24,25 @@ say() { printf '\n==> %s\n' "$1"; }
 
 mkdir -p "$APP" "$WEB"
 
+# ---- 0) First-run .env guard ------------------------------------------------
+# The app's .env lives in $APP (kept across deploys). On the very first run it
+# won't exist — seed it from the example and stop so you can fill the DB creds.
+if [ ! -f "$APP/.env" ]; then
+    cp "$SRC/backend/.env.example" "$APP/.env"
+    cat <<MSG
+
+==> No .env found — created one at:
+      $APP/.env
+    EDIT it now (at minimum):
+      APP_ENV=production   APP_DEBUG=false   APP_URL=https://$(basename "$DOMAIN_DIR")
+      DB_DATABASE / DB_USERNAME / DB_PASSWORD   (hPanel → MySQL)
+      FRONTEND_URL=https://$(basename "$DOMAIN_DIR")
+    Leave APP_KEY= and JWT_SECRET= empty (this script generates them).
+    Then run:  bash deploy.sh   again.
+MSG
+    exit 1
+fi
+
 # ---- 1) Backend (Laravel) ---------------------------------------------------
 say "Backend: installing PHP dependencies"
 cd "$SRC/backend"
@@ -66,8 +85,15 @@ cp -f "$SRC/deploy/public_html/index.php" "$WEB/index.php"
 cp -f "$SRC/deploy/public_html/.htaccess" "$WEB/.htaccess"
 
 # ---- 4) Migrate, seed, cache ------------------------------------------------
-say "Laravel: migrate + seed + cache"
+say "Laravel: keys + migrate + seed + cache"
 cd "$APP"
+# First-time only: generate the app keys if they're still blank (idempotent).
+if ! grep -q '^APP_KEY=base64:' .env; then
+    say "Generating APP_KEY"; php artisan key:generate --force
+fi
+if ! grep -qE '^JWT_SECRET=.+' .env; then
+    say "Generating JWT_SECRET"; php artisan jwt:secret --force
+fi
 php artisan migrate --force
 php artisan db:seed --class='Database\Seeders\RolePermissionSeeder' --force
 php artisan db:seed --class='Database\Seeders\PlanSeeder' --force
