@@ -659,6 +659,8 @@ export const api = {
     // Hide / restore a synced location (keep only the ones you manage).
     setLocationHidden: (token: string, id: string, hidden: boolean) =>
       request<{ message: string }>(`/gbp/locations/${id}/hidden`, { method: "POST", body: { hidden }, token }),
+    keepOnlyLocation: (token: string, id: string) =>
+      request<{ message: string }>(`/gbp/locations/${id}/only`, { method: "POST", token }),
 
     // Automation control centre (ON/OFF toggles + cadence + QR review-assist).
     automation: (token: string) => request<GbpAutomationResponse>("/gbp/automation", { token }),

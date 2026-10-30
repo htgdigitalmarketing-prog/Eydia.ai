@@ -55,6 +55,26 @@ class GbpSyncService
                         'last_synced_at' => now(),
                     ]
                 );
+
+                // Merge the auto-fetched profile extras. place_id + review link
+                // always refresh; description/hours/service_area only fill when
+                // empty so the user's own Business Info edits are preserved.
+                $g = $loc['meta'] ?? [];
+                if ($g !== []) {
+                    $meta = $location->meta ?? [];
+                    if (! empty($g['place_id'])) {
+                        $meta['place_id'] = $g['place_id'];
+                    }
+                    if (! empty($g['review_url'])) {
+                        $meta['review_url'] = $meta['review_url'] ?? $g['review_url'];
+                    }
+                    foreach (['description', 'hours', 'service_area'] as $k) {
+                        if (! empty($g[$k]) && empty($meta[$k])) {
+                            $meta[$k] = $g[$k];
+                        }
+                    }
+                    $location->forceFill(['meta' => $meta])->save();
+                }
                 $locationsSynced++;
 
                 $reviewsSynced += $this->syncReviews($integration, $location);

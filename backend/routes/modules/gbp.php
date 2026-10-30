@@ -19,6 +19,8 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
 
     // Hide / restore a synced location (an agency Google account can manage many).
     Route::post('/locations/{uuid}/hidden', [GbpController::class, 'setLocationHidden']);
+    // Keep only this location, hide all others (one-click).
+    Route::post('/locations/{uuid}/only', [GbpController::class, 'keepOnlyLocation']);
 
     // Business Information editor (About / Contact / Location / Hours / More).
     Route::get('/profile', [GbpController::class, 'profile']);

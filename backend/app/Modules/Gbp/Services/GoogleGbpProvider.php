@@ -122,7 +122,7 @@ class GoogleGbpProvider
         $this->lastError = null;
         $url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$accountName}/locations";
         $res = $this->client($integration)->get($url, [
-            'readMask' => 'name,title,storefrontAddress,phoneNumbers,websiteUri,categories,metadata',
+            'readMask' => 'name,title,storefrontAddress,phoneNumbers,websiteUri,categories,metadata,regularHours,profile,serviceArea',
             'pageSize' => 100,
         ]);
 
@@ -145,6 +145,27 @@ class GoogleGbpProvider
             // Business Information returns "locations/Y"; the Reviews API needs
             // "accounts/X/locations/Y". Prefix the account unless already present.
             $fullName = str_starts_with($locName, 'accounts/') ? $locName : $accountName . '/' . $locName;
+            // Auto-fetched profile extras stored in the location's meta: the
+            // Google "write a review" link + Place ID (for the QR), the
+            // description, opening hours and service areas.
+            $meta = [];
+            if (! empty($loc['metadata']['newReviewUri'])) {
+                $meta['review_url'] = $loc['metadata']['newReviewUri'];
+            }
+            if (! empty($loc['metadata']['placeId'])) {
+                $meta['place_id'] = $loc['metadata']['placeId'];
+            }
+            if (! empty($loc['profile']['description'])) {
+                $meta['description'] = $loc['profile']['description'];
+            }
+            if (! empty($loc['regularHours']['periods'])) {
+                $meta['hours'] = $this->mapHours($loc['regularHours']['periods']);
+            }
+            $places = $loc['serviceArea']['places']['placeInfos'] ?? [];
+            if ($places) {
+                $meta['service_area'] = array_values(array_filter(array_map(fn ($p) => $p['placeName'] ?? null, $places)));
+            }
+
             $out[] = [
                 'google_name' => $fullName,
                 'title' => $loc['title'] ?? 'Untitled location',
@@ -153,10 +174,32 @@ class GoogleGbpProvider
                 'website' => $loc['websiteUri'] ?? null,
                 'category' => $loc['categories']['primaryCategory']['displayName'] ?? null,
                 'is_verified' => (bool) ($loc['metadata']['hasVoiceOfMerchant'] ?? false),
+                'meta' => $meta,
             ];
         }
 
         return $out;
+    }
+
+    /** Convert Google regularHours.periods to our 7-day [{day,open,close,closed}] grid. */
+    private function mapHours(array $periods): array
+    {
+        $days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+        $open = [];
+        foreach ($periods as $p) {
+            $d = $p['openDay'] ?? null;
+            if (! $d) {
+                continue;
+            }
+            $open[$d] = [
+                'day' => $d,
+                'open' => sprintf('%02d:%02d', $p['openTime']['hours'] ?? 0, $p['openTime']['minutes'] ?? 0),
+                'close' => sprintf('%02d:%02d', $p['closeTime']['hours'] ?? 0, $p['closeTime']['minutes'] ?? 0),
+                'closed' => false,
+            ];
+        }
+
+        return array_map(fn ($d) => $open[$d] ?? ['day' => $d, 'open' => '10:00', 'close' => '18:00', 'closed' => true], $days);
     }
 
     /** Reviews for a location ("accounts/123/locations/456"); normalized rows. */
@@ -423,19 +466,19 @@ class GoogleGbpProvider
         ];
         $end = now();
         $start = now()->subDays($days);
-        $query = [
+        // Build the query by hand: the Performance API wants REPEATED keys
+        // (dailyMetrics=A&dailyMetrics=B), not the bracketed array Laravel/
+        // http_build_query produces (dailyMetrics[0]=A), which Google rejects
+        // with "Unknown name dailyMetrics[0]".
+        $params = http_build_query([
             'dailyRange.start_date.year' => $start->year, 'dailyRange.start_date.month' => $start->month, 'dailyRange.start_date.day' => $start->day,
             'dailyRange.end_date.year' => $end->year, 'dailyRange.end_date.month' => $end->month, 'dailyRange.end_date.day' => $end->day,
-        ];
-        foreach ($metrics as $m) {
-            $query['dailyMetrics'][] = $m;
-        }
+        ]);
+        $params .= '&' . implode('&', array_map(fn ($m) => 'dailyMetrics=' . $m, $metrics));
+        $url = "https://businessprofileperformance.googleapis.com/v1/{$locId}:fetchMultiDailyMetricsTimeSeries?{$params}";
 
         try {
-            $res = $this->client($integration)->get(
-                "https://businessprofileperformance.googleapis.com/v1/{$locId}:fetchMultiDailyMetricsTimeSeries",
-                $query,
-            );
+            $res = $this->client($integration)->get($url);
         } catch (\Illuminate\Http\Client\ConnectionException $e) {
             $this->lastError = 'Google took too long to respond. Try again in a moment.';
 

@@ -177,6 +177,12 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
     try { await api.gbp.setLocationHidden(t, id, hidden); onReload(); }
     catch (e) { alert((e as ApiError).message); }
   }
+  async function keepOnly(id: string, name: string) {
+    const t = getToken(); if (!t) return;
+    if (!confirm(`Show only "${name}" and hide all other locations?`)) return;
+    try { await api.gbp.keepOnlyLocation(t, id); onReload(); }
+    catch (e) { alert((e as ApiError).message); }
+  }
   if (!overview) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Loading your dashboard…</span></div>;
 
   const s = overview.stats;
@@ -416,7 +422,10 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
                 <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", alignItems: "center" }}>
                   <div><b style={{ fontSize: 16 }}>{(l.avg_rating ?? l.rating ?? 0).toFixed(1)}</b><div className="muted" style={{ fontSize: 11 }}>★ Rating</div></div>
                   <div><b style={{ fontSize: 16 }}>{l.total_reviews ?? l.review_count ?? 0}</b><div className="muted" style={{ fontSize: 11 }}>Reviews</div></div>
-                  <button className="btn-mini" style={{ marginLeft: "auto" }} title="Hide this location from your dashboard" onClick={() => setHidden(l.id, true)}>Hide</button>
+                  <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                    <button className="btn-mini" title="Show only this location, hide all others" onClick={() => keepOnly(l.id, l.name ?? "this")}>Only this</button>
+                    <button className="btn-mini" title="Hide this location from your dashboard" onClick={() => setHidden(l.id, true)}>Hide</button>
+                  </div>
                 </div>
               </div>
             ))}

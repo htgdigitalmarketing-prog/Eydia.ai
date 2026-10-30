@@ -629,6 +629,16 @@ class GbpController extends Controller
         return $this->ok(['message' => $data['hidden'] ? 'Location hidden.' : 'Location restored.']);
     }
 
+    /** Keep ONLY this location visible and hide every other one (one-click cleanup). */
+    public function keepOnlyLocation(Request $request, string $uuid): JsonResponse
+    {
+        $keep = GbpLocation::where('uuid', $uuid)->firstOrFail();
+        GbpLocation::query()->where('id', '!=', $keep->id)->update(['is_hidden' => true]);
+        $keep->update(['is_hidden' => false]);
+
+        return $this->ok(['message' => 'Showing only ' . $keep->name . '.']);
+    }
+
     private function reviewArray(GbpReview $r): array
     {
         return [

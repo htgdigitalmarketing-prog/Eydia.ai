@@ -77,4 +77,21 @@ class GbpLocationHideTest extends TestCase
         $this->actingAs($this->owner, 'api')->getJson('/api/v1/gbp/overview')
             ->assertOk()->assertJsonCount(2, 'data.locations');
     }
+
+    public function test_keep_only_this_hides_every_other_location(): void
+    {
+        $mine = $this->makeLocation('MyBiz');
+        $this->makeLocation('Other1');
+        $this->makeLocation('Other2');
+
+        $this->actingAs($this->owner, 'api')
+            ->postJson("/api/v1/gbp/locations/{$mine->uuid}/only")
+            ->assertOk();
+
+        $this->actingAs($this->owner, 'api')->getJson('/api/v1/gbp/overview')
+            ->assertOk()
+            ->assertJsonCount(1, 'data.locations')
+            ->assertJsonPath('data.locations.0.name', 'MyBiz')
+            ->assertJsonCount(2, 'data.hidden_locations');
+    }
 }
