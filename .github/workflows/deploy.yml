@@ -1,0 +1,109 @@
+name: Deploy to Hostinger
+
+# Push to main (or click "Run workflow") → builds the app and uploads it to
+# Hostinger over FTP, then runs migrations + cache via the deploy hook.
+# No local zip, no SSH needed. One-time setup (GitHub → Settings → Secrets):
+#   FTP_SERVER     e.g. ftp.eydia.in   (hPanel → Files → FTP Accounts → Host)
+#   FTP_USERNAME   the FTP account username
+#   FTP_PASSWORD   the FTP account password
+#   FTP_WEB_DIR    path to the web root, e.g.  /public_html/            (must end with /)
+#   FTP_APP_DIR    path to the Laravel app,  e.g.  /app/   or  /domains/eydia.in/app/
+#   DEPLOY_URL     https://eydia.in/api/v1/system/deploy   (optional; runs migrations)
+#   DEPLOY_KEY     same random value as DEPLOY_KEY in the server .env (optional)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+concurrency:
+  group: hostinger-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Build the frontend (static export) ----
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      # ---- Install backend (PHP) dependencies ----
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, bcmath, pdo_mysql, gd, zip, intl, pcntl, posix, sodium
+          tools: composer
+      - name: Install backend dependencies
+        working-directory: backend
+        run: composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+
+      # ---- Assemble the exact folders Hostinger expects ----
+      - name: Assemble release
+        run: |
+          set -e
+          rm -rf release && mkdir -p release/app release/public_html
+          # Laravel app (never ship the server's .env, storage or caches)
+          rsync -a \
+            --exclude='.git/' --exclude='.env' --exclude='.env.*' \
+            --exclude='storage/' --exclude='bootstrap/cache/' \
+            --exclude='tests/' --exclude='database/database.sqlite' \
+            backend/ release/app/
+          mkdir -p release/app/bootstrap/cache
+          # Static frontend + the Laravel front controller for the web root
+          rsync -a frontend/out/ release/public_html/
+          cp -f deploy/public_html/index.php  release/public_html/index.php
+          cp -f deploy/public_html/.htaccess  release/public_html/.htaccess
+
+      # ---- Upload the Laravel app ----
+      - name: Upload Laravel app (FTP)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: release/app/
+          server-dir: ${{ secrets.FTP_APP_DIR }}
+          # Never delete the server's live config, uploads or caches.
+          exclude: |
+            **/.env
+            **/.env.*
+            **/storage/**
+            **/bootstrap/cache/**
+
+      # ---- Upload the frontend + web-root entry ----
+      - name: Upload frontend + web root (FTP)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: release/public_html/
+          server-dir: ${{ secrets.FTP_WEB_DIR }}
+          # Keep user-uploaded media (served from /storage) untouched.
+          exclude: |
+            **/storage/**
+
+      # ---- Apply migrations + refresh caches (no SSH) ----
+      - name: Run migrations & cache (deploy hook)
+        env:
+          DEPLOY_URL: ${{ secrets.DEPLOY_URL }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        run: |
+          if [ -n "$DEPLOY_URL" ]; then
+            echo "Calling deploy hook…"
+            curl -fsS --max-time 180 "$DEPLOY_URL" -H "X-Deploy-Key: $DEPLOY_KEY" && echo "" || \
+              echo "Deploy hook failed — check DEPLOY_URL / DEPLOY_KEY, or run migrations manually."
+          else
+            echo "DEPLOY_URL not set — skipping remote migrate (set it to automate DB changes)."
+          fi

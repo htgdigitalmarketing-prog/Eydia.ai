@@ -1,5 +1,57 @@
 # Deploying Eydia.ai to Hostinger — single domain (`eydia.ai`)
 
+---
+
+## ⚡ Easiest: auto-deploy from GitHub (no zip, no SSH)
+
+Set this up **once**, then every push to `main` (or clicking **Run workflow**)
+builds the app and uploads it to Hostinger for you. The workflow is
+`.github/workflows/deploy.yml`.
+
+**One-time setup — 5 minutes:**
+
+1. **Get your FTP details** in hPanel → **Files → FTP Accounts** (or create one):
+   you need the **FTP host**, **username**, and **password**. Note the folder
+   paths too — the **web root** (usually `/public_html/`) and where the Laravel
+   app folder lives (e.g. `/app/` next to `public_html`, or
+   `/domains/eydia.in/app/`).
+
+2. **First-time server prep** (do this once, via hPanel File Manager):
+   - Create the `app/` folder next to `public_html/`.
+   - Put your real **`.env`** inside `app/` (copy `backend/.env.example`, fill
+     `APP_URL`, `FRONTEND_URL`, DB creds; set `APP_ENV=production`,
+     `APP_DEBUG=false`; add a long random **`DEPLOY_KEY=`**).
+     Leave `APP_KEY=` / `JWT_SECRET=` blank — the deploy hook fills them.
+   - Create empty `app/storage/` + `app/bootstrap/cache/` (the uploader never
+     overwrites these).
+
+3. **Add GitHub secrets** — repo → **Settings → Secrets and variables → Actions
+   → New repository secret** — add:
+
+   | Secret        | Value (example)                               |
+   |---------------|-----------------------------------------------|
+   | `FTP_SERVER`  | `ftp.eydia.in`                                |
+   | `FTP_USERNAME`| your FTP username                             |
+   | `FTP_PASSWORD`| your FTP password                             |
+   | `FTP_WEB_DIR` | `/public_html/`  *(must end with `/`)*        |
+   | `FTP_APP_DIR` | `/app/`  *(or `/domains/eydia.in/app/`)*      |
+   | `DEPLOY_URL`  | `https://eydia.in/api/v1/system/deploy`       |
+   | `DEPLOY_KEY`  | the **same** value as `DEPLOY_KEY` in server `.env` |
+
+4. **Done.** Push to `main` (or Actions tab → *Deploy to Hostinger* → **Run
+   workflow**). It builds, uploads changed files only, and runs migrations +
+   cache automatically. Watch progress in the **Actions** tab.
+
+> First upload is slower (it sends `vendor/`); later deploys only send what
+> changed. No SSH? No problem — this uses plain FTP, which every Hostinger plan
+> has. `DEPLOY_URL`/`DEPLOY_KEY` are optional: without them the files still
+> upload, you'd just run migrations yourself when the DB changes.
+
+---
+
+## Manual options (SSH script or File Manager)
+
+
 Eydia.ai is **one Laravel API** + **one Next.js frontend**. The frontend is built
 as a **static export** (`next build` → `out/`), so it needs **no Node at runtime** —
 perfect for Hostinger shared/Business hosting.
