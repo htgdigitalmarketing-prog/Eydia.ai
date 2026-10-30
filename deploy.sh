@@ -67,16 +67,27 @@ rsync -a \
 # ---- 2) Frontend (Next.js static export) ------------------------------------
 cd "$SRC/frontend"
 if command -v npm >/dev/null 2>&1; then
-    say "Frontend: building static export"
+    say "Frontend: building static export (next build → out/)"
     npm ci
     npm run build
+fi
+if [ -f "$SRC/frontend/out/index.html" ]; then
     say "Frontend: syncing out/ into $WEB"
     rsync -a --exclude='index.php' --exclude='.htaccess' "$SRC/frontend/out/" "$WEB/"
 else
-    echo ""
-    echo "!! npm not found on this server — cannot build the frontend here."
-    echo "   Build it locally:  cd frontend && npm run build"
-    echo "   then upload the CONTENTS of frontend/out/ into $WEB"
+    cat <<MSG
+
+!! No built frontend found at frontend/out/ and no Node on this server to build it.
+   Fix with ONE of these, then re-run  bash deploy.sh :
+
+   A) Install Node once on this server (recommended), then it builds automatically:
+        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+        . ~/.nvm/nvm.sh && nvm install 20
+
+   B) Or build on your PC ( cd frontend && npm run build ) and upload the CONTENTS
+      of frontend/out/ into:  $WEB
+MSG
+    exit 1
 fi
 
 # ---- 3) Laravel entry + .htaccess in the web root ---------------------------

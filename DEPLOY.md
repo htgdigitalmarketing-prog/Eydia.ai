@@ -49,6 +49,76 @@ builds the app and uploads it to Hostinger for you. The workflow is
 
 ---
 
+## 🚀 SSH + git clone (one command) — no more zip uploads
+
+If you have **SSH** on your Hostinger plan, this is the simplest repeatable way:
+clone the repo once, then every deploy is `git pull && bash deploy.sh`.
+
+### One-time setup (≈5 min)
+
+1. **SSH in** (hPanel → Advanced → SSH Access for host/port/user):
+   ```bash
+   ssh -p <port> <user>@<your-server>
+   ```
+
+2. **Make sure Node is available** (needed to build the frontend on the server).
+   Check with `node -v`. If it's missing, install it once with nvm:
+   ```bash
+   curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+   . ~/.nvm/nvm.sh && nvm install 20
+   ```
+   (Composer + PHP 8.2+ are already on Hostinger. If `composer` is missing, hPanel
+   has a "Composer" tool, or install it in your home dir.)
+
+3. **Clone the repo** anywhere in your home (NOT inside `public_html`):
+   ```bash
+   cd ~
+   git clone https://github.com/htgdigitalmarketing-prog/Eydia.ai.git eydia-src
+   cd eydia-src
+   ```
+   > Private repo? Use a GitHub **Personal Access Token** or deploy key, e.g.
+   > `git clone https://<token>@github.com/htgdigitalmarketing-prog/Eydia.ai.git eydia-src`
+
+4. **Run the deploy once** — it creates the `.env` and stops so you can fill it:
+   ```bash
+   bash deploy.sh
+   ```
+   It prints the path to `~/domains/eydia.in/app/.env`. **Edit that file**: set
+   `APP_URL=https://eydia.in`, `FRONTEND_URL=https://eydia.in`, the MySQL
+   `DB_*` creds (hPanel → MySQL), and your API keys (Google / Meta / Gemini /
+   Razorpay). Leave `APP_KEY=` and `JWT_SECRET=` blank — the script fills them.
+
+   > Different domain folder? Run `DOMAIN_DIR="$HOME/domains/eydia.ai" bash deploy.sh`.
+
+5. **Run it again** to finish:
+   ```bash
+   bash deploy.sh
+   ```
+   This builds the frontend, syncs the backend into `app/`, installs the Laravel
+   entry + `.htaccess` into `public_html/`, generates keys, migrates, seeds, and
+   caches. Done → `https://eydia.in/` and `https://eydia.in/api/v1/health`.
+
+6. **Add the cron** (scheduler — drip follow-ups, GBP automations, campaigns),
+   hPanel → Advanced → Cron Jobs, every minute:
+   ```
+   * * * * * php ~/domains/eydia.in/app/artisan schedule:run >> /dev/null 2>&1
+   ```
+
+### Every deploy after that (one command)
+
+From your PC: commit & push your changes (`git push`). Then on the server:
+```bash
+cd ~/eydia-src && git pull && bash deploy.sh
+```
+That's it — it rebuilds the frontend, updates the backend, runs any new
+migrations, and refreshes the caches. `.env`, `storage/` and uploaded files are
+never touched.
+
+> Zero-SSH alternative: the **GitHub Action above** does the same on every
+> `git push` to `main` (builds in CI, uploads over FTP) — no server commands at all.
+
+---
+
 ## Manual options (SSH script or File Manager)
 
 
