@@ -121,9 +121,13 @@ class GbpOAuthController extends Controller
     /** Disconnect — remove stored tokens for this tenant. */
     public function disconnect(Request $request): JsonResponse
     {
+        // Clean slate: drop the token AND the locations synced from that account,
+        // so reconnecting a DIFFERENT Google account starts fresh (no stale
+        // businesses from the previous account). Reviews/posts/photos cascade.
+        \App\Models\GbpLocation::query()->delete();
         Integration::where('provider', Integration::GOOGLE_GBP)->delete();
 
-        return $this->ok(['message' => 'Google Business Profile disconnected.']);
+        return $this->ok(['message' => 'Google Business Profile disconnected and its synced locations cleared.']);
     }
 
     private function frontend(string $path): string

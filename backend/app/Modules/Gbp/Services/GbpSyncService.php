@@ -33,6 +33,9 @@ class GbpSyncService
             return ['synced' => 0, 'locations' => 0, 'reviews' => 0, 'error' => $error];
         }
 
+        // Pass 1 — upsert every location (cheap: one listLocations call per
+        // account, no per-location review fetch yet).
+        $upserted = [];
         foreach ($accounts as $account) {
             $accountName = $account['name'] ?? null; // "accounts/123"
             if (! $accountName) {
@@ -76,10 +79,23 @@ class GbpSyncService
                     $location->forceFill(['meta' => $meta])->save();
                 }
                 $locationsSynced++;
-
-                $reviewsSynced += $this->syncReviews($integration, $location);
-                $this->recomputeAggregate($location);
+                $upserted[] = $location;
             }
+        }
+
+        // Pass 2 — pull reviews only for the locations the tenant actually
+        // manages here (visible ones), capped so a connected agency account with
+        // many locations never times out (504). After "keep only this" that's a
+        // single location, so re-syncs are instant.
+        $withReviews = array_values(array_filter($upserted, fn (GbpLocation $l) => ! $l->is_hidden));
+        if ($withReviews === []) {
+            $withReviews = $upserted; // first sync — nothing hidden yet
+        }
+        usort($withReviews, fn ($a, $b) => (int) $b->review_count <=> (int) $a->review_count);
+        $cap = 8;
+        foreach (array_slice($withReviews, 0, $cap) as $location) {
+            $reviewsSynced += $this->syncReviews($integration, $location);
+            $this->recomputeAggregate($location);
         }
 
         $integration->update(['last_synced_at' => now()]);
