@@ -437,9 +437,10 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
             <div className="muted" style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Hidden locations</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {hidden.map((h) => (
-                <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 10 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.name}</span>
+                <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 10, flexWrap: "wrap" }}>
+                  <span style={{ fontWeight: 600, fontSize: 13, flex: 1, minWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.name}</span>
                   <span className="muted" style={{ fontSize: 11.5 }}>{h.review_count} reviews</span>
+                  <button className="btn-mini" title="Show only this one, hide all others" onClick={() => keepOnly(h.id, h.name)}>Only this</button>
                   <button className="btn-mini" onClick={() => setHidden(h.id, false)}>Un-hide</button>
                 </div>
               ))}
