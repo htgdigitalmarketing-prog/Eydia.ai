@@ -50,7 +50,9 @@ class GbpOAuthController extends Controller
             'response_type' => 'code',
             'scope' => implode(' ', config('services.google.gbp.scopes')),
             'access_type' => 'offline', // so Google returns a refresh_token
-            'prompt' => 'consent',      // force a refresh_token on every connect
+            // select_account lets the user pick WHICH Google account to connect
+            // (not auto-reuse the one already signed in); consent forces a refresh_token.
+            'prompt' => 'select_account consent',
             'state' => $state,
         ]);
 

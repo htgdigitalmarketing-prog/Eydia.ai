@@ -661,6 +661,8 @@ export const api = {
       request<{ message: string }>(`/gbp/locations/${id}/hidden`, { method: "POST", body: { hidden }, token }),
     keepOnlyLocation: (token: string, id: string) =>
       request<{ message: string }>(`/gbp/locations/${id}/only`, { method: "POST", token }),
+    removeLocation: (token: string, id: string) =>
+      request<{ message: string }>(`/gbp/locations/${id}`, { method: "DELETE", token }),
 
     // Automation control centre (ON/OFF toggles + cadence + QR review-assist).
     automation: (token: string) => request<GbpAutomationResponse>("/gbp/automation", { token }),

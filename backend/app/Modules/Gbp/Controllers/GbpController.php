@@ -639,6 +639,20 @@ class GbpController extends Controller
         return $this->ok(['message' => 'Showing only ' . $keep->name . '.']);
     }
 
+    /**
+     * Permanently remove a synced location and its reviews/posts/photos. Use this
+     * to clear out businesses that belong to a different Google account. A re-sync
+     * only re-adds locations the currently connected account still manages.
+     */
+    public function destroyLocation(Request $request, string $uuid): JsonResponse
+    {
+        $location = GbpLocation::where('uuid', $uuid)->firstOrFail();
+        $name = $location->name;
+        $location->delete();
+
+        return $this->ok(['message' => $name . ' removed.']);
+    }
+
     private function reviewArray(GbpReview $r): array
     {
         return [

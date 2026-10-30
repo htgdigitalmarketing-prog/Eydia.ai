@@ -183,6 +183,12 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
     try { await api.gbp.keepOnlyLocation(t, id); onReload(); }
     catch (e) { alert((e as ApiError).message); }
   }
+  async function removeLoc(id: string, name: string) {
+    const t = getToken(); if (!t) return;
+    if (!confirm(`Permanently remove "${name}" and its reviews/posts? (A re-sync only re-adds locations your connected Google account manages.)`)) return;
+    try { await api.gbp.removeLocation(t, id); onReload(); }
+    catch (e) { alert((e as ApiError).message); }
+  }
   if (!overview) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Loading your dashboard…</span></div>;
 
   const s = overview.stats;
@@ -442,6 +448,7 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
                   <span className="muted" style={{ fontSize: 11.5 }}>{h.review_count} reviews</span>
                   <button className="btn-mini" title="Show only this one, hide all others" onClick={() => keepOnly(h.id, h.name)}>Only this</button>
                   <button className="btn-mini" onClick={() => setHidden(h.id, false)}>Un-hide</button>
+                  <button className="btn-mini" title="Permanently remove this location" style={{ color: "#c0392b" }} onClick={() => removeLoc(h.id, h.name)}>Remove</button>
                 </div>
               ))}
             </div>
