@@ -61,6 +61,18 @@ function Dashboard() {
     finally { setSaving(null); }
   }
 
+  async function runNow() {
+    const token = getToken(); if (!token) return;
+    setSaving("run"); setError(null); setNotice(null);
+    try {
+      const res = await api.gbp.runAutomationsNow(token);
+      setData(res);
+      setNotice(res.message);
+      setTimeout(() => setNotice(null), 6000);
+    } catch (e) { setError((e as ApiError).message); }
+    finally { setSaving(null); }
+  }
+
   function copyAssist() {
     if (!assistUrl) return;
     navigator.clipboard?.writeText(assistUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }).catch(() => {});
@@ -96,7 +108,16 @@ function Dashboard() {
             {a.last_run_at ? `Last run ${new Date(a.last_run_at).toLocaleString()}` : "Automations run in the background once enabled."}
           </div>
         </div>
+        {activeCount > 0 && data?.has_location && (
+          <button className="btn-primary" disabled={saving === "run"} onClick={runNow}>
+            {saving === "run" ? "Running…" : "⚡ Run now"}
+          </button>
+        )}
       </div>
+      <p className="muted" style={{ fontSize: 12, marginTop: -8, marginBottom: 16 }}>
+        Automations run on a schedule on the server. Use <strong>Run now</strong> to generate replies &amp; posts
+        immediately and confirm everything works. (Your host must run the hourly scheduler cron for it to run on its own.)
+      </p>
 
       {/* Feature toggles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: 14 }}>

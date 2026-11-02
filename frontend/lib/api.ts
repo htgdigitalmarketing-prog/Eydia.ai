@@ -651,6 +651,10 @@ export const api = {
     aiRewriteProfile: (token: string, body: { keywords?: string[]; location?: string }) =>
       request<{ description: string; source: string; credits: number | null }>(
         "/gbp/profile/ai-rewrite", { method: "POST", body, token }),
+    // AI: analyse the business and set up the WHOLE profile automatically.
+    autoSetupProfile: (token: string, location?: string) =>
+      request<{ profile: GbpProfile; changed: string[]; synced_to_google: boolean; credits: number | null; message: string }>(
+        `/gbp/profile/auto-setup${location ? `?location=${location}` : ""}`, { method: "POST", token }),
     // AI: generate a batch of posts and schedule them.
     autoPlanPosts: (token: string, body: { count?: number; cadence_days?: number; start_at?: string; with_images?: boolean; keywords?: string[]; location?: string }) =>
       request<{ posts: GbpPostItem[]; created: number; with_images: boolean; credits: number | null; message: string }>(
@@ -668,6 +672,10 @@ export const api = {
     automation: (token: string) => request<GbpAutomationResponse>("/gbp/automation", { token }),
     updateAutomation: (token: string, body: Partial<GbpAutomationSettings>) =>
       request<GbpAutomationResponse & { message: string }>("/gbp/automation", { method: "PUT", body, token }),
+    // Run the enabled automations immediately (don't wait for the scheduler).
+    runAutomationsNow: (token: string) =>
+      request<GbpAutomationResponse & { message: string; ran: { replies: number; posts: number; images: number } }>(
+        "/gbp/automation/run", { method: "POST", token }),
 
     // Business insights + Google audit / health score
     insights: (token: string, days = 30, location?: string) => {

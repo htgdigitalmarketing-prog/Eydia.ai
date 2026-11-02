@@ -340,13 +340,72 @@ class GbpController extends Controller
 
         $result = $sync->sync($integration);
 
+        // Fully-automatic first-time setup: right after the first successful sync,
+        // if the primary business still has no description, let AI set up the whole
+        // Business Information profile for it. Runs once (guarded by auto_setup_done)
+        // and never overwrites fields the user has filled. Best-effort — a failure
+        // here never fails the sync.
+        $autoSetup = null;
+        if (! $result['error']) {
+            try {
+                $autoSetup = $this->maybeAutoSetup($request);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('gbp auto-setup after sync failed: ' . $e->getMessage());
+            }
+        }
+
         return $this->ok([
             'synced' => $result['synced'],
             'locations' => $result['locations'],
             'reviews' => $result['reviews'],
+            'auto_setup' => $autoSetup,
             'message' => $result['error']
-                ?? ("Synced {$result['locations']} location(s) and {$result['reviews']} review(s) from Google."),
+                ?? ("Synced {$result['locations']} location(s) and {$result['reviews']} review(s) from Google."
+                    . ($autoSetup ? ' AI set up your Business Information automatically.' : '')),
         ]);
+    }
+
+    /**
+     * One-time AI auto-setup of the primary business profile, triggered after the
+     * first sync when the description is still empty. Returns the list of fields
+     * it filled, or null when it did nothing (already set up, no AI, no credits).
+     */
+    private function maybeAutoSetup(Request $request): ?array
+    {
+        $location = GbpLocation::visible()->orderByDesc('review_count')->first();
+        if (! $location) {
+            return null;
+        }
+        $meta = $location->meta ?? [];
+        if (! empty($meta['description']) || ! empty($meta['auto_setup_done'])) {
+            return null; // already has content or was set up before
+        }
+
+        $ai = app(\App\Modules\Gbp\Services\GbpAiService::class);
+        if (! $ai->configured() || ! $this->credits->canAfford($request->user()->tenant_id, 'ai_caption')) {
+            return null;
+        }
+
+        $plan = $ai->autoProfile($location);
+        if (! $plan) {
+            return null;
+        }
+
+        $profiles = app(\App\Modules\Gbp\Services\GbpProfileService::class);
+        $changed = $profiles->applyAutoPlan($location, $plan);
+        $this->credits->deduct($request->user()->tenant_id, $request->user()->id, 'ai_caption', 'AI auto-setup: business profile (after sync)');
+        $location->forceFill(['meta' => array_merge($location->fresh()->meta ?? [], ['auto_setup_done' => true])])->save();
+
+        // Best-effort live push to Google.
+        $integration = $this->connectedIntegration();
+        if ($integration && $location->google_location_id && $changed !== []) {
+            $patch = $profiles->googlePatch($changed);
+            if ($patch['mask'] !== '') {
+                app(GoogleGbpProvider::class)->updateLocation($integration, $location->google_location_id, $patch['body'], $patch['mask']);
+            }
+        }
+
+        return $changed !== [] ? array_keys($changed) : null;
     }
 
     /** Business Insights — live GBP performance metrics for a location. */
@@ -584,6 +643,55 @@ class GbpController extends Controller
             'description' => $description,
             'source' => 'ai',
             'credits' => $this->credits->balance($request->user()->tenant_id),
+        ]);
+    }
+
+    /**
+     * AI auto-setup: analyse the connected business and fill the whole Business
+     * Information profile the best way — SEO description, highlights, keyword
+     * labels, service area and default hours — without overwriting anything the
+     * user already filled in. Pushes the writable fields to Google when linked.
+     */
+    public function autoSetupProfile(Request $request, \App\Modules\Gbp\Services\GbpProfileService $profiles, \App\Modules\Gbp\Services\GbpAiService $ai, GoogleGbpProvider $provider): JsonResponse
+    {
+        $location = $this->pickLocation($request);
+        if (! $location) {
+            return $this->fail('Connect Google and Sync first so AI has a business to set up.', [], 422);
+        }
+        if ($blocked = $this->guardCredits($request, 'ai_caption')) {
+            return $blocked;
+        }
+
+        $plan = $ai->autoProfile($location);
+        if (! $plan) {
+            return $this->fail('No AI provider is active yet. Go to Settings → AI Provider, add your API key and activate a provider, then try again.', [], 422);
+        }
+
+        $changed = $profiles->applyAutoPlan($location, $plan);
+        $this->credits->deduct($request->user()->tenant_id, $request->user()->id, 'ai_caption', 'AI auto-setup: business profile');
+
+        // Remember we've done the one-time auto-setup so a later sync won't redo it.
+        $location->forceFill(['meta' => array_merge($location->meta ?? [], ['auto_setup_done' => true])])->save();
+
+        // Best-effort live push of the writable fields (description, hours) to Google.
+        $syncedToGoogle = false;
+        $integration = $this->connectedIntegration();
+        if ($integration && $location->google_location_id && $changed !== []) {
+            $patch = $profiles->googlePatch($changed);
+            if ($patch['mask'] !== '') {
+                $syncedToGoogle = $provider->updateLocation($integration, $location->google_location_id, $patch['body'], $patch['mask']);
+            }
+        }
+
+        return $this->ok([
+            'profile' => $profiles->toArray($location->fresh()),
+            'changed' => array_keys($changed),
+            'synced_to_google' => $syncedToGoogle,
+            'credits' => $this->credits->balance($request->user()->tenant_id),
+            'message' => $changed === []
+                ? 'Your profile already has these details filled in — nothing to overwrite.'
+                : ('AI set up your profile: ' . implode(', ', array_keys($changed)) . '.'
+                    . ($syncedToGoogle ? ' Pushed to Google.' : '')),
         ]);
     }
 

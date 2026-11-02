@@ -154,3 +154,29 @@ php artisan route:cache
 
 say "Deploy complete → https://$(basename "$DOMAIN_DIR")/"
 echo "    API health: https://$(basename "$DOMAIN_DIR")/api/v1/health"
+
+# ---- 5) Scheduler cron reminder --------------------------------------------
+# GBP automations (AI posts/photos/replies), scheduled-post publishing and the
+# drip follow-ups ALL run through Laravel's scheduler. Without this one cron they
+# never fire — this is the usual reason "automation did nothing". Idempotent to
+# print every deploy.
+CRON_LINE="* * * * * php $APP/artisan schedule:run >> /dev/null 2>&1"
+if crontab -l 2>/dev/null | grep -Fq "$APP/artisan schedule:run"; then
+    say "Scheduler cron: already installed ✓"
+else
+    cat <<MSG
+
+==> ⚠️  ACTION NEEDED — the scheduler cron is NOT installed.
+    Without it, automations (AI posts/photos/review replies) never run.
+
+    Add it in hPanel → Advanced → Cron Jobs (every minute), command:
+
+      $CRON_LINE
+
+    Or from this SSH session, run ONCE:
+
+      ( crontab -l 2>/dev/null; echo "$CRON_LINE" ) | crontab -
+
+    Verify with:  crontab -l
+MSG
+fi

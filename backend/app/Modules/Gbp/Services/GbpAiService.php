@@ -90,6 +90,58 @@ class GbpAiService
         return array_slice($out, 0, $count);
     }
 
+    /**
+     * Analyse a business and plan a complete, optimised Business Information set:
+     * an SEO description, "from the business" highlights, local service-area city
+     * and keyword labels. Used to auto-set-up the profile the moment a Google
+     * location is connected. Null when AI is unavailable.
+     *
+     * @return array{description:string, highlights:array<int,string>, keywords:array<int,string>, service_area:array<int,string>}|null
+     */
+    public function autoProfile(GbpLocation $location): ?array
+    {
+        $city = $this->cityOf($location);
+
+        $system = 'You are a senior local-SEO consultant setting up a Google Business Profile end to end. '
+            . 'Return ONLY JSON.';
+        $user = 'Plan the best Business Information for this business.' . $this->facts($location)
+            . ' Return {"description":"a compelling \"from the business\" description, 1–2 short paragraphs, '
+            . '600–750 characters, natural local keywords + the city + main services, ends in a soft call to action, '
+            . 'plain text only (no markdown/hashtags/quotes)",'
+            . '"highlights":["4–6 short selling points / services, 2–4 words each"],'
+            . '"keywords":["5–8 local SEO keywords a customer would search, lowercase"],'
+            . '"service_area":["up to 5 nearby areas/cities this business serves"]}.';
+
+        $parsed = $this->json($system, $user, 1200);
+        if (! is_array($parsed) || empty($parsed['description'])) {
+            return null;
+        }
+
+        $clean = fn ($v) => array_values(array_filter(array_map(
+            fn ($x) => trim((string) $x),
+            is_array($v) ? $v : []
+        )));
+
+        $serviceArea = $clean($parsed['service_area'] ?? []);
+        if ($serviceArea === [] && $city) {
+            $serviceArea = [$city];
+        }
+
+        return [
+            'description' => trim((string) $parsed['description']),
+            'highlights' => array_slice($clean($parsed['highlights'] ?? []), 0, 8),
+            'keywords' => array_slice($clean($parsed['keywords'] ?? []), 0, 10),
+            'service_area' => array_slice($serviceArea, 0, 5),
+        ];
+    }
+
+    private function cityOf(GbpLocation $location): ?string
+    {
+        $meta = $location->meta ?? [];
+
+        return ($meta['service_area'][0] ?? null) ?: GbpProfileService::cityFromAddress($location->address);
+    }
+
     /** 3–5 SEO-friendly hashtags built from the business name, category and city. */
     public function hashtagsFor(GbpLocation $location): string
     {

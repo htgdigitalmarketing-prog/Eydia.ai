@@ -93,6 +93,52 @@ class GbpProfileService
     }
 
     /**
+     * Apply an AI auto-setup plan WITHOUT overwriting anything the user already
+     * filled in: description, "from the business" highlights, keyword labels and
+     * service area are only set when currently empty, and a sensible default
+     * hours grid is seeded if none exists. Returns the subset of editor fields
+     * that actually changed, so the caller can push just those to Google.
+     *
+     * @param  array{description?:string, highlights?:array, keywords?:array, service_area?:array}  $plan
+     * @return array<string, mixed> the applied changes (googlePatch-compatible)
+     */
+    public function applyAutoPlan(GbpLocation $l, array $plan): array
+    {
+        $meta = $l->meta ?? [];
+        $data = [];
+
+        if (empty($meta['description']) && ! empty($plan['description'])) {
+            $data['description'] = (string) $plan['description'];
+        }
+
+        $fromBusiness = $meta['attributes']['From the business'] ?? [];
+        if (empty($fromBusiness) && ! empty($plan['highlights'])) {
+            $attrs = $this->attributes($meta['attributes'] ?? []);
+            $attrs['From the business'] = array_values((array) $plan['highlights']);
+            $data['attributes'] = $attrs;
+        }
+
+        if (empty($meta['labels']) && ! empty($plan['keywords'])) {
+            $data['labels'] = array_values((array) $plan['keywords']);
+        }
+
+        if (empty($meta['service_area']) && ! empty($plan['service_area'])) {
+            $data['service_area'] = array_values((array) $plan['service_area']);
+        }
+
+        if (empty($meta['hours'])) {
+            // Seed the default Mon–Sat 10–18 grid so the listing shows hours.
+            $data['hours'] = $this->hours(null);
+        }
+
+        if ($data !== []) {
+            $this->apply($l, $data);
+        }
+
+        return $data;
+    }
+
+    /**
      * Build the Google Business Profile patch for the fields Google lets us write
      * from here: title, phone, website, description and regular hours. Address is
      * kept local (a storefront-address patch can disrupt a verified listing).

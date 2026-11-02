@@ -87,6 +87,18 @@ function Editor() {
     finally { setAiBusy(false); }
   }
 
+  async function autoSetup() {
+    const token = getToken(); if (!token) return;
+    if (!confirm("Let AI analyse your business and set up your whole profile (description, highlights, keywords, service area, hours)? It won't overwrite anything you've already filled in.")) return;
+    setAiBusy(true); setError(null); setNotice(null);
+    try {
+      const res = await api.gbp.autoSetupProfile(token);
+      setForm(res.profile);
+      setNotice(res.message);
+    } catch (e) { setError((e as ApiError).message ?? "AI auto-setup failed."); }
+    finally { setAiBusy(false); }
+  }
+
   function copyLink() {
     if (!form?.review_url) return;
     navigator.clipboard?.writeText(form.review_url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }).catch(() => {});
@@ -121,6 +133,20 @@ function Editor() {
             ? "Changes are saved in Eydia and pushed to your live Google listing."
             : "Changes are saved in Eydia and power your website & reports. Connect Google (Reviews → Connect) to push them live."}
         </span>
+      </div>
+
+      {/* AI auto-setup — one click to fill the whole profile from the connected business. */}
+      <div className="panel" style={{ marginBottom: 16, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", background: "linear-gradient(135deg,#f3f0ff,#eef3ff)", border: "1px solid #e0dcff" }}>
+        <div style={{ fontSize: 24 }}>✨</div>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>Let AI set up your profile automatically</div>
+          <div className="muted" style={{ fontSize: 12.5 }}>
+            AI reads your business, category, city &amp; reviews and fills the best description, highlights, keywords, service area and hours — without overwriting anything you&apos;ve already entered.
+          </div>
+        </div>
+        <button className="btn-primary" disabled={aiBusy} onClick={autoSetup}>
+          {aiBusy ? "Setting up…" : "✨ Auto-setup my profile"}
+        </button>
       </div>
 
       <ReviewCard profile={form} qr={qr} copied={copied} onCopy={copyLink} onReviewUrl={(v) => set("review_url", v)} onSave={save} saving={saving} />

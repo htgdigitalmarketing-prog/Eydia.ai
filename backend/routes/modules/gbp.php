@@ -29,10 +29,14 @@ Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     Route::put('/profile', [GbpController::class, 'updateProfile']);
     // AI: rewrite the business description for local SEO.
     Route::post('/profile/ai-rewrite', [GbpController::class, 'aiRewriteProfile']);
+    // AI: analyse the connected business and set up the WHOLE profile automatically.
+    Route::post('/profile/auto-setup', [GbpController::class, 'autoSetupProfile']);
 
     // Automation control centre (ON/OFF switches + cadence + QR review-assist).
     Route::get('/automation', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'show']);
     Route::put('/automation', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'update']);
+    // Run the enabled automations right now (instead of waiting for the scheduler).
+    Route::post('/automation/run', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'runNow']);
 
     // Business insights (performance metrics) + CSV export.
     Route::get('/insights', [GbpController::class, 'insights']);
