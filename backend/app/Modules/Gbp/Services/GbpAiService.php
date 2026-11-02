@@ -102,17 +102,23 @@ class GbpAiService
     {
         $city = $this->cityOf($location);
 
+        $groups = implode(', ', GbpProfileService::ATTRIBUTE_GROUPS);
+
         $system = 'You are a senior local-SEO consultant setting up a Google Business Profile end to end. '
             . 'Return ONLY JSON.';
-        $user = 'Plan the best Business Information for this business.' . $this->facts($location)
-            . ' Return {"description":"a compelling \"from the business\" description, 1–2 short paragraphs, '
-            . '600–750 characters, natural local keywords + the city + main services, ends in a soft call to action, '
-            . 'plain text only (no markdown/hashtags/quotes)",'
-            . '"highlights":["4–6 short selling points / services, 2–4 words each"],'
-            . '"keywords":["5–8 local SEO keywords a customer would search, lowercase"],'
-            . '"service_area":["up to 5 nearby areas/cities this business serves"]}.';
+        $user = 'Plan the best, most complete Business Information for this business.' . $this->facts($location)
+            . ' Return {"description":"a compelling \"from the business\" description, 2–3 paragraphs, '
+            . '900–1100 characters (detailed but genuine), weaving in natural local keywords, the city, the main '
+            . 'services/products, what makes it trusted, and ending with a soft call to action; plain text only '
+            . '(no markdown/hashtags/quotes)",'
+            . '"highlights":["5–7 short selling points / services, 2–4 words each"],'
+            . '"keywords":["6–10 local SEO keywords a customer would search, lowercase"],'
+            . '"service_area":["up to 5 nearby areas/cities this business serves"],'
+            . '"attributes":{' . '"<group>":["2–4 realistic attributes a customer cares about"]'
+            . '}}. For "attributes" use ONLY these group names where they genuinely fit this business type: '
+            . $groups . '. Skip a group that does not apply. Keep each attribute short and factual.';
 
-        $parsed = $this->json($system, $user, 1200);
+        $parsed = $this->json($system, $user, 1600);
         if (! is_array($parsed) || empty($parsed['description'])) {
             return null;
         }
@@ -127,11 +133,23 @@ class GbpAiService
             $serviceArea = [$city];
         }
 
+        // Keep only attribute groups Google's editor knows about.
+        $attributes = [];
+        foreach ((array) ($parsed['attributes'] ?? []) as $group => $items) {
+            if (in_array($group, GbpProfileService::ATTRIBUTE_GROUPS, true)) {
+                $vals = array_slice($clean($items), 0, 6);
+                if ($vals !== []) {
+                    $attributes[$group] = $vals;
+                }
+            }
+        }
+
         return [
             'description' => trim((string) $parsed['description']),
             'highlights' => array_slice($clean($parsed['highlights'] ?? []), 0, 8),
             'keywords' => array_slice($clean($parsed['keywords'] ?? []), 0, 10),
             'service_area' => array_slice($serviceArea, 0, 5),
+            'attributes' => $attributes,
         ];
     }
 

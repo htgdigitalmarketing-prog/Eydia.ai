@@ -677,10 +677,13 @@ export const api = {
       request<GbpAutomationResponse & { message: string; ran: { replies: number; posts: number; images: number } }>(
         "/gbp/automation/run", { method: "POST", token }),
 
-    // Business insights + Google audit / health score
-    insights: (token: string, days = 30, location?: string) => {
+    // Business insights + Google audit / health score.
+    // Pass a custom range with { start, end } (YYYY-MM-DD) to see any period,
+    // down to a single day; otherwise `days` is the rolling window.
+    insights: (token: string, days = 30, location?: string, range?: { start: string; end: string }) => {
       const qs = new URLSearchParams({ days: String(days) });
       if (location) qs.set("location", location);
+      if (range?.start && range?.end) { qs.set("start", range.start); qs.set("end", range.end); }
       return request<GbpInsights>(`/gbp/insights?${qs.toString()}`, { token });
     },
     health: (token: string) => request<GbpHealth>("/gbp/health", { token }),
@@ -1125,6 +1128,7 @@ export type GbpPhotoInput = { location: string; image_url: string; caption?: str
 export type GbpInsights = {
   connected: boolean;
   days?: number;
+  range?: { start: string; end: string } | null;
   location?: { id: string; name: string };
   metrics: Record<string, number>;
   series: { date: string; value: number }[];

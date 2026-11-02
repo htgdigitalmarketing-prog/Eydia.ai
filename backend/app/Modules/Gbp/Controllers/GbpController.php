@@ -411,7 +411,8 @@ class GbpController extends Controller
     /** Business Insights — live GBP performance metrics for a location. */
     public function insights(Request $request, GoogleGbpProvider $provider): JsonResponse
     {
-        $days = max(7, min(90, (int) $request->query('days', 30)));
+        $days = max(1, min(540, (int) $request->query('days', 30)));
+        [$start, $end] = $this->insightsRange($request);
         $location = $this->pickLocation($request);
         $integration = $this->connectedIntegration();
 
@@ -428,7 +429,7 @@ class GbpController extends Controller
             ]);
         }
 
-        $data = $provider->fetchInsights($integration, $location->google_location_id, $days);
+        $data = $provider->fetchInsights($integration, $location->google_location_id, $days, $start, $end);
         if ($data === null) {
             return $this->fail($provider->getLastError() ?? 'Could not load insights from Google.', [], 502);
         }
@@ -440,6 +441,7 @@ class GbpController extends Controller
         return $this->ok([
             'connected' => true,
             'days' => $days,
+            'range' => ($start && $end) ? ['start' => $start->toDateString(), 'end' => $end->toDateString()] : null,
             'location' => ['id' => $location->uuid, 'name' => $location->name],
             'metrics' => [
                 'impressions' => $impressions,
@@ -455,11 +457,12 @@ class GbpController extends Controller
     /** CSV export of the daily insights series. */
     public function insightsCsv(Request $request, GoogleGbpProvider $provider): StreamedResponse
     {
-        $days = max(7, min(90, (int) $request->query('days', 30)));
+        $days = max(1, min(540, (int) $request->query('days', 30)));
+        [$start, $end] = $this->insightsRange($request);
         $location = $this->pickLocation($request);
         $integration = $this->connectedIntegration();
         $rows = ($integration && $location?->google_location_id)
-            ? ($provider->fetchInsights($integration, $location->google_location_id, $days)['series'] ?? [])
+            ? ($provider->fetchInsights($integration, $location->google_location_id, $days, $start, $end)['series'] ?? [])
             : [];
 
         return response()->streamDownload(function () use ($rows) {
@@ -693,6 +696,33 @@ class GbpController extends Controller
                 : ('AI set up your profile: ' . implode(', ', array_keys($changed)) . '.'
                     . ($syncedToGoogle ? ' Pushed to Google.' : '')),
         ]);
+    }
+
+    /**
+     * Parse an optional custom insights date range (?start=YYYY-MM-DD&end=…).
+     * Returns [Carbon|null, Carbon|null]; both null falls back to the rolling
+     * "last N days". A single day is allowed (start == end).
+     *
+     * @return array{0:?\Illuminate\Support\Carbon, 1:?\Illuminate\Support\Carbon}
+     */
+    private function insightsRange(Request $request): array
+    {
+        $s = $request->query('start');
+        $e = $request->query('end');
+        if (! $s || ! $e) {
+            return [null, null];
+        }
+        try {
+            $start = \Illuminate\Support\Carbon::parse($s)->startOfDay();
+            $end = \Illuminate\Support\Carbon::parse($e)->startOfDay();
+        } catch (\Throwable) {
+            return [null, null];
+        }
+        if ($start->greaterThan($end)) {
+            [$start, $end] = [$end, $start];
+        }
+
+        return [$start, $end];
     }
 
     private function pickLocation(Request $request): ?GbpLocation

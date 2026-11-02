@@ -119,9 +119,9 @@ class ReviewAssistController extends Controller
   <div class="out" id="out">
     <label>Your review <span class="muted">(tap to edit)</span></label>
     <textarea id="review" style="min-height:120px"></textarea>
-    <button class="btn" id="copy">📋 Copy review</button>
-    <a class="btn google" id="post" href="{$url}" target="_blank" rel="noreferrer">Open Google to post it →</a>
-    <p class="muted center" style="margin-top:10px">Paste your review on Google and tap Post. You're in control — nothing is submitted for you.</p>
+    <button class="btn" id="copyPost" data-url="{$url}">📋 Copy &amp; post on Google →</button>
+    <button class="btn google" id="copy">Just copy the review</button>
+    <p class="muted center" style="margin-top:10px">We copy your review and open Google — just <strong>paste</strong> it there and tap <strong>Post</strong>. You're in control; nothing is submitted for you.</p>
   </div>
   <div class="foot">Powered by Eydia.ai</div>
 </div></div>
@@ -139,7 +139,24 @@ class ReviewAssistController extends Controller
       .catch(function(){alert('Could not generate a review. Please try again.');})
       .finally(function(){gen.disabled=false;gen.textContent='✨ Help me write my review';});
   };
-  document.getElementById('copy').onclick=function(){rv.select();try{navigator.clipboard.writeText(rv.value);this.textContent='✓ Copied!';var b=this;setTimeout(function(){b.textContent='📋 Copy review';},1600);}catch(e){document.execCommand('copy');}};
+  function doCopy(){
+    rv.select();rv.setSelectionRange(0,99999);
+    var ok=false;
+    try{ok=document.execCommand('copy');}catch(e){}            // synchronous — keeps the user gesture for the popup
+    try{if(navigator.clipboard)navigator.clipboard.writeText(rv.value);}catch(e){}
+    return ok;
+  }
+  // Copy AND open Google in the SAME tap, so the customer just pastes & posts.
+  var cp=document.getElementById('copyPost');
+  if(cp){cp.onclick=function(){
+    doCopy();
+    cp.textContent='✓ Copied — opening Google…';
+    var url=cp.getAttribute('data-url');
+    if(url){window.open(url,'_blank','noopener');}
+    else{alert('Review copied! This business has not set a Google review link yet.');}
+    setTimeout(function(){cp.textContent='📋 Copy & post on Google →';},2200);
+  };}
+  document.getElementById('copy').onclick=function(){var ok=doCopy();this.textContent=ok?'✓ Copied!':'Copied!';var b=this;setTimeout(function(){b.textContent='Just copy the review';},1600);};
 </script>
 </body></html>
 HTML;

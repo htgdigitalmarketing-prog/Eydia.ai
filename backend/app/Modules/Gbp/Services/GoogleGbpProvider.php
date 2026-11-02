@@ -453,7 +453,7 @@ class GoogleGbpProvider
      *
      * @return ?array{totals:array<string,int>, series:array<int,array>}
      */
-    public function fetchInsights(Integration $integration, string $locationName, int $days = 30): ?array
+    public function fetchInsights(Integration $integration, string $locationName, int $days = 30, ?\Illuminate\Support\Carbon $startDate = null, ?\Illuminate\Support\Carbon $endDate = null): ?array
     {
         $this->lastError = null;
         // locationName here is "accounts/x/locations/y"; the performance API
@@ -464,8 +464,17 @@ class GoogleGbpProvider
             'BUSINESS_IMPRESSIONS_DESKTOP_MAPS', 'BUSINESS_IMPRESSIONS_MOBILE_MAPS',
             'CALL_CLICKS', 'WEBSITE_CLICKS', 'BUSINESS_DIRECTION_REQUESTS',
         ];
-        $end = now();
-        $start = now()->subDays($days);
+        // A custom range wins over the rolling "last N days". Google has a ~2-3 day
+        // reporting lag and rejects a future end date, so clamp end to yesterday.
+        $yesterday = now()->subDay();
+        $end = $endDate ? $endDate->copy() : now();
+        if ($end->greaterThan($yesterday)) {
+            $end = $yesterday;
+        }
+        $start = $startDate ? $startDate->copy() : $end->copy()->subDays($days);
+        if ($start->greaterThan($end)) {
+            $start = $end->copy();
+        }
         // Build the query by hand: the Performance API wants REPEATED keys
         // (dailyMetrics=A&dailyMetrics=B), not the bracketed array Laravel/
         // http_build_query produces (dailyMetrics[0]=A), which Google rejects

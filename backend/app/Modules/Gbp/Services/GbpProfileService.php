@@ -111,10 +111,21 @@ class GbpProfileService
             $data['description'] = (string) $plan['description'];
         }
 
-        $fromBusiness = $meta['attributes']['From the business'] ?? [];
-        if (empty($fromBusiness) && ! empty($plan['highlights'])) {
-            $attrs = $this->attributes($meta['attributes'] ?? []);
+        // Fill the "More" attribute groups that are still empty: highlights go to
+        // "From the business", and the AI's per-group suggestions fill the rest.
+        $attrs = $this->attributes($meta['attributes'] ?? []);
+        $attrsTouched = false;
+        if (empty($attrs['From the business']) && ! empty($plan['highlights'])) {
             $attrs['From the business'] = array_values((array) $plan['highlights']);
+            $attrsTouched = true;
+        }
+        foreach ((array) ($plan['attributes'] ?? []) as $group => $items) {
+            if (array_key_exists($group, $attrs) && empty($attrs[$group]) && ! empty($items)) {
+                $attrs[$group] = array_values((array) $items);
+                $attrsTouched = true;
+            }
+        }
+        if ($attrsTouched) {
             $data['attributes'] = $attrs;
         }
 

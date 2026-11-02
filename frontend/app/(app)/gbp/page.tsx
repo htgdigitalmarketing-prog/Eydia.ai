@@ -1202,27 +1202,42 @@ function WebsiteTab({ hasLocations }: { hasLocations: boolean }) {
 }
 
 /* ---------------- Insights ---------------- */
+function isoDay(offsetDays: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
 function InsightsTab({ locations }: { locations: GbpLocationItem[] }) {
   const [data, setData] = useState<GbpInsights | null>(null);
   const [days, setDays] = useState(30);
+  const [mode, setMode] = useState<"preset" | "custom">("preset");
+  // Default custom range: yesterday (Google data lags ~1-2 days). Single day = start===end.
+  const [start, setStart] = useState(() => isoDay(2));
+  const [end, setEnd] = useState(() => isoDay(1));
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const custom = mode === "custom";
   const load = useCallback(() => {
     const t = getToken(); if (!t) return;
     setLoading(true);
-    api.gbp.insights(t, days).then(setData).catch((e) => setErr((e as ApiError).message)).finally(() => setLoading(false));
-  }, [days]);
+    const range = custom && start && end ? { start, end } : undefined;
+    api.gbp.insights(t, days, undefined, range).then(setData).catch((e) => setErr((e as ApiError).message)).finally(() => setLoading(false));
+  }, [days, custom, start, end]);
   useEffect(() => { load(); }, [load]);
 
   async function exportCsv() {
     const t = getToken(); if (!t) return;
     const base = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
-    const res = await fetch(`${base}/gbp/insights/export?days=${days}`, { headers: { Authorization: `Bearer ${t}` } });
+    const qs = custom && start && end ? `start=${start}&end=${end}` : `days=${days}`;
+    const res = await fetch(`${base}/gbp/insights/export?${qs}`, { headers: { Authorization: `Bearer ${t}` } });
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = "gbp-insights.csv"; a.click(); URL.revokeObjectURL(url);
   }
+
+  const today = isoDay(0);
 
   const metricCards = [
     { k: "impressions", icon: "👁️", bg: "#eef3ff" },
@@ -1237,9 +1252,24 @@ function InsightsTab({ locations }: { locations: GbpLocationItem[] }) {
     <div>
       <div className="panel" style={{ padding: 12, marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontSize: 13, fontWeight: 600 }}>Period</span>
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))} style={{ padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 13 }}>
+        <select
+          value={custom ? "custom" : String(days)}
+          onChange={(e) => { if (e.target.value === "custom") { setMode("custom"); } else { setMode("preset"); setDays(Number(e.target.value)); } }}
+          style={{ padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 13 }}
+        >
           {[7, 30, 90].map((d) => <option key={d} value={d}>Last {d} days</option>)}
+          <option value="custom">Custom range…</option>
         </select>
+        {custom && (
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+            <input type="date" value={start} max={end || today} onChange={(e) => setStart(e.target.value)}
+              style={{ padding: "7px 9px", border: "1px solid var(--border)", borderRadius: 9, fontSize: 13 }} />
+            <span className="muted" style={{ fontSize: 12 }}>to</span>
+            <input type="date" value={end} min={start} max={today} onChange={(e) => setEnd(e.target.value)}
+              style={{ padding: "7px 9px", border: "1px solid var(--border)", borderRadius: 9, fontSize: 13 }} />
+            <button className="btn-mini" onClick={() => { setStart(end); }} title="See just the end day">1 day</button>
+          </div>
+        )}
         <div style={{ flex: 1 }} />
         <button className="btn-mini" onClick={exportCsv} disabled={!data?.connected}>⬇ Export CSV</button>
       </div>
