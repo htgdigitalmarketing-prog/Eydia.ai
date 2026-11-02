@@ -65,15 +65,42 @@ rsync -a \
     "$SRC/backend/" "$APP/"
 
 # ---- 2) Frontend (Next.js static export) ------------------------------------
+# On Hostinger / CloudLinux the build can HANG at "Generating static pages"
+# (worker can't fork under the nproc limit) or thrash swap (OOM). We defend by:
+#   * capping Node heap so it fails fast instead of thrashing,
+#   * disabling telemetry (one less network/worker),
+#   * running under `timeout` so a hang can never block the deploy forever,
+#   * keeping the previous out/ as a backup and restoring it if the build
+#     hangs/fails, so the site stays up on the last good export.
+# Set SKIP_FRONTEND_BUILD=1 to reuse the existing out/ (e.g. you built it on
+# your PC and committed/uploaded it) and skip the server build entirely.
 cd "$SRC/frontend"
-if command -v npm >/dev/null 2>&1; then
+BUILD_TIMEOUT="${BUILD_TIMEOUT:-900}"   # seconds; override if your box is slow
+if [ "${SKIP_FRONTEND_BUILD:-0}" = "1" ]; then
+    say "Frontend: SKIP_FRONTEND_BUILD=1 — reusing existing out/ (no build)"
+elif command -v npm >/dev/null 2>&1; then
     say "Frontend: building static export (next build → out/)"
     npm ci
-    rm -rf out
-    # LIGHT_BUILD=1 trims worker processes so the build fits shared-hosting
-    # (CloudLinux) process limits. A non-zero exit from a post-export worker
-    # cleanup crash (EPERM/EAGAIN) is tolerated — we verify out/index.html below.
-    LIGHT_BUILD=1 npm run build || true
+    # Back up the last good export, then build fresh. If the build hangs
+    # (timeout) or crashes, we restore the backup so the site stays live.
+    rm -rf out.prev && [ -d out ] && mv out out.prev || true
+    run_build() {
+        NODE_OPTIONS="--max-old-space-size=${NEXT_HEAP_MB:-2048}" \
+        NEXT_TELEMETRY_DISABLED=1 \
+        LIGHT_BUILD=1 \
+            npm run build
+    }
+    if command -v timeout >/dev/null 2>&1; then
+        timeout "${BUILD_TIMEOUT}"s bash -c "$(declare -f run_build); run_build" || true
+    else
+        run_build || true
+    fi
+    if [ -f out/index.html ]; then
+        rm -rf out.prev
+    elif [ -d out.prev ]; then
+        say "Frontend: build did not finish — restoring the previous export"
+        rm -rf out && mv out.prev out
+    fi
 fi
 if [ -f "$SRC/frontend/out/index.html" ]; then
     say "Frontend: syncing out/ into $WEB"
@@ -81,15 +108,22 @@ if [ -f "$SRC/frontend/out/index.html" ]; then
 else
     cat <<MSG
 
-!! No built frontend found at frontend/out/ and no Node on this server to build it.
+!! No usable frontend build at frontend/out/.
+   The build likely HUNG at "Generating static pages" (CloudLinux limit).
    Fix with ONE of these, then re-run  bash deploy.sh :
 
-   A) Install Node once on this server (recommended), then it builds automatically:
-        curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-        . ~/.nvm/nvm.sh && nvm install 20
+   A) Build the frontend by hand with a smaller heap, then re-run deploy:
+        cd "$SRC/frontend" && rm -rf out
+        NODE_OPTIONS="--max-old-space-size=2048" NEXT_TELEMETRY_DISABLED=1 \
+          LIGHT_BUILD=1 npx next build
+        cd "$SRC" && SKIP_FRONTEND_BUILD=1 bash deploy.sh
 
-   B) Or build on your PC ( cd frontend && npm run build ) and upload the CONTENTS
-      of frontend/out/ into:  $WEB
+   B) Give the deploy's own build more/less room (default heap 2048MB, timeout 900s):
+        NEXT_HEAP_MB=1536 BUILD_TIMEOUT=1200 bash deploy.sh
+
+   C) Or build on your PC ( cd frontend && npm run build ), upload the CONTENTS of
+      frontend/out/ into  $WEB , or into  $SRC/frontend/out  then:
+        SKIP_FRONTEND_BUILD=1 bash deploy.sh
 MSG
     exit 1
 fi
