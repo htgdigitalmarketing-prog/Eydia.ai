@@ -198,6 +198,9 @@ function AiProviderCard() {
       <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
         Choose which AI runs everything (chatbot, SEO, captions, images). Pick one, paste its key, set the model, then Activate.
       </p>
+      <p className="muted" style={{ marginTop: 0, fontSize: 12, padding: "7px 10px", background: "#f3f6ff", borderRadius: 8, border: "1px solid #e0e6ff" }}>
+        🖼️ <strong>For AI images</strong> (AI Studio, auto post photos) you need a <strong>Gemini</strong> or <strong>OpenAI</strong> key — Anthropic/Claude generates text only, not images. You can paste a Gemini/OpenAI key here even while another provider stays active for text.
+      </p>
 
       {/* Provider selector */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, margin: "12px 0" }}>

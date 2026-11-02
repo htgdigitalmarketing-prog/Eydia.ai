@@ -83,7 +83,7 @@ function ImagesTab() {
       setPrompt("");
       pickRef(null);
       setNotice(res.source === "fallback"
-        ? "AI image model isn't configured — showing a placeholder. No credits were charged."
+        ? "Showed a placeholder (no credits charged). AI image generation needs a Gemini or OpenAI key — Claude/Anthropic can't make images. Add one in Settings → AI Provider."
         : `Image generated.${res.credits != null ? ` ${res.credits} credits left.` : ""}`);
     } catch (err) {
       setError((err as ApiError).message);
@@ -110,6 +110,9 @@ function ImagesTab() {
       {notice && <div className="panel" style={{ background: "#e7f7ef", color: "#0a7d47", marginBottom: 16 }}>{notice}</div>}
 
       <div className="panel" style={{ marginBottom: 16 }}>
+        <div className="muted" style={{ fontSize: 12, marginBottom: 10, padding: "8px 11px", background: "#f3f6ff", borderRadius: 9, border: "1px solid #e0e6ff" }}>
+          💡 AI image generation uses <strong>Gemini</strong> or <strong>OpenAI</strong> (Claude/Anthropic can&apos;t make images). Add a Gemini or OpenAI API key in <strong>Settings → AI Provider</strong> to generate real images instead of placeholders.
+        </div>
         <form onSubmit={generate}>
           <div className="field" style={{ marginBottom: 8 }}>
             <label>Describe the image you want <span className="muted">(5 credits)</span></label>
