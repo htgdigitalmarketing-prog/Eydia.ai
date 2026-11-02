@@ -70,6 +70,14 @@ class AiSetting extends Model
         return $db ?: ($env ?: (self::DEFAULT_MODELS[$provider] ?? ''));
     }
 
+    /** The Gemini image-generation model (settings override → .env → default). */
+    public function geminiImageModel(): string
+    {
+        $override = $this->meta['gemini_image_model'] ?? null;
+
+        return $override ?: (config('services.gemini.image_model') ?: 'gemini-2.5-flash-image');
+    }
+
     /** The forced single provider when active, else null (auto-detect from keys). */
     public function activeProvider(): ?string
     {

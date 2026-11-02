@@ -28,6 +28,7 @@ class AiSettingsController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'active_provider' => ['sometimes', 'nullable', Rule::in(AiSetting::PROVIDERS)],
             'gemini_model' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'gemini_image_model' => ['sometimes', 'nullable', 'string', 'max:100'],
             'anthropic_model' => ['sometimes', 'nullable', 'string', 'max:100'],
             'openai_model' => ['sometimes', 'nullable', 'string', 'max:100'],
             // Keys are optional — only overwrite when a non-empty, non-masked value is sent.
@@ -42,6 +43,12 @@ class AiSettingsController extends Controller
             if (array_key_exists($field, $data)) {
                 $settings->{$field} = $data[$field];
             }
+        }
+        // The Gemini image model lives in meta (text and image models differ).
+        if (array_key_exists('gemini_image_model', $data)) {
+            $meta = $settings->meta ?? [];
+            $meta['gemini_image_model'] = $data['gemini_image_model'] ?: null;
+            $settings->meta = $meta;
         }
         foreach (['gemini_api_key', 'anthropic_api_key', 'openai_api_key'] as $field) {
             if (array_key_exists($field, $data) && $this->isNewKey($data[$field])) {
@@ -98,6 +105,8 @@ class AiSettingsController extends Controller
             'active_provider' => $s->active_provider,
             'effective_provider' => $s->activeProvider(),
             'providers' => $providers,
+            'gemini_image_model' => $s->geminiImageModel(),
+            'can_generate_images' => (bool) ($s->keyFor('gemini') || $s->keyFor('openai')),
         ];
     }
 }

@@ -135,6 +135,7 @@ function AiProviderCard() {
   const [isActive, setIsActive] = useState(false);
   const [keys, setKeys] = useState<Record<ProviderKey, string>>({ gemini: "", anthropic: "", openai: "" });
   const [models, setModels] = useState<Record<ProviderKey, string>>({ gemini: "", anthropic: "", openai: "" });
+  const [imageModel, setImageModel] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -151,6 +152,7 @@ function AiProviderCard() {
       setModels({
         gemini: ai.providers.gemini.model, anthropic: ai.providers.anthropic.model, openai: ai.providers.openai.model,
       });
+      setImageModel(ai.gemini_image_model ?? "");
     } catch { /* non-super admins never render this */ }
     finally { setLoading(false); }
   }, []);
@@ -165,6 +167,7 @@ function AiProviderCard() {
         body[`${p}_model`] = models[p];
         if (keys[p].trim()) body[`${p}_api_key`] = keys[p].trim();
       });
+      if (imageModel.trim()) body.gemini_image_model = imageModel.trim();
       const { ai } = await api.admin.updateAiSettings(token, body);
       setAi(ai); setIsActive(ai.is_active); setKeys({ gemini: "", anthropic: "", openai: "" });
       setMsg({ ok: true, text: "AI provider settings saved." });
@@ -230,11 +233,20 @@ function AiProviderCard() {
           placeholder={info.has_key ? "•••••••• (leave blank to keep current)" : "Paste the API key"} />
       </div>
       <div className="field">
-        <label>Model name</label>
+        <label>Model name <span className="muted" style={{ fontWeight: 400 }}>(for text — chat, SEO, captions)</span></label>
         <input value={models[active]} onChange={(e) => setModels((m) => ({ ...m, [active]: e.target.value }))}
           placeholder={info.model_default} />
         <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>Default: {info.model_default}</div>
       </div>
+      {active === "gemini" && (
+        <div className="field">
+          <label>Image model <span className="muted" style={{ fontWeight: 400 }}>(for AI Studio &amp; post photos)</span></label>
+          <input value={imageModel} onChange={(e) => setImageModel(e.target.value)} placeholder="gemini-2.5-flash-image" />
+          <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
+            Must be an image-capable Gemini model (e.g. <code>gemini-2.5-flash-image</code>). The text model above can&apos;t make images.
+          </div>
+        </div>
+      )}
       <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, cursor: "pointer", margin: "6px 0 14px" }}>
         <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} style={{ width: "auto" }} />
         Use <strong>{PROVIDERS.find((p) => p.k === active)?.label}</strong> as the only active AI provider

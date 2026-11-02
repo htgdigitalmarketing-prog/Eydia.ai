@@ -637,7 +637,10 @@ class GbpController extends Controller
 
         $description = $ai->rewriteDescription($location, $data['keywords'] ?? []);
         if (! $description) {
-            return $this->fail('AI is not configured yet (set GEMINI_API_KEY or ANTHROPIC_API_KEY in the backend .env).', [], 422);
+            return $this->fail(
+                $ai->lastError() ?? 'No AI provider is active. Go to Settings → AI Provider, add a key and activate a provider.',
+                [], 422
+            );
         }
 
         $this->credits->deduct($request->user()->tenant_id, $request->user()->id, 'ai_caption', 'AI SEO rewrite: business description');
@@ -667,7 +670,10 @@ class GbpController extends Controller
 
         $plan = $ai->autoProfile($location);
         if (! $plan) {
-            return $this->fail('No AI provider is active yet. Go to Settings → AI Provider, add your API key and activate a provider, then try again.', [], 422);
+            return $this->fail(
+                $ai->lastError() ?? 'No AI provider is active yet. Go to Settings → AI Provider, add your API key and activate a provider, then try again.',
+                [], 422
+            );
         }
 
         $changed = $profiles->applyAutoPlan($location, $plan);

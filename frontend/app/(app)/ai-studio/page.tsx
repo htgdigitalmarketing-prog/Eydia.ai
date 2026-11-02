@@ -83,7 +83,7 @@ function ImagesTab() {
       setPrompt("");
       pickRef(null);
       setNotice(res.source === "fallback"
-        ? "Showed a placeholder (no credits charged). AI image generation needs a Gemini or OpenAI key — Claude/Anthropic can't make images. Add one in Settings → AI Provider."
+        ? `Showed a placeholder (no credits charged). ${res.reason ?? "AI image generation needs a Gemini or OpenAI key — Claude/Anthropic can't make images. Add one in Settings → AI Provider."}`
         : `Image generated.${res.credits != null ? ` ${res.credits} credits left.` : ""}`);
     } catch (err) {
       setError((err as ApiError).message);

@@ -498,7 +498,7 @@ export const api = {
     list: (token: string) => request<{ media: AiMediaItem[] }>("/ai-media", { token }),
     generate: async (token: string, prompt: string, image?: File | null) => {
       if (!image) {
-        return request<{ media: AiMediaItem; source: string; credits: number | null }>(
+        return request<{ media: AiMediaItem; source: string; reason?: string | null; credits: number | null }>(
           "/ai-media", { method: "POST", body: { prompt }, token }
         );
       }
@@ -511,7 +511,7 @@ export const api = {
         const err: ApiError = { message: json?.message ?? `Generation failed (${res.status})`, errors: json?.errors, status: res.status };
         throw err;
       }
-      return json.data as { media: AiMediaItem; source: string; credits: number | null };
+      return json.data as { media: AiMediaItem; source: string; reason?: string | null; credits: number | null };
     },
     remove: (token: string, id: string) =>
       request<{ message: string }>(`/ai-media/${id}`, { method: "DELETE", token }),
@@ -1776,11 +1776,14 @@ export type AiSettings = {
   active_provider: string | null;
   effective_provider: string | null;
   providers: Record<"gemini" | "anthropic" | "openai", AiProviderInfo>;
+  gemini_image_model?: string;
+  can_generate_images?: boolean;
 };
 export type AiSettingsUpdate = {
   is_active?: boolean;
   active_provider?: string | null;
   gemini_model?: string; anthropic_model?: string; openai_model?: string;
+  gemini_image_model?: string;
   gemini_api_key?: string; anthropic_api_key?: string; openai_api_key?: string;
 };
 

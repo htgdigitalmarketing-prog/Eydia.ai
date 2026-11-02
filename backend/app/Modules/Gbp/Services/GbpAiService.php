@@ -26,6 +26,12 @@ class GbpAiService
         return $this->ai->configuredProviders() !== [];
     }
 
+    /** The last provider/API error, so callers can explain WHY nothing came back. */
+    public function lastError(): ?string
+    {
+        return $this->ai->getLastError();
+    }
+
     /** SEO-optimised "from the business" description. Null when AI is unavailable. */
     public function rewriteDescription(GbpLocation $location, array $keywords = []): ?string
     {

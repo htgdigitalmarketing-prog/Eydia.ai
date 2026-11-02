@@ -55,6 +55,7 @@ class AiMediaController extends Controller
 
         $image = $this->ai->generateImage($data['prompt'], $refBytes, $refMime);
         $source = $image ? 'ai' : 'fallback';
+        $reason = $image ? null : $this->ai->getLastError();
         if (! $image) {
             $image = $this->placeholder($data['prompt']);
         }
@@ -76,6 +77,7 @@ class AiMediaController extends Controller
         return $this->ok([
             'media' => $this->arr($media),
             'source' => $source,
+            'reason' => $reason,
             'credits' => $tenantId ? $this->credits->balance($tenantId) : null,
         ], 201);
     }

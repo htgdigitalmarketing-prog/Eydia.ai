@@ -130,7 +130,10 @@ class GbpPostController extends Controller
         $count = $data['count'] ?? 4;
         $ideas = $ai->planPosts($location, $count, $data['keywords'] ?? []);
         if ($ideas === []) {
-            return $this->fail('AI is not configured yet (set GEMINI_API_KEY or ANTHROPIC_API_KEY in the backend .env).', [], 422);
+            return $this->fail(
+                $ai->lastError() ?? 'No AI provider is active. Go to Settings → AI Provider, add a key and activate a provider.',
+                [], 422
+            );
         }
         // One AI call planned the whole batch — charge once.
         $this->credits->deduct($tenantId, $request->user()->id, 'ai_caption', 'AI content plan (' . count($ideas) . ' posts)');

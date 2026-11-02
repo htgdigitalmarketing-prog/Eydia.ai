@@ -27,6 +27,14 @@ class AiReplyService
     /** Lazily-loaded platform AI settings (admin's provider/key/model choice). */
     private ?AiSetting $aiSettings = null;
 
+    /** The last provider/API error, so callers can show WHY a call produced nothing. */
+    private ?string $lastError = null;
+
+    public function getLastError(): ?string
+    {
+        return $this->lastError;
+    }
+
     private function settings(): AiSetting
     {
         if ($this->aiSettings === null) {
@@ -52,13 +60,20 @@ class AiReplyService
         return $this->settings()->modelFor($provider);
     }
 
-    /** Dispatch a text completion to the chosen provider. */
-    private function dispatchText(string $provider, string $system, array $messages): ?string
+    /**
+     * Dispatch a text completion to the chosen provider.
+     *
+     * $maxTokens is the OUTPUT budget. It must be generous for content tasks
+     * (post plans, SEO descriptions): modern Gemini/Claude "thinking" models
+     * spend part of the budget on internal reasoning, so a low cap (e.g. 400)
+     * can return EMPTY text — which looks like "AI not configured" to callers.
+     */
+    private function dispatchText(string $provider, string $system, array $messages, int $maxTokens = 1024): ?string
     {
         return match ($provider) {
-            'anthropic' => $this->callAnthropic($system, $messages),
-            'openai' => $this->callOpenAI($system, $messages),
-            default => $this->callGemini($system, $messages),
+            'anthropic' => $this->callAnthropic($system, $messages, $maxTokens),
+            'openai' => $this->callOpenAI($system, $messages, $maxTokens),
+            default => $this->callGemini($system, $messages, $maxTokens),
         };
     }
 
@@ -107,15 +122,23 @@ class AiReplyService
      *
      * @param array<int, array{role:string, content:string}> $messages
      */
-    public function classify(string $system, array $messages): ?string
+    public function classify(string $system, array $messages, int $maxTokens = 2048): ?string
     {
-        foreach ($this->providerChain() as $provider) {
+        $this->lastError = null;
+        $chain = $this->providerChain();
+        if ($chain === []) {
+            $this->lastError = 'No AI provider is active. Go to Settings → AI Provider, add a key and activate a provider.';
+
+            return null;
+        }
+        foreach ($chain as $provider) {
             try {
-                $reply = $this->dispatchText($provider, $system, $messages);
+                $reply = $this->dispatchText($provider, $system, $messages, $maxTokens);
                 if ($reply) {
                     return $reply;
                 }
             } catch (\Throwable $e) {
+                $this->lastError = ucfirst($provider) . ' error: ' . $e->getMessage();
                 Log::warning("AI classify via {$provider} failed: " . $e->getMessage());
             }
         }
@@ -273,7 +296,13 @@ class AiReplyService
      */
     public function generateImage(string $prompt, ?string $refBytes = null, ?string $refMime = null): ?string
     {
+        $this->lastError = null;
         $active = $this->settings()->activeProvider();
+        if (! $this->canGenerateImages()) {
+            $this->lastError = 'Image generation needs a Gemini or OpenAI key (Anthropic/Claude cannot make images). Add one in Settings → AI Provider.';
+
+            return null;
+        }
 
         // Image-to-image is Gemini-only; prefer it when a reference is supplied.
         if ($refBytes !== null && $this->keyFor('gemini')) {
@@ -300,7 +329,7 @@ class AiReplyService
             return null;
         }
 
-        $model = config('services.gemini.image_model', 'gemini-2.5-flash-image');
+        $model = $this->settings()->geminiImageModel();
         $url = self::GEMINI_ENDPOINT . $model . ':generateContent?key=' . urlencode($apiKey);
 
         // When a reference image is given, include it so the model edits/builds
@@ -323,7 +352,10 @@ class AiReplyService
         }
 
         if ($res->failed()) {
-            Log::warning('Gemini image API error', ['status' => $res->status(), 'body' => $res->json('error.message')]);
+            $msg = $res->json('error.message') ?? ('HTTP ' . $res->status());
+            Log::warning('Gemini image API error', ['status' => $res->status(), 'body' => $msg, 'model' => $model]);
+            $this->lastError = "Gemini image model \"{$model}\": {$msg}. Set a valid image model (e.g. gemini-2.5-flash-image) in Settings → AI Provider.";
+
             return null;
         }
 
@@ -338,12 +370,13 @@ class AiReplyService
         }
 
         Log::warning('Gemini image API returned no image data', ['model' => $model]);
+        $this->lastError = "Gemini model \"{$model}\" did not return an image. Use an image-capable model (e.g. gemini-2.5-flash-image) in Settings → AI Provider.";
 
         return null;
     }
 
     /** @param array<int, array{role:string, content:string}> $messages */
-    private function callGemini(string $system, array $messages): ?string
+    private function callGemini(string $system, array $messages, int $maxTokens = 1024): ?string
     {
         $model = $this->modelFor('gemini');
         $contents = array_map(fn ($m) => [
@@ -354,20 +387,29 @@ class AiReplyService
         $apiKey = $this->keyFor('gemini');
         $url = self::GEMINI_ENDPOINT . $model . ':generateContent?key=' . urlencode($apiKey);
 
-        $res = Http::timeout(30)
+        $res = Http::timeout(60)
             ->post($url, [
                 'system_instruction' => ['parts' => [['text' => $system]]],
                 'contents' => $contents,
-                // WhatsApp replies are short; a lower cap keeps generation quick.
-                'generationConfig' => ['maxOutputTokens' => 400, 'temperature' => 0.7],
+                'generationConfig' => ['maxOutputTokens' => max(256, $maxTokens), 'temperature' => 0.7],
             ]);
 
         if ($res->failed()) {
-            Log::warning('Gemini reply API error', ['status' => $res->status(), 'body' => $res->json('error.message')]);
+            $msg = $res->json('error.message') ?? ('HTTP ' . $res->status());
+            Log::warning('Gemini reply API error', ['status' => $res->status(), 'body' => $msg]);
+            $this->lastError = 'Gemini: ' . $msg;
+
             return null;
         }
 
         $text = $res->json('candidates.0.content.parts.0.text');
+        if (! $text) {
+            // Thinking models can hit the output cap before emitting text.
+            $finish = $res->json('candidates.0.finishReason');
+            if ($finish === 'MAX_TOKENS') {
+                $this->lastError = 'Gemini hit the output limit before finishing. Try again — the token budget has been raised.';
+            }
+        }
 
         return $text ? trim($text) : null;
     }
@@ -435,22 +477,25 @@ class AiReplyService
     }
 
     /** @param array<int, array{role:string, content:string}> $messages */
-    private function callAnthropic(string $system, array $messages): ?string
+    private function callAnthropic(string $system, array $messages, int $maxTokens = 1024): ?string
     {
         $res = Http::withHeaders([
             'x-api-key' => $this->keyFor('anthropic'),
             'anthropic-version' => '2023-06-01',
             'content-type' => 'application/json',
-        ])->timeout(30)->post(self::ANTHROPIC_ENDPOINT, [
+        ])->timeout(60)->post(self::ANTHROPIC_ENDPOINT, [
             'model' => $this->modelFor('anthropic'),
-            'max_tokens' => 600,
+            'max_tokens' => max(512, $maxTokens),
             'system' => $system,
             'output_config' => ['effort' => 'low'], // quick, chat-style replies
             'messages' => $messages,
         ]);
 
         if ($res->failed()) {
-            Log::warning('AI reply API error', ['status' => $res->status(), 'body' => $res->json('error.message')]);
+            $msg = $res->json('error.message') ?? ('HTTP ' . $res->status());
+            Log::warning('AI reply API error', ['status' => $res->status(), 'body' => $msg]);
+            $this->lastError = 'Anthropic: ' . $msg;
+
             return null;
         }
 
@@ -465,7 +510,7 @@ class AiReplyService
     }
 
     /** @param array<int, array{role:string, content:string}> $messages */
-    private function callOpenAI(string $system, array $messages): ?string
+    private function callOpenAI(string $system, array $messages, int $maxTokens = 1024): ?string
     {
         $key = $this->keyFor('openai');
         if (! $key) {
@@ -480,15 +525,18 @@ class AiReplyService
             ], $messages),
         );
 
-        $res = Http::withToken($key)->timeout(30)->post(self::OPENAI_CHAT_ENDPOINT, [
+        $res = Http::withToken($key)->timeout(60)->post(self::OPENAI_CHAT_ENDPOINT, [
             'model' => $this->modelFor('openai'),
             'messages' => $msgs,
-            'max_tokens' => 700,
+            'max_tokens' => max(512, $maxTokens),
             'temperature' => 0.7,
         ]);
 
         if ($res->failed()) {
-            Log::warning('OpenAI reply API error', ['status' => $res->status(), 'body' => $res->json('error.message')]);
+            $msg = $res->json('error.message') ?? ('HTTP ' . $res->status());
+            Log::warning('OpenAI reply API error', ['status' => $res->status(), 'body' => $msg]);
+            $this->lastError = 'OpenAI: ' . $msg;
+
             return null;
         }
 
