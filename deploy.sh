@@ -198,17 +198,17 @@ if crontab -l 2>/dev/null | grep -Fq "$APP/artisan schedule:run"; then
 else
     cat <<MSG
 
-==> ⚠️  ACTION NEEDED — the scheduler cron is NOT installed.
-    Without it, automations (AI posts/photos/review replies) never run.
+==> ℹ️  Scheduler cron not found in this user's crontab.
+    NOTE: Hostinger cron jobs added in hPanel → Advanced → Cron Jobs are
+    managed separately and do NOT show up in 'crontab -l', so if you
+    already added it there, IGNORE this message — it's working.
 
-    Add it in hPanel → Advanced → Cron Jobs (every minute), command:
+    If you have NOT set it up yet, the scheduler runs GBP automations,
+    scheduled-post publishing and drip follow-ups. Add it in
+    hPanel → Advanced → Cron Jobs (every minute), command:
 
-      $CRON_LINE
+      /opt/alt/php82/usr/bin/php $APP/artisan schedule:run
 
-    Or from this SSH session, run ONCE:
-
-      ( crontab -l 2>/dev/null; echo "$CRON_LINE" ) | crontab -
-
-    Verify with:  crontab -l
+    (or '$APP/artisan schedule:run' with your PHP binary).
 MSG
 fi
