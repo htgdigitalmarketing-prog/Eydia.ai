@@ -72,12 +72,31 @@ rsync -a \
 #   * running under `timeout` so a hang can never block the deploy forever,
 #   * keeping the previous out/ as a backup and restoring it if the build
 #     hangs/fails, so the site stays up on the last good export.
-# Set SKIP_FRONTEND_BUILD=1 to reuse the existing out/ (e.g. you built it on
-# your PC and committed/uploaded it) and skip the server build entirely.
+# A prebuilt export is committed at deploy/frontend-out.tgz (built in a reliable
+# environment). If the server build is skipped, or hangs/crashes (CloudLinux
+# nproc limit → "spawn node EAGAIN"), we fall back to that tarball, so a deploy
+# NEVER depends on the server being able to run `next build`.
+#   * SKIP_FRONTEND_BUILD=1 → don't build here at all, use the committed tarball
+#     (or an existing out/). This is the reliable default for this host.
+PREBUILT_TGZ="$SRC/deploy/frontend-out.tgz"
 cd "$SRC/frontend"
 BUILD_TIMEOUT="${BUILD_TIMEOUT:-900}"   # seconds; override if your box is slow
+
+extract_prebuilt() {
+    if [ -f "$PREBUILT_TGZ" ]; then
+        say "Frontend: using committed prebuilt export (deploy/frontend-out.tgz)"
+        rm -rf out && mkdir -p out && tar -xzf "$PREBUILT_TGZ" -C out
+        return 0
+    fi
+    return 1
+}
+
 if [ "${SKIP_FRONTEND_BUILD:-0}" = "1" ]; then
-    say "Frontend: SKIP_FRONTEND_BUILD=1 — reusing existing out/ (no build)"
+    if [ -f out/index.html ]; then
+        say "Frontend: SKIP_FRONTEND_BUILD=1 — reusing existing out/ (no build)"
+    else
+        extract_prebuilt || say "Frontend: SKIP_FRONTEND_BUILD=1 but no out/ and no prebuilt tarball!"
+    fi
 elif command -v npm >/dev/null 2>&1; then
     say "Frontend: building static export (next build → out/)"
     npm ci
@@ -92,6 +111,7 @@ elif command -v npm >/dev/null 2>&1; then
         CI=1 \
         NODE_OPTIONS="--max-old-space-size=${NEXT_HEAP_MB:-2048}" \
         NEXT_TELEMETRY_DISABLED=1 \
+        UV_THREADPOOL_SIZE=1 \
         LIGHT_BUILD=1 \
             npm run build < /dev/null
     }
@@ -102,9 +122,16 @@ elif command -v npm >/dev/null 2>&1; then
     fi
     if [ -f out/index.html ]; then
         rm -rf out.prev
-    elif [ -d out.prev ]; then
-        say "Frontend: build did not finish — restoring the previous export"
-        rm -rf out && mv out.prev out
+    else
+        # Build hung/crashed (e.g. "spawn node EAGAIN" under the nproc limit).
+        # Prefer the committed prebuilt export; else fall back to the last good one.
+        say "Frontend: server build did not finish — falling back"
+        if extract_prebuilt; then
+            rm -rf out.prev
+        elif [ -d out.prev ]; then
+            say "Frontend: restoring the previous export"
+            rm -rf out && mv out.prev out
+        fi
     fi
 fi
 if [ -f "$SRC/frontend/out/index.html" ]; then
