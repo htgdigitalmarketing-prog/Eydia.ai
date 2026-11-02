@@ -84,11 +84,16 @@ elif command -v npm >/dev/null 2>&1; then
     # Back up the last good export, then build fresh. If the build hangs
     # (timeout) or crashes, we restore the backup so the site stays live.
     rm -rf out.prev && [ -d out ] && mv out out.prev || true
+    # CI=1 + stdin from /dev/null keep `next build` NON-INTERACTIVE. On CloudLinux
+    # the restricted pseudo-terminal makes Next's interactive output call
+    # setRawMode on the TTY, which fails with "EIO" and crashes the build after
+    # a clean compile. Running headless avoids that entirely.
     run_build() {
+        CI=1 \
         NODE_OPTIONS="--max-old-space-size=${NEXT_HEAP_MB:-2048}" \
         NEXT_TELEMETRY_DISABLED=1 \
         LIGHT_BUILD=1 \
-            npm run build
+            npm run build < /dev/null
     }
     if command -v timeout >/dev/null 2>&1; then
         timeout "${BUILD_TIMEOUT}"s bash -c "$(declare -f run_build); run_build" || true
@@ -112,10 +117,10 @@ else
    The build likely HUNG at "Generating static pages" (CloudLinux limit).
    Fix with ONE of these, then re-run  bash deploy.sh :
 
-   A) Build the frontend by hand with a smaller heap, then re-run deploy:
+   A) Build the frontend by hand (headless — avoids the CloudLinux TTY crash):
         cd "$SRC/frontend" && rm -rf out
-        NODE_OPTIONS="--max-old-space-size=2048" NEXT_TELEMETRY_DISABLED=1 \
-          LIGHT_BUILD=1 npx next build
+        CI=1 NODE_OPTIONS="--max-old-space-size=2048" NEXT_TELEMETRY_DISABLED=1 \
+          LIGHT_BUILD=1 npx next build < /dev/null
         cd "$SRC" && SKIP_FRONTEND_BUILD=1 bash deploy.sh
 
    B) Give the deploy's own build more/less room (default heap 2048MB, timeout 900s):
