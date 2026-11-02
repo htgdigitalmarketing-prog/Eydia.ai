@@ -33,6 +33,11 @@ class GbpSyncService
             return ['synced' => 0, 'locations' => 0, 'reviews' => 0, 'error' => $error];
         }
 
+        // Locations the tenant has explicitly removed ("Remove" / "Only this")
+        // must not come back on a re-sync, even though the connected (often
+        // agency) Google account still manages them. Skip those entirely.
+        $dismissed = (array) ($integration->meta['dismissed_locations'] ?? []);
+
         // Pass 1 — upsert every location (cheap: one listLocations call per
         // account, no per-location review fetch yet).
         $upserted = [];
@@ -43,6 +48,10 @@ class GbpSyncService
             }
 
             foreach ($this->provider->listLocations($integration, $accountName) as $loc) {
+                if (in_array($loc['google_name'], $dismissed, true)) {
+                    continue; // tenant removed this one — never re-create it
+                }
+
                 $location = GbpLocation::updateOrCreate(
                     [
                         'tenant_id' => $integration->tenant_id,

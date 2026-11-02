@@ -633,28 +633,63 @@ class GbpController extends Controller
         return $this->ok(['message' => $data['hidden'] ? 'Location hidden.' : 'Location restored.']);
     }
 
-    /** Keep ONLY this location visible and hide every other one (one-click cleanup). */
+    /**
+     * Keep ONLY this location and permanently remove every other one. For an
+     * agency Google account that manages many client listings this is the
+     * one-click "show only my business" cleanup: the others are deleted AND
+     * remembered as dismissed, so a later Sync does not pull them back in.
+     */
     public function keepOnlyLocation(Request $request, string $uuid): JsonResponse
     {
         $keep = GbpLocation::where('uuid', $uuid)->firstOrFail();
-        GbpLocation::query()->where('id', '!=', $keep->id)->update(['is_hidden' => true]);
+
+        $others = GbpLocation::query()->where('id', '!=', $keep->id)->get();
+        $this->dismissLocations($others->pluck('google_location_id')->all());
+        GbpLocation::query()->where('id', '!=', $keep->id)->delete();
         $keep->update(['is_hidden' => false]);
 
-        return $this->ok(['message' => 'Showing only ' . $keep->name . '.']);
+        return $this->ok(['message' => 'Showing only ' . $keep->name . '. Other locations removed.']);
     }
 
     /**
-     * Permanently remove a synced location and its reviews/posts/photos. Use this
-     * to clear out businesses that belong to a different Google account. A re-sync
-     * only re-adds locations the currently connected account still manages.
+     * Permanently remove a synced location and its reviews/posts/photos, and
+     * remember it as dismissed so a re-sync does not re-add it. Use this to clear
+     * out businesses the connected (agency) Google account manages but that do
+     * not belong in this dashboard.
      */
     public function destroyLocation(Request $request, string $uuid): JsonResponse
     {
         $location = GbpLocation::where('uuid', $uuid)->firstOrFail();
         $name = $location->name;
+        $this->dismissLocations([$location->google_location_id]);
         $location->delete();
 
         return $this->ok(['message' => $name . ' removed.']);
+    }
+
+    /**
+     * Record Google location ids the tenant does not want in this dashboard on
+     * the GBP integration's meta, so GbpSyncService skips re-creating them. The
+     * dismissed list is cleared on Disconnect (the Integration row is deleted).
+     */
+    private function dismissLocations(array $googleIds): void
+    {
+        $googleIds = array_values(array_filter(array_unique($googleIds)));
+        if ($googleIds === []) {
+            return;
+        }
+
+        $integration = Integration::where('provider', Integration::GOOGLE_GBP)->first();
+        if (! $integration) {
+            return;
+        }
+
+        $meta = $integration->meta ?? [];
+        $meta['dismissed_locations'] = array_values(array_unique(array_merge(
+            $meta['dismissed_locations'] ?? [],
+            $googleIds
+        )));
+        $integration->forceFill(['meta' => $meta])->save();
     }
 
     private function reviewArray(GbpReview $r): array

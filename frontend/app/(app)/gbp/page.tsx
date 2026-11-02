@@ -180,15 +180,23 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
   }
   async function keepOnly(id: string, name: string) {
     const t = getToken(); if (!t) return;
-    if (!confirm(`Show only "${name}" and hide all other locations?`)) return;
+    if (!confirm(`Show only "${name}" and permanently remove every other location? They won't come back on the next Sync.`)) return;
     try { await api.gbp.keepOnlyLocation(t, id); onReload(); }
     catch (e) { alert((e as ApiError).message); }
   }
   async function removeLoc(id: string, name: string) {
     const t = getToken(); if (!t) return;
-    if (!confirm(`Permanently remove "${name}" and its reviews/posts? (A re-sync only re-adds locations your connected Google account manages.)`)) return;
+    if (!confirm(`Permanently remove "${name}" and its reviews/posts? It won't come back on the next Sync.`)) return;
     try { await api.gbp.removeLocation(t, id); onReload(); }
     catch (e) { alert((e as ApiError).message); }
+  }
+  async function removeAllHidden(items: { id: string; name: string }[]) {
+    const t = getToken(); if (!t) return;
+    if (!confirm(`Permanently remove all ${items.length} other locations? Only the business(es) shown above stay. They won't come back on the next Sync.`)) return;
+    try {
+      for (const it of items) { await api.gbp.removeLocation(t, it.id); }
+      onReload();
+    } catch (e) { alert((e as ApiError).message); }
   }
   if (!overview) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Loading your dashboard…</span></div>;
 
@@ -422,8 +430,19 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
           </div>
         </div>
         <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-          Showing the locations you manage here. Use <strong>Only this</strong> on your business to focus the whole dashboard (reviews, insights) on it, and hide the rest.
+          Your connected Google account can manage several listings. Click <strong>Only this</strong> on your own business to keep it and permanently remove the rest — they won&apos;t return on the next Sync.
         </p>
+        {allHidden.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, marginBottom: 2, padding: "9px 12px", borderRadius: 10, background: "#fff6f5", border: "1px solid #f3d6d2", flexWrap: "wrap" }}>
+            <span style={{ fontSize: 12.5, color: "#a93226", flex: 1, minWidth: 180 }}>
+              {allHidden.length} other location{allHidden.length === 1 ? "" : "s"} from your connected account {allHidden.length === 1 ? "is" : "are"} hidden. Remove them so only your business shows.
+            </span>
+            <button className="btn-mini" style={{ color: "#fff", background: "#c0392b", border: "none" }}
+              onClick={() => removeAllHidden(allHidden.map((h) => ({ id: h.id, name: h.name })))}>
+              Remove all {allHidden.length} others
+            </button>
+          </div>
+        )}
         {locs.length === 0 ? (
           <p className="muted" style={{ fontSize: 13 }}>No visible locations. {hidden.length > 0 ? "Un-hide one below, or " : ""}Connect Google and Sync to pull your business locations.</p>
         ) : (
