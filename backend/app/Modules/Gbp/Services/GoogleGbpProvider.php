@@ -338,13 +338,15 @@ class GoogleGbpProvider
             $title = $post['title']
                 ?? (\Illuminate\Support\Str::limit(trim((string) ($post['summary'] ?? '')), 58, '')
                     ?: ($topic === 'OFFER' ? 'Special offer' : 'Event'));
-            $event = array_filter([
+            // Google REQUIRES a schedule (with a start date) for EVENT/OFFER posts;
+            // without it the API rejects the post with "invalid argument". When the
+            // caller gave no dates (e.g. AI-planned posts), default a 7-day window.
+            $schedule = $this->buildSchedule($post['event_start'] ?? null, $post['event_end'] ?? null)
+                ?? $this->buildSchedule(now()->toIso8601String(), now()->addDays(7)->toIso8601String());
+            $body['event'] = [
                 'title' => $title,
-                'schedule' => $this->buildSchedule($post['event_start'] ?? null, $post['event_end'] ?? null),
-            ]);
-            if (! empty($event)) {
-                $body['event'] = $event;
-            }
+                'schedule' => $schedule,
+            ];
         }
         if ($topic === 'OFFER') {
             $offer = array_filter([
