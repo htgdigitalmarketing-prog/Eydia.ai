@@ -1,8 +1,15 @@
 <?php
 
+use App\Modules\Gbp\Controllers\MediaController;
 use App\Modules\Gbp\Controllers\PublicSiteController;
 use App\Modules\Gbp\Controllers\ReviewAssistController;
 use Illuminate\Support\Facades\Route;
+
+// Public media (GBP post images, AI photos) served from the public disk:
+// eydia.in/media/gbp/… — works without a web-root storage symlink, and Google
+// fetches post images from here.
+Route::get('/media/{path}', [MediaController::class, 'show'])
+    ->where('path', '[A-Za-z0-9/_\-.]+');
 
 // Public, unauthenticated business microsites: eydia.in/site/{slug}
 Route::get('/site/{slug}', [PublicSiteController::class, 'show'])

@@ -259,7 +259,10 @@ class GbpAiService
         try {
             Storage::disk('public')->put($path, $bytes);
 
-            return url(Storage::disk('public')->url($path));
+            // Serve through the app front controller (/media/…) so the URL works
+            // even when the web root isn't symlinked to storage. Google fetches
+            // post images from this URL too.
+            return url('media/' . $path);
         } catch (\Throwable $e) {
             Log::warning('gbp ai image store failed: ' . $e->getMessage());
             $this->imageError = 'The image was generated but could not be saved to storage (' . $e->getMessage() . ').';

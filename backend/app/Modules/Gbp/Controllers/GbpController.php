@@ -498,7 +498,9 @@ class GbpController extends Controller
         $path = $request->file('file')->store('gbp/' . now()->format('Y/m'), 'public');
 
         return $this->ok([
-            'url' => url(\Illuminate\Support\Facades\Storage::disk('public')->url($path)),
+            // Served via the app (/media/…) so it works without a storage symlink
+            // and Google can fetch it as a post image source.
+            'url' => url('media/' . $path),
             'path' => $path,
         ], 201);
     }

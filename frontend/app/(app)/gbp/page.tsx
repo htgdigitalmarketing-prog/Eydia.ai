@@ -943,13 +943,13 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
   async function removePhoto(id: string) { const t = getToken(); if (!t || !confirm("Delete this photo?")) return; try { await api.gbp.deletePhoto(t, id); loadPhotos(); } catch (e) { alert((e as ApiError).message); } }
   async function autoPlan() {
     const t = getToken(); if (!t) return;
-    if (!confirm("Let AI generate 4 posts from your business profile and schedule them (one every 3 days)? Uses AI credits.")) return;
-    // Opt in to an AI image per post (extra credits, needs a Gemini/OpenAI image
-    // model set in Settings → AI Provider). Declining keeps them text-only.
-    const withImages = confirm("Also generate an AI image for each post?\n\nOK = yes (5 credits each, needs a Gemini/OpenAI image model in Settings → AI Provider).\nCancel = text-only posts.");
+    if (!confirm("Let AI generate 4 posts WITH an AI image each, and schedule them (one every 3 days)?\n\nUses AI credits (images cost extra). To make text-only posts instead, use \"+ Add Post\".")) return;
     setPlanning(true);
     try {
-      const r = await api.gbp.autoPlanPosts(t, { count: 4, cadence_days: 3, with_images: withImages });
+      // Images on by default — that's what most users expect. Image generation
+      // needs a Gemini/OpenAI image model (Settings → AI Provider); the response
+      // says if any image could not be made and why.
+      const r = await api.gbp.autoPlanPosts(t, { count: 4, cadence_days: 3, with_images: true });
       setSub("posts"); setFilter("SCHEDULED"); loadPosts();
       alert(r.message || `${r.created} posts scheduled.`);
     } catch (e) { alert((e as ApiError).message); }
