@@ -23,6 +23,11 @@ class BusinessSiteRenderer
         $mapsUrl = $this->e($d['maps_url'] ?? '#');
         $initial = mb_strtoupper(mb_substr($name, 0, 1));
 
+        $isLead = ! empty($d['is_lead']);
+        $tagline = $this->e($d['tagline'] ?? '');
+        $about = trim((string) ($d['about'] ?? ''));
+        $services = array_values(array_filter((array) ($d['services'] ?? [])));
+
         $report = $d['report'] ?? ['score' => 0, 'grade' => '', 'sub_scores' => [], 'actions' => []];
         $score = (int) ($report['score'] ?? 0);
         $grade = $this->e($report['grade'] ?? '');
@@ -41,7 +46,28 @@ class BusinessSiteRenderer
         $gallery = $this->gallery($d['photos'] ?? []);
         $reviews = $this->reviews($d['reviews'] ?? []);
 
-        $metaDesc = $this->e(trim("{$name} — {$category}. {$rating}★ from {$reviewCount} Google reviews."));
+        // Lead sites (built from a name only) show an About + Services section
+        // in place of the Google health report; GBP sites keep the report.
+        $aboutSection = $this->aboutSection($about, $services);
+        $mainSection = $isLead
+            ? $aboutSection
+            : <<<SEC
+  <section class="report"><div class="wrap">
+    <div class="sec-title">Google Business Profile</div>
+    <h2>Your Business Health Report</h2>
+    <div class="card"><div class="report-grid">
+      <div class="ring-wrap">{$ring}<div class="ring-label">{$grade}</div></div>
+      <div class="subs">{$subScores}</div>
+    </div>
+    {$actions}
+    </div>
+  </div></section>
+SEC;
+
+        $pageTitle = $isLead ? trim("{$name} — {$category}", ' —') : "{$name} — Google Business Profile";
+        $metaDesc = $isLead
+            ? $this->e(trim("{$name} — {$category}. " . mb_substr(strip_tags($about), 0, 140)))
+            : $this->e(trim("{$name} — {$category}. {$rating}★ from {$reviewCount} Google reviews."));
 
         return <<<HTML
 <!doctype html>
@@ -49,7 +75,7 @@ class BusinessSiteRenderer
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{$name} — Google Business Profile</title>
+<title>{$pageTitle}</title>
 <meta name="description" content="{$metaDesc}">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -100,35 +126,26 @@ class BusinessSiteRenderer
   .rev-av{width:36px;height:36px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center;font-weight:800;}
   .rev-stars{color:#f59e0b;font-size:13px;letter-spacing:1px;}
   .rev p{margin:0;font-size:13.5px;color:#36414f;}
+  .hero-tagline{font-size:17px;opacity:.95;font-weight:600;margin:14px 0 18px;max-width:560px;}
+  .about{max-width:760px;margin:0 auto;}
+  .about p{margin:0 0 14px;font-size:15px;color:#36414f;}.about p:last-child{margin-bottom:0;}
+  .services{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:760px;margin:16px auto 0;}
+  .svc{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px;font-weight:600;font-size:14px;}
   footer{background:#0f1b2d;color:#aeb8cc;text-align:center;padding:30px 20px;font-size:13px;}
   footer a{color:#fff;font-weight:700;text-decoration:none;}
   .foot-brand{font-weight:800;color:#fff;font-size:15px;margin-bottom:4px;}
-  @media(max-width:720px){.report-grid{grid-template-columns:1fr;}.subs,.gallery,.reviews{grid-template-columns:1fr;}h1{font-size:28px;}}
+  @media(max-width:720px){.report-grid{grid-template-columns:1fr;}.subs,.gallery,.reviews,.services{grid-template-columns:1fr;}h1{font-size:28px;}}
 </style>
 </head>
 <body>
   <header class="hero"><div class="wrap hero-in">
     <div class="avatar">{$initial}</div>
     <div style="flex:1;min-width:240px;">
-      {$this->verifiedBadge($verified)}
-      <h1>{$name}</h1>
-      <div class="cat">{$category}</div>
-      <div class="hero-rating"><span class="stars">{$stars}</span> {$this->ratingText($rating, $reviewCount)}</div>
-      <div class="hero-addr">📍 {$address}</div>
-      <div class="hero-cta">{$ctas}</div>
+      {$this->heroMeta($isLead, $verified, $name, $category, $tagline, $stars, $this->ratingText($rating, $reviewCount), $address, $ctas)}
     </div>
   </div></header>
 
-  <section class="report"><div class="wrap">
-    <div class="sec-title">Google Business Profile</div>
-    <h2>Your Business Health Report</h2>
-    <div class="card"><div class="report-grid">
-      <div class="ring-wrap">{$ring}<div class="ring-label">{$grade}</div></div>
-      <div class="subs">{$subScores}</div>
-    </div>
-    {$actions}
-    </div>
-  </div></section>
+  {$mainSection}
 
   {$gallery}
   {$reviews}
@@ -145,6 +162,51 @@ HTML;
     private function verifiedBadge(bool $v): string
     {
         return $v ? '<span class="verified">✔ Verified on Google</span>' : '';
+    }
+
+    /** The hero body: a lead site leads with a tagline; a GBP site with its rating. */
+    private function heroMeta(bool $isLead, bool $verified, string $name, string $category, string $tagline, string $stars, string $ratingText, string $address, string $ctas): string
+    {
+        $badge = $isLead ? '' : $this->verifiedBadge($verified);
+        $sub = $isLead
+            ? ($tagline !== '' ? '<div class="hero-tagline">' . $tagline . '</div>' : '')
+            : '<div class="hero-rating"><span class="stars">' . $stars . '</span> ' . $ratingText . '</div>';
+        $addr = ($isLead || $address === '') ? '' : '<div class="hero-addr">📍 ' . $address . '</div>';
+
+        return $badge
+            . '<h1>' . $name . '</h1>'
+            . '<div class="cat">' . $category . '</div>'
+            . $sub . $addr
+            . '<div class="hero-cta">' . $ctas . '</div>';
+    }
+
+    /** About + services section for a lead (name-only) microsite. */
+    private function aboutSection(string $about, array $services): string
+    {
+        if ($about === '' && $services === []) {
+            return '';
+        }
+        $paras = '';
+        foreach (preg_split('/\n{1,}/', $about) as $p) {
+            $p = trim($p);
+            if ($p !== '') {
+                $paras .= '<p>' . $this->e($p) . '</p>';
+            }
+        }
+        $svc = '';
+        foreach ($services as $s) {
+            $svc .= '<div class="svc">✓ ' . $this->e((string) $s) . '</div>';
+        }
+        $svcBlock = $svc !== '' ? '<div class="services">' . $svc . '</div>' : '';
+
+        return <<<SEC
+  <section><div class="wrap">
+    <div class="sec-title">About us</div>
+    <h2>Who we are</h2>
+    <div class="card about">{$paras}</div>
+    {$svcBlock}
+  </div></section>
+SEC;
     }
 
     private function ratingText(float $rating, int $count): string

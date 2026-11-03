@@ -64,6 +64,7 @@ class ChatbotController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'ai_enabled' => ['sometimes', 'boolean'],
             'ai_instructions' => ['nullable', 'string', 'max:8000'],
+            'website_builder' => ['sometimes', 'boolean'],
             'followup_enabled' => ['sometimes', 'boolean'],
             'followup_message' => ['nullable', 'string', 'max:1000'],
         ]);
@@ -79,6 +80,7 @@ class ChatbotController extends Controller
             'is_active' => $data['is_active'] ?? false,
             'ai_enabled' => $data['ai_enabled'] ?? false,
             'ai_instructions' => $data['ai_instructions'] ?? null,
+            'website_builder' => $data['website_builder'] ?? false,
             'followup_enabled' => $data['followup_enabled'] ?? false,
             'followup_message' => $data['followup_message'] ?? null,
         ]);
@@ -157,6 +159,7 @@ class ChatbotController extends Controller
             'is_active' => ['sometimes', 'boolean'],
             'ai_enabled' => ['sometimes', 'boolean'],
             'ai_instructions' => ['nullable', 'string', 'max:8000'],
+            'website_builder' => ['sometimes', 'boolean'],
             'followup_enabled' => ['sometimes', 'boolean'],
             'followup_message' => ['nullable', 'string', 'max:1000'],
         ]);

@@ -54,7 +54,7 @@ export default function ChatbotPage() {
   const [savingRule, setSavingRule] = useState(false);
 
   // AI settings (per bot)
-  const [ai, setAi] = useState({ enabled: false, instructions: "" });
+  const [ai, setAi] = useState({ enabled: false, instructions: "", website: false });
   const [aiSaving, setAiSaving] = useState(false);
 
   // Follow-up settings (per bot)
@@ -63,7 +63,7 @@ export default function ChatbotPage() {
 
   useEffect(() => {
     if (bot) {
-      setAi({ enabled: !!bot.ai_enabled, instructions: bot.ai_instructions ?? "" });
+      setAi({ enabled: !!bot.ai_enabled, instructions: bot.ai_instructions ?? "", website: !!bot.website_builder });
       setFollowup({ enabled: !!bot.followup_enabled, message: bot.followup_message ?? "" });
     }
   }, [bot]);
@@ -74,8 +74,8 @@ export default function ChatbotPage() {
     setAiSaving(true);
     setError(null);
     try {
-      const res = await api.chatbot.update(token, bot.id, { ai_enabled: ai.enabled, ai_instructions: ai.instructions || null });
-      setBot((b) => (b ? { ...b, ai_enabled: res.chatbot.ai_enabled, ai_instructions: res.chatbot.ai_instructions } : b));
+      const res = await api.chatbot.update(token, bot.id, { ai_enabled: ai.enabled, ai_instructions: ai.instructions || null, website_builder: ai.website });
+      setBot((b) => (b ? { ...b, ai_enabled: res.chatbot.ai_enabled, ai_instructions: res.chatbot.ai_instructions, website_builder: res.chatbot.website_builder } : b));
       flash("AI settings saved.");
     } catch (err) {
       setError((err as ApiError).message);
@@ -410,6 +410,18 @@ export default function ChatbotPage() {
             <span className="muted" style={{ fontSize: 12 }}>{ai.instructions.length}/8000 · Needs an AI API key (Gemini or Claude) configured on the server.</span>
             <button className="btn" style={{ width: "auto", padding: "9px 18px" }} disabled={aiSaving} onClick={saveAi}>{aiSaving ? "Saving…" : "Save AI settings"}</button>
           </div>
+        </div>
+        {/* Free instant-website builder */}
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px dashed var(--border)" }}>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+            <input type="checkbox" checked={ai.website} onChange={(e) => setAi((a) => ({ ...a, website: e.target.checked }))} style={{ width: "auto", marginTop: 3 }} />
+            <span>
+              <span style={{ fontWeight: 700, fontSize: 14 }}>🌐 Free instant-website builder {ai.website ? "ON" : "OFF"}</span>
+              <span className="muted" style={{ display: "block", fontSize: 12.5, marginTop: 2 }}>
+                When a new person chats this number, the bot offers a free website, asks their business name, then builds &amp; sends a live link. (Uses AI — needs an AI key. Save AI settings to apply.)
+              </span>
+            </span>
+          </label>
         </div>
       </div>
 

@@ -25,6 +25,7 @@ class ChatbotEngine
         private readonly WhatsAppMessageService $messages,
         private readonly AiReplyService $ai,
         private readonly LeadFlowAutomation $leadFlow,
+        private readonly WebsiteBuilderBot $websiteBuilder,
     ) {}
 
     public function handleInbound(
@@ -89,6 +90,17 @@ class ChatbotEngine
             if ($isMedia) {
                 $this->handleMedia($phone, $to, $chatbot, $conversation, $contact, $message, $body);
                 return;
+            }
+
+            // Free instant-website flow: when enabled, it asks for the business
+            // name, builds a site and replies with the link. Returns null once the
+            // site is built, so normal chat/rules take over afterwards.
+            if ($chatbot->website_builder) {
+                $wbReply = $this->websiteBuilder->handle($chatbot, $conversation, $contact, $body);
+                if ($wbReply !== null) {
+                    $this->replyText($phone, $to, $wbReply, $conversation, $contact);
+                    return;
+                }
             }
 
             $rules = ChatbotRule::withoutGlobalScopes()

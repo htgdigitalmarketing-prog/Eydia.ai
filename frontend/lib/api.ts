@@ -1699,6 +1699,7 @@ export type ChatbotItem = {
   fallback_message: string | null;
   ai_enabled?: boolean;
   ai_instructions?: string | null;
+  website_builder?: boolean;
   followup_enabled?: boolean;
   followup_message?: string | null;
   phone_number?: { id: string; display_phone_number: string } | null;
