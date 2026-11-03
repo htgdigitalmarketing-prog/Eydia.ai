@@ -53,6 +53,7 @@ class GbpAiFeaturesTest extends TestCase
             $m->shouldReceive('configuredProviders')->andReturn(['gemini']);
             $m->shouldReceive('generateImage')->andReturn(null);
             $m->shouldReceive('canGenerateImages')->andReturn(false);
+            $m->shouldReceive('getLastError')->andReturn(null);
             $m->shouldReceive('classify')->andReturnUsing(function (string $system) {
                 if (str_contains($system, 'ONLY JSON')) {
                     return '{"posts":[{"title":"Diwali Offer","type":"OFFER","summary":"Big Diwali sale at VezetoLMS! 🎉 Save on your branded learning platform."},'
