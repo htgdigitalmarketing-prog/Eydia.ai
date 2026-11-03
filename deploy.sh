@@ -180,6 +180,13 @@ php artisan db:seed --class='Database\Seeders\RolePermissionSeeder' --force
 php artisan db:seed --class='Database\Seeders\PlanSeeder' --force
 php artisan db:seed --class='Database\Seeders\SuperAdminSeeder' --force
 php artisan storage:link || true
+# The web root is public_html (not $APP/public), so `storage:link` alone leaves
+# uploaded/generated media (GBP post images, AI photos) unreachable at
+# https://domain/storage/... . Link the web root's /storage to the public disk
+# so those files are publicly served (needed for the dashboard AND for Google to
+# fetch post images).
+mkdir -p "$APP/storage/app/public"
+ln -sfn "$APP/storage/app/public" "$WEB/storage"
 php artisan optimize:clear
 php artisan config:cache
 php artisan route:cache

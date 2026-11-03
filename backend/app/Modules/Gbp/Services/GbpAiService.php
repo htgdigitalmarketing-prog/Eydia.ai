@@ -26,10 +26,12 @@ class GbpAiService
         return $this->ai->configuredProviders() !== [];
     }
 
+    private ?string $imageError = null;
+
     /** The last provider/API error, so callers can explain WHY nothing came back. */
     public function lastError(): ?string
     {
-        return $this->ai->getLastError();
+        return $this->imageError ?: $this->ai->getLastError();
     }
 
     /** SEO-optimised "from the business" description. Null when AI is unavailable. */
@@ -227,8 +229,11 @@ class GbpAiService
     /** Generate an image for a post and host it on the public disk; returns a URL or null. */
     public function generatePostImage(string $prompt): ?string
     {
+        $this->imageError = null;
         $dataUri = $this->ai->generateImage($prompt);
         if (! $dataUri || ! str_starts_with($dataUri, 'data:')) {
+            $this->imageError = $this->ai->getLastError() ?: 'AI did not return an image.';
+
             return null;
         }
 
@@ -238,11 +243,15 @@ class GbpAiService
     private function storeDataUri(string $dataUri): ?string
     {
         if (! preg_match('/^data:(image\/[a-z.+-]+);base64,(.+)$/is', $dataUri, $m)) {
+            $this->imageError = 'The generated image was in an unexpected format.';
+
             return null;
         }
         $ext = ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/jpg' => 'jpg', 'image/webp' => 'webp'][$m[1]] ?? 'png';
         $bytes = base64_decode($m[2], true);
         if ($bytes === false) {
+            $this->imageError = 'The generated image could not be decoded.';
+
             return null;
         }
 
@@ -253,6 +262,7 @@ class GbpAiService
             return url(Storage::disk('public')->url($path));
         } catch (\Throwable $e) {
             Log::warning('gbp ai image store failed: ' . $e->getMessage());
+            $this->imageError = 'The image was generated but could not be saved to storage (' . $e->getMessage() . ').';
 
             return null;
         }
