@@ -92,10 +92,15 @@ extract_prebuilt() {
 }
 
 if [ "${SKIP_FRONTEND_BUILD:-0}" = "1" ]; then
-    if [ -f out/index.html ]; then
-        say "Frontend: SKIP_FRONTEND_BUILD=1 — reusing existing out/ (no build)"
+    # Always prefer the committed tarball: it's the source of truth for this
+    # deploy. A stale out/ left by an earlier (failed) build must NOT be reused,
+    # or the deploy ships old UI even though a fresh frontend was committed.
+    if [ -f "$PREBUILT_TGZ" ]; then
+        extract_prebuilt
+    elif [ -f out/index.html ]; then
+        say "Frontend: SKIP_FRONTEND_BUILD=1 — no tarball, reusing existing out/"
     else
-        extract_prebuilt || say "Frontend: SKIP_FRONTEND_BUILD=1 but no out/ and no prebuilt tarball!"
+        say "Frontend: SKIP_FRONTEND_BUILD=1 but no out/ and no prebuilt tarball!"
     fi
 elif command -v npm >/dev/null 2>&1; then
     say "Frontend: building static export (next build → out/)"
