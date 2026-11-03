@@ -141,7 +141,9 @@ class GbpPostController extends Controller
         $cadence = $data['cadence_days'] ?? 3;
         $start = (! empty($data['start_at']) ? \Illuminate\Support\Carbon::parse($data['start_at']) : now()->addDay())
             ->copy()->setTime(10, 0);
-        $wantImages = (bool) ($data['with_images'] ?? false);
+        // Default to generating an image per post — that's what the AI content
+        // plan is expected to do. Callers can still pass with_images:false.
+        $wantImages = array_key_exists('with_images', $data) ? (bool) $data['with_images'] : true;
 
         $created = [];
         $imagesMade = 0;
