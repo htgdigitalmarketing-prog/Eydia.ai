@@ -34,9 +34,25 @@ class GbpAutomationController extends Controller
             'reply_tone' => ['sometimes', 'string', 'max:120'],
             'post_frequency_days' => ['sometimes', 'integer', 'min:1', 'max:30'],
             'post_queue_target' => ['sometimes', 'integer', 'min:1', 'max:12'],
+            // Brand kit for branded post images.
+            'brand' => ['sometimes', 'array'],
+            'brand.logo_url' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'brand.logo_path' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'brand.primary_color' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'brand.secondary_color' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'brand.tagline' => ['sometimes', 'nullable', 'string', 'max:160'],
+            'brand.phone' => ['sometimes', 'nullable', 'string', 'max:40'],
+            'brand.email' => ['sometimes', 'nullable', 'string', 'max:120'],
+            'brand.website' => ['sometimes', 'nullable', 'string', 'max:200'],
         ]);
 
         $automation = GbpAutomation::forTenant($request->user()->tenant_id);
+        if (array_key_exists('brand', $data)) {
+            $meta = $automation->meta ?? [];
+            $meta['brand'] = array_filter(array_merge((array) ($meta['brand'] ?? []), $data['brand']), fn ($v) => $v !== null);
+            $automation->meta = $meta;
+            unset($data['brand']);
+        }
         $automation->fill($data)->save();
         $location = $this->primaryLocation($automation);
 
@@ -119,6 +135,7 @@ class GbpAutomationController extends Controller
             ],
             'business' => $location?->name,
             'has_location' => (bool) $location,
+            'brand' => (array) ($automation->meta['brand'] ?? []),
             'review_url' => $reviewUrl,
             // When QR review-assist is on and we have a review link, this is the
             // page the QR encodes (AI helps the customer write the review first).

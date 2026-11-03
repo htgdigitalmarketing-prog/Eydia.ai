@@ -138,12 +138,16 @@ class GbpAutomationRunner
         $created = 0;
         $images = 0;
         $wantImages = $a->auto_photos;
+        $brand = (array) ($a->meta['brand'] ?? []);
         foreach ($ideas as $idea) {
             $imageUrl = null;
             if ($wantImages && $this->credits->canAfford($a->tenant_id, 'ai_media_generate')) {
-                $imageUrl = $this->ai->generatePostImage(
-                    "Professional marketing image for {$location->name}. Theme: " . ($idea['title'] ?: $idea['summary']) . '. Clean, modern, no text overlay.'
-                );
+                $headline = $idea['title'] ?: \Illuminate\Support\Str::limit(trim(explode("\n", (string) $idea['summary'])[0]), 70, '');
+                $imageUrl = $brand !== []
+                    ? $this->ai->generateBrandedPostImage($location, $headline, $brand)
+                    : $this->ai->generatePostImage(
+                        "Professional marketing image for {$location->name}. Theme: " . ($idea['title'] ?: $idea['summary']) . '. Clean, modern, no text overlay.'
+                    );
                 if ($imageUrl) {
                     $this->credits->deduct($a->tenant_id, null, 'ai_media_generate', 'Auto post image');
                     $images++;

@@ -240,6 +240,88 @@ class GbpAiService
         return $this->storeDataUri($dataUri);
     }
 
+    /**
+     * Generate a BRANDED, square social-media marketing graphic for a post —
+     * designed like a professional agency creative (bold headline, icons, brand
+     * colours, a contact footer) with the business's logo placed in it when a
+     * brand kit is configured. Falls back to a plain image when no brand is set.
+     *
+     * @param  array<string,mixed>  $brand  logo_url/logo_path, primary_color, secondary_color, tagline, phone, email, website
+     */
+    public function generateBrandedPostImage(GbpLocation $location, string $headline, array $brand = []): ?string
+    {
+        $this->imageError = null;
+
+        $name = $location->name ?: 'our business';
+        $cat = $location->category ? " ({$location->category})" : '';
+        $city = $this->cityOf($location);
+
+        $colors = array_values(array_filter([$brand['primary_color'] ?? null, $brand['secondary_color'] ?? null]));
+        $contact = array_values(array_filter([$brand['phone'] ?? null, $brand['email'] ?? null, $brand['website'] ?? null]));
+        $tagline = trim((string) ($brand['tagline'] ?? ''));
+
+        $prompt = "Design a professional, eye-catching SQUARE (1:1, 1080x1080px) social media marketing post graphic for \"{$name}\"{$cat}"
+            . ($city ? " in {$city}" : '') . '. '
+            . "Main headline (large, bold, crisp and readable): \"{$headline}\". "
+            . ($tagline !== '' ? "Include the tagline: \"{$tagline}\". " : '')
+            . 'Style: modern high-end digital-marketing agency creative — clean layout, strong visual hierarchy, relevant 3D/flat icons and illustrations, generous contrast, professional typography. '
+            . 'Place the brand name/logo prominently at the TOP. '
+            . ($colors !== [] ? ('Use the brand colours ' . implode(' and ', $colors) . ' as the primary palette. ') : 'Use a bold, professional colour palette. ')
+            . ($contact !== [] ? ('Add a slim footer bar with the contact details: ' . implode('   ', $contact) . '. ') : '')
+            . 'Make all text perfectly spelled and legible. Instagram / Facebook post aesthetic. No watermark.';
+
+        // Logo as a reference image (image-to-image) so the REAL logo appears.
+        $refBytes = $refMime = null;
+        $logo = $this->readBrandLogo($brand);
+        if ($logo) {
+            [$refBytes, $refMime] = $logo;
+            $prompt .= ' Use the provided logo image as the brand logo in the design — keep it intact and undistorted.';
+        }
+
+        $dataUri = $this->ai->generateImage($prompt, $refBytes, $refMime);
+        if (! $dataUri || ! str_starts_with($dataUri, 'data:')) {
+            $this->imageError = $this->ai->getLastError() ?: 'AI did not return an image.';
+
+            return null;
+        }
+
+        return $this->storeDataUri($dataUri);
+    }
+
+    /**
+     * Read the brand logo bytes: from the public disk (logo_path) when available,
+     * else by fetching logo_url. Returns [bytes, mime] or null.
+     *
+     * @param  array<string,mixed>  $brand
+     * @return array{0:string,1:string}|null
+     */
+    private function readBrandLogo(array $brand): ?array
+    {
+        try {
+            $path = $brand['logo_path'] ?? null;
+            if ($path && Storage::disk('public')->exists($path)) {
+                $bytes = Storage::disk('public')->get($path);
+                $mime = Storage::disk('public')->mimeType($path) ?: 'image/png';
+
+                return [$bytes, $mime];
+            }
+            $url = $brand['logo_url'] ?? null;
+            if ($url) {
+                $res = \Illuminate\Support\Facades\Http::timeout(15)->get($url);
+                if ($res->successful()) {
+                    $mime = (string) ($res->header('Content-Type') ?: 'image/png');
+                    if (str_starts_with($mime, 'image/')) {
+                        return [(string) $res->body(), $mime];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('brand logo read failed: ' . $e->getMessage());
+        }
+
+        return null;
+    }
+
     private function storeDataUri(string $dataUri): ?string
     {
         if (! preg_match('/^data:(image\/[a-z.+-]+);base64,(.+)$/is', $dataUri, $m)) {

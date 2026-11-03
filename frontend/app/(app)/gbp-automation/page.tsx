@@ -61,6 +61,27 @@ function Dashboard() {
     finally { setSaving(null); }
   }
 
+  async function patchBrand(fields: Record<string, string>, label: string) {
+    const token = getToken(); if (!token) return;
+    setSaving(label); setError(null); setNotice(null);
+    try {
+      const res = await api.gbp.updateAutomation(token, { brand: { ...(data?.brand ?? {}), ...fields } });
+      setData(res);
+      setNotice("Brand kit saved.");
+      setTimeout(() => setNotice(null), 2500);
+    } catch (e) { setError((e as ApiError).message); }
+    finally { setSaving(null); }
+  }
+
+  async function uploadLogo(file: File) {
+    const token = getToken(); if (!token) return;
+    setSaving("logo"); setError(null);
+    try {
+      const r = await api.gbp.uploadImage(token, file);
+      await patchBrand({ logo_url: r.url, logo_path: r.path }, "logo");
+    } catch (e) { setError((e as ApiError).message); setSaving(null); }
+  }
+
   async function runNow() {
     const token = getToken(); if (!token) return;
     setSaving("run"); setError(null); setNotice(null);
@@ -160,6 +181,56 @@ function Dashboard() {
             placeholder="warm, friendly and professional" />
         </div>
         <p className="muted" style={{ fontSize: 11.5 }}>Changes save automatically when you click away.</p>
+      </div>
+
+      {/* Brand kit — branded post images */}
+      <div className="panel" style={{ marginTop: 16, maxWidth: 640, borderLeft: "4px solid #16b6f2" }}>
+        <h3 style={{ marginTop: 0 }}>🎨 Brand Kit <span className="muted" style={{ fontSize: 12, fontWeight: 400 }}>(for AI post images)</span></h3>
+        <p className="muted" style={{ marginTop: 0, fontSize: 12.5, maxWidth: 580 }}>
+          Add your logo, colours and contact details. AI then creates <strong>branded, square marketing-style post images</strong> (headline + icons + your logo), like a design agency — instead of plain photos.
+        </p>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: 96, height: 96, borderRadius: 14, border: "1px dashed var(--border)", display: "grid", placeItems: "center", overflow: "hidden", background: "#fff", marginBottom: 6 }}>
+              {data?.brand?.logo_url
+                ? <img src={data.brand.logo_url} alt="logo" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                : <span className="muted" style={{ fontSize: 11 }}>No logo</span>}
+            </div>
+            <label className="btn-mini" style={{ cursor: "pointer" }}>
+              {saving === "logo" ? "Uploading…" : "Upload logo"}
+              <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadLogo(f); }} />
+            </label>
+          </div>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div className="field" style={{ flex: 1, minWidth: 110 }}>
+                <label>Primary colour</label>
+                <input type="color" defaultValue={data?.brand?.primary_color || "#e8622d"}
+                  onBlur={(e) => patchBrand({ primary_color: e.target.value }, "brand")} style={{ height: 38, padding: 2 }} />
+              </div>
+              <div className="field" style={{ flex: 1, minWidth: 110 }}>
+                <label>Secondary colour</label>
+                <input type="color" defaultValue={data?.brand?.secondary_color || "#2160ef"}
+                  onBlur={(e) => patchBrand({ secondary_color: e.target.value }, "brand")} style={{ height: 38, padding: 2 }} />
+              </div>
+            </div>
+            <div className="field"><label>Tagline</label>
+              <input defaultValue={data?.brand?.tagline || ""} placeholder="Your growth, our digital expertise"
+                onBlur={(e) => { const v = e.target.value.trim(); if (v !== (data?.brand?.tagline || "")) patchBrand({ tagline: v }, "brand"); }} /></div>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div className="field" style={{ flex: 1, minWidth: 140 }}><label>Phone</label>
+                <input defaultValue={data?.brand?.phone || ""} placeholder="+91 …"
+                  onBlur={(e) => { const v = e.target.value.trim(); if (v !== (data?.brand?.phone || "")) patchBrand({ phone: v }, "brand"); }} /></div>
+              <div className="field" style={{ flex: 1, minWidth: 140 }}><label>Website</label>
+                <input defaultValue={data?.brand?.website || ""} placeholder="www.heltog.com"
+                  onBlur={(e) => { const v = e.target.value.trim(); if (v !== (data?.brand?.website || "")) patchBrand({ website: v }, "brand"); }} /></div>
+            </div>
+            <div className="field"><label>Email</label>
+              <input defaultValue={data?.brand?.email || ""} placeholder="info@heltog.com"
+                onBlur={(e) => { const v = e.target.value.trim(); if (v !== (data?.brand?.email || "")) patchBrand({ email: v }, "brand"); }} /></div>
+          </div>
+        </div>
+        <p className="muted" style={{ fontSize: 11.5, marginBottom: 0 }}>Saved automatically. Next time you run <strong>AI content plan</strong> or auto-posts, images use this brand kit.</p>
       </div>
 
       {/* QR review assistant */}

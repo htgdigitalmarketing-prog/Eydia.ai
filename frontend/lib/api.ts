@@ -670,7 +670,7 @@ export const api = {
 
     // Automation control centre (ON/OFF toggles + cadence + QR review-assist).
     automation: (token: string) => request<GbpAutomationResponse>("/gbp/automation", { token }),
-    updateAutomation: (token: string, body: Partial<GbpAutomationSettings>) =>
+    updateAutomation: (token: string, body: Partial<GbpAutomationSettings> & { brand?: GbpBrand }) =>
       request<GbpAutomationResponse & { message: string }>("/gbp/automation", { method: "PUT", body, token }),
     // Run the enabled automations immediately (don't wait for the scheduler).
     runAutomationsNow: (token: string) =>
@@ -1664,6 +1664,11 @@ export type GbpAutomationSettings = {
   post_queue_target: number;
   last_run_at: string | null;
 };
+export type GbpBrand = {
+  logo_url?: string; logo_path?: string;
+  primary_color?: string; secondary_color?: string;
+  tagline?: string; phone?: string; email?: string; website?: string;
+};
 export type GbpAutomationResponse = {
   automation: GbpAutomationSettings;
   business: string | null;
@@ -1671,6 +1676,7 @@ export type GbpAutomationResponse = {
   review_url: string | null;
   assist_url: string | null;
   assist_url_preview: string | null;
+  brand?: GbpBrand;
 };
 
 export type LeadFlowStep = { trigger: string; action: string };

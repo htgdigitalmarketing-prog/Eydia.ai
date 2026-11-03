@@ -145,17 +145,24 @@ class GbpPostController extends Controller
         // plan is expected to do. Callers can still pass with_images:false.
         $wantImages = array_key_exists('with_images', $data) ? (bool) $data['with_images'] : true;
 
+        // Brand kit (logo, colours, contact) — when set, posts get a branded,
+        // square marketing-graphic image instead of a plain photo.
+        $brand = (array) (\App\Models\GbpAutomation::forTenant($tenantId)->meta['brand'] ?? []);
+
         $created = [];
         $imagesMade = 0;
         $imageError = null;
         foreach ($ideas as $i => $idea) {
             $imageUrl = null;
             if ($wantImages && $tenantId && $this->credits->canAfford($tenantId, 'ai_media_generate')) {
-                $imageUrl = $ai->generatePostImage(
-                    "Professional, photorealistic marketing image for a Google Business Profile post. "
-                    . "Business: {$location->name}" . ($location->category ? " ({$location->category})" : '') . '. '
-                    . 'Theme: ' . ($idea['title'] ?: $idea['summary']) . '. Clean, modern, bright, no text overlay.'
-                );
+                $headline = $idea['title'] ?: \Illuminate\Support\Str::limit(trim(explode("\n", (string) $idea['summary'])[0]), 70, '');
+                $imageUrl = $brand !== []
+                    ? $ai->generateBrandedPostImage($location, $headline, $brand)
+                    : $ai->generatePostImage(
+                        "Professional, photorealistic marketing image for a Google Business Profile post. "
+                        . "Business: {$location->name}" . ($location->category ? " ({$location->category})" : '') . '. '
+                        . 'Theme: ' . ($idea['title'] ?: $idea['summary']) . '. Clean, modern, bright, no text overlay.'
+                    );
                 if ($imageUrl) {
                     $this->credits->deduct($tenantId, $request->user()->id, 'ai_media_generate', 'AI post image');
                     $imagesMade++;
