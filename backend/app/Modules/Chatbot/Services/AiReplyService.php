@@ -345,9 +345,14 @@ class AiReplyService
                     'role' => 'user',
                     'parts' => $parts,
                 ]],
+                // Image-generation models (e.g. gemini-2.5-flash-image) return an
+                // image ONLY when IMAGE is in responseModalities; without this they
+                // reply with text and we get no picture.
+                'generationConfig' => ['responseModalities' => ['TEXT', 'IMAGE']],
             ]);
         } catch (\Throwable $e) {
             Log::warning('AI image generation failed: ' . $e->getMessage());
+            $this->lastError = 'Image generation request failed: ' . $e->getMessage();
             return null;
         }
 
