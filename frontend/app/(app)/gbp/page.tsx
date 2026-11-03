@@ -944,9 +944,12 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
   async function autoPlan() {
     const t = getToken(); if (!t) return;
     if (!confirm("Let AI generate 4 posts from your business profile and schedule them (one every 3 days)? Uses AI credits.")) return;
+    // Opt in to an AI image per post (extra credits, needs a Gemini/OpenAI image
+    // model set in Settings → AI Provider). Declining keeps them text-only.
+    const withImages = confirm("Also generate an AI image for each post?\n\nOK = yes (5 credits each, needs a Gemini/OpenAI image model in Settings → AI Provider).\nCancel = text-only posts.");
     setPlanning(true);
     try {
-      const r = await api.gbp.autoPlanPosts(t, { count: 4, cadence_days: 3 });
+      const r = await api.gbp.autoPlanPosts(t, { count: 4, cadence_days: 3, with_images: withImages });
       setSub("posts"); setFilter("SCHEDULED"); loadPosts();
       alert(r.message || `${r.created} posts scheduled.`);
     } catch (e) { alert((e as ApiError).message); }

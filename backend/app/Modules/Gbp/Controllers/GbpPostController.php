@@ -144,6 +144,8 @@ class GbpPostController extends Controller
         $wantImages = (bool) ($data['with_images'] ?? false);
 
         $created = [];
+        $imagesMade = 0;
+        $imageError = null;
         foreach ($ideas as $i => $idea) {
             $imageUrl = null;
             if ($wantImages && $tenantId && $this->credits->canAfford($tenantId, 'ai_media_generate')) {
@@ -154,6 +156,9 @@ class GbpPostController extends Controller
                 );
                 if ($imageUrl) {
                     $this->credits->deduct($tenantId, $request->user()->id, 'ai_media_generate', 'AI post image');
+                    $imagesMade++;
+                } else {
+                    $imageError ??= $ai->lastError();
                 }
             }
 
@@ -171,13 +176,26 @@ class GbpPostController extends Controller
             $created[] = $this->arr($post->load('location'));
         }
 
+        $message = count($created) . ' posts generated and scheduled.';
+        if ($wantImages) {
+            if ($imagesMade > 0) {
+                $message .= " {$imagesMade} AI image(s) added.";
+            } elseif ($imageError) {
+                $message .= ' Images could not be generated — ' . $imageError;
+            } else {
+                $message .= ' No images were generated (set a Gemini/OpenAI image model in Settings → AI Provider).';
+            }
+        }
+
         return $this->ok([
             'posts' => $created,
             'created' => count($created),
             'with_images' => $wantImages,
+            'images_made' => $imagesMade,
+            'image_error' => $imageError,
             'source' => 'ai',
             'credits' => $tenantId ? $this->credits->balance($tenantId) : null,
-            'message' => count($created) . ' posts generated and scheduled.',
+            'message' => $message,
         ], 201);
     }
 
