@@ -1104,6 +1104,7 @@ export type GbpPostItem = {
   terms: string | null;
   event_start: string | null;
   event_end: string | null;
+  fail_reason?: string | null;
 };
 export type GbpPostInput = {
   location: string; summary: string; type?: string;

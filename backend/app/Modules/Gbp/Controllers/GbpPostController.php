@@ -304,9 +304,10 @@ class GbpPostController extends Controller
         ]);
 
         if (! $name) {
-            $post->update(['status' => 'FAILED']);
+            $reason = $provider->getLastError() ?? 'Could not publish the post to Google.';
+            $post->update(['status' => 'FAILED', 'meta' => array_merge($meta, ['fail_reason' => $reason])]);
 
-            return $this->fail($provider->getLastError() ?? 'Could not publish the post to Google.', [], 502);
+            return $this->fail($reason, [], 502);
         }
 
         $post->update(['status' => 'PUBLISHED', 'google_post_name' => $name, 'published_at' => now()]);
@@ -375,6 +376,7 @@ class GbpPostController extends Controller
             'terms' => $p->meta['terms'] ?? null,
             'event_start' => $p->meta['event_start'] ?? null,
             'event_end' => $p->meta['event_end'] ?? null,
+            'fail_reason' => $p->status === 'FAILED' ? ($p->meta['fail_reason'] ?? null) : null,
         ];
     }
 }

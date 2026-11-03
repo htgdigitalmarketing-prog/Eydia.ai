@@ -62,7 +62,7 @@ class PublishDueGbpContent extends Command
 
             $post->update($name
                 ? ['status' => 'PUBLISHED', 'google_post_name' => $name, 'published_at' => now()]
-                : ['status' => 'FAILED']);
+                : ['status' => 'FAILED', 'meta' => array_merge($meta, ['fail_reason' => $provider->getLastError() ?? 'Google rejected the post.'])]);
             $this->info("Post {$post->uuid}: {$post->status}");
         }
     }

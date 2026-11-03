@@ -1034,6 +1034,11 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
                 {(p.event_start || p.event_end) && <div className="muted" style={{ marginTop: 6, fontSize: 12.5 }}>📅 {fmtDate(p.event_start)}{p.event_end ? ` → ${fmtDate(p.event_end)}` : ""}</div>}
                 {p.terms && <div className="muted" style={{ marginTop: 4, fontSize: 12 }}>Terms: {p.terms}</div>}
                 {p.cta_url && <div style={{ marginTop: 8, fontSize: 12.5, color: "var(--accent)" }}>▸ Learn more → {p.cta_url}</div>}
+                {p.status === "FAILED" && p.fail_reason && (
+                  <div style={{ marginTop: 10, fontSize: 12.5, color: "#c53030", background: "#fdecec", border: "1px solid #f5c6c6", borderRadius: 8, padding: "8px 11px" }}>
+                    ⚠️ {p.fail_reason}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -1242,8 +1247,10 @@ function InsightsTab({ locations }: { locations: GbpLocationItem[] }) {
   const metricCards = [
     { k: "impressions", icon: "👁️", bg: "#eef3ff" },
     { k: "CALL_CLICKS", icon: "📞", bg: "#e9faf1" },
-    { k: "WEBSITE_CLICKS", icon: "🌐", bg: "#fff4e6" },
+    { k: "BUSINESS_CONVERSATIONS", icon: "💬", bg: "#eafaff" },
+    { k: "BUSINESS_BOOKINGS", icon: "📅", bg: "#fdeef6" },
     { k: "BUSINESS_DIRECTION_REQUESTS", icon: "🧭", bg: "#f3eeff" },
+    { k: "WEBSITE_CLICKS", icon: "🌐", bg: "#fff4e6" },
   ];
   const series = data?.series ?? [];
   const maxV = Math.max(1, ...series.map((s) => s.value));

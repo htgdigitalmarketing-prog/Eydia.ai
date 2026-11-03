@@ -77,8 +77,10 @@ class GbpSyncService
                     if (! empty($g['place_id'])) {
                         $meta['place_id'] = $g['place_id'];
                     }
+                    // Always prefer Google's own "write a review" link (the short
+                    // g.page/r/…/review URL) so Eydia's link matches Google's exactly.
                     if (! empty($g['review_url'])) {
-                        $meta['review_url'] = $meta['review_url'] ?? $g['review_url'];
+                        $meta['review_url'] = $g['review_url'];
                     }
                     foreach (['description', 'hours', 'service_area'] as $k) {
                         if (! empty($g[$k]) && empty($meta[$k])) {

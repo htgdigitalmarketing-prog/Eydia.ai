@@ -93,9 +93,18 @@ class GoogleGbpProvider
             return $res->status() . ' ' . $res->body();
         }
 
+        // A disabled/not-enabled API comes back as PERMISSION_DENIED with a
+        // SERVICE_DISABLED reason, or plainly in the message — call that out so
+        // the admin knows to enable the API in Google Cloud.
+        $reason = $res->json('error.details.0.reason');
+        if ($reason === 'SERVICE_DISABLED' || str_contains(strtolower($message), 'has not been used in project') || str_contains(strtolower($message), 'is disabled')) {
+            return "Google says the posting API is not enabled for this project ({$message}). Enable \"My Business API\" / \"Business Profile APIs\" in Google Cloud Console, then try again.";
+        }
+
         return match ($res->json('error.status')) {
-            'PERMISSION_DENIED' => "Google denied access ({$message}). Business Profile API access is likely still pending Google's approval for this project.",
+            'PERMISSION_DENIED' => "Google denied access ({$message}). This Google account may not have permission to post for this listing, or Business Profile API access is still pending Google's approval for this project.",
             'UNAUTHENTICATED' => 'Your Google connection is no longer valid. Reconnect Google Business Profile.',
+            'NOT_FOUND' => "Google could not find this listing/endpoint ({$message}). The posting API (My Business API v4) may not be enabled for this project.",
             default => $message,
         };
     }
@@ -463,6 +472,7 @@ class GoogleGbpProvider
             'BUSINESS_IMPRESSIONS_DESKTOP_SEARCH', 'BUSINESS_IMPRESSIONS_MOBILE_SEARCH',
             'BUSINESS_IMPRESSIONS_DESKTOP_MAPS', 'BUSINESS_IMPRESSIONS_MOBILE_MAPS',
             'CALL_CLICKS', 'WEBSITE_CLICKS', 'BUSINESS_DIRECTION_REQUESTS',
+            'BUSINESS_CONVERSATIONS', 'BUSINESS_BOOKINGS',
         ];
         // A custom range wins over the rolling "last N days". Google has a ~2-3 day
         // reporting lag and rejects a future end date, so clamp end to yesterday.

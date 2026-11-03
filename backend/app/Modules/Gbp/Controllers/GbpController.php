@@ -417,8 +417,9 @@ class GbpController extends Controller
         $integration = $this->connectedIntegration();
 
         $labels = [
-            'impressions' => 'Total impressions', 'CALL_CLICKS' => 'Calls',
-            'WEBSITE_CLICKS' => 'Website clicks', 'BUSINESS_DIRECTION_REQUESTS' => 'Direction requests',
+            'impressions' => 'Total views', 'CALL_CLICKS' => 'Calls',
+            'BUSINESS_CONVERSATIONS' => 'Chat / messages', 'BUSINESS_BOOKINGS' => 'Bookings',
+            'BUSINESS_DIRECTION_REQUESTS' => 'Directions', 'WEBSITE_CLICKS' => 'Website clicks',
         ];
 
         if (! $integration || ! $location?->google_location_id) {
@@ -446,8 +447,10 @@ class GbpController extends Controller
             'metrics' => [
                 'impressions' => $impressions,
                 'CALL_CLICKS' => $t['CALL_CLICKS'] ?? 0,
-                'WEBSITE_CLICKS' => $t['WEBSITE_CLICKS'] ?? 0,
+                'BUSINESS_CONVERSATIONS' => $t['BUSINESS_CONVERSATIONS'] ?? 0,
+                'BUSINESS_BOOKINGS' => $t['BUSINESS_BOOKINGS'] ?? 0,
                 'BUSINESS_DIRECTION_REQUESTS' => $t['BUSINESS_DIRECTION_REQUESTS'] ?? 0,
+                'WEBSITE_CLICKS' => $t['WEBSITE_CLICKS'] ?? 0,
             ],
             'series' => $data['series'],
             'labels' => $labels,

@@ -253,11 +253,23 @@ function ReviewCard({ profile, qr, copied, onCopy, onReviewUrl, onSave, saving }
             </div>
           </div>
           {profile.review_url ? (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-              <a className="btn-mini" href={profile.share.whatsapp} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>🟢 WhatsApp</a>
-              <a className="btn-mini" href={profile.share.email} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>✉️ Email</a>
-              <a className="btn-mini" href={profile.share.facebook} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>🔵 Facebook</a>
-            </div>
+            (() => {
+              // Build the share links from the CURRENT review link so they work
+              // even right after editing it (the server's copy can be stale).
+              const ru = profile.review_url;
+              const name = profile.name || "us";
+              const msg = `We'd love your feedback! Please leave ${name} a quick Google review: ${ru}`;
+              const wa = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+              const mail = `mailto:?subject=${encodeURIComponent("Review " + name + " on Google")}&body=${encodeURIComponent(msg)}`;
+              const fb = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(ru)}`;
+              return (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
+                  <a className="btn-mini" href={wa} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>🟢 WhatsApp</a>
+                  <a className="btn-mini" href={mail} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>✉️ Email</a>
+                  <a className="btn-mini" href={fb} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>🔵 Facebook</a>
+                </div>
+              );
+            })()
           ) : (
             <button className="btn-mini" onClick={onSave} disabled={saving} style={{ marginTop: 4 }}>Save to enable sharing</button>
           )}
