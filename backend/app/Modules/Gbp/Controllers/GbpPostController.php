@@ -38,7 +38,7 @@ class GbpPostController extends Controller
 
         $tenantId = $request->user()->tenant_id;
         if ($tenantId && ! $this->credits->canAfford($tenantId, 'ai_caption')) {
-            return $this->fail('You are out of AI credits (' . $this->credits->cost('ai_caption') . ' needed). Top up or upgrade your plan.', ['credits' => ['insufficient']], 402);
+            return $this->fail('You are out of AI credits (' . $this->credits->cost('ai_caption') . ' needed). Top up or upgrade your plan.', ['credits' => ['insufficient']], 402, 'credits_insufficient');
         }
 
         // Auto-fetch the connected Google Business Profile so the AI writes to the
@@ -124,7 +124,7 @@ class GbpPostController extends Controller
 
         $tenantId = $request->user()->tenant_id;
         if ($tenantId && ! $this->credits->canAfford($tenantId, 'ai_caption')) {
-            return $this->fail('You are out of AI credits. Top up or upgrade your plan to continue.', ['credits' => ['insufficient']], 402);
+            return $this->fail('You are out of AI credits. Top up or upgrade your plan to continue.', ['credits' => ['insufficient']], 402, 'credits_insufficient');
         }
 
         $count = $data['count'] ?? 4;

@@ -34,7 +34,7 @@ class GbpPhotoController extends Controller
 
         $tenantId = $request->user()->tenant_id;
         if ($tenantId && ! $this->credits->canAfford($tenantId, 'ai_caption')) {
-            return $this->fail('You are out of AI credits (' . $this->credits->cost('ai_caption') . ' needed). Top up or upgrade your plan.', ['credits' => ['insufficient']], 402);
+            return $this->fail('You are out of AI credits (' . $this->credits->cost('ai_caption') . ' needed). Top up or upgrade your plan.', ['credits' => ['insufficient']], 402, 'credits_insufficient');
         }
 
         $business = ! empty($data['location'])

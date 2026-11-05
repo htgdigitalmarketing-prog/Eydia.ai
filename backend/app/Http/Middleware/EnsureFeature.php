@@ -32,6 +32,7 @@ class EnsureFeature
                 'success' => false,
                 'message' => 'Access Denied — your plan does not include this dashboard.',
                 'errors' => ['plan' => ['feature_not_included']],
+                'code' => 'feature_not_included',
             ], 403);
         }
 

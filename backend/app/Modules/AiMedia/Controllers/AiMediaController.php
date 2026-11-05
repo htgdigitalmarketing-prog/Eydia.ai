@@ -42,6 +42,7 @@ class AiMediaController extends Controller
                 'You are out of AI credits (' . $this->credits->cost('ai_media_generate') . ' needed). Top up or upgrade your plan to continue.',
                 ['credits' => ['insufficient']],
                 402,
+                'credits_insufficient',
             );
         }
 

@@ -45,6 +45,7 @@ class GbpController extends Controller
                 'You are out of AI credits (' . $this->credits->cost($action) . ' needed). Top up or upgrade your plan to continue.',
                 ['credits' => ['insufficient']],
                 402,
+                'credits_insufficient',
             );
         }
 
