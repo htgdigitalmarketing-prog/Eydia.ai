@@ -88,7 +88,13 @@ class AuthController extends Controller
 
     public function refresh(): JsonResponse
     {
-        return $this->ok($this->authPayload($this->auth->refresh()));
+        try {
+            return $this->ok($this->authPayload($this->auth->refresh()));
+        } catch (\PHPOpenSourceSaver\JWTAuth\Exceptions\TokenExpiredException) {
+            return $this->fail('Your session has fully expired. Please sign in again.', [], 401, 'token_invalid');
+        } catch (\PHPOpenSourceSaver\JWTAuth\Exceptions\JWTException) {
+            return $this->fail('Invalid session token.', [], 401, 'token_invalid');
+        }
     }
 
     public function forgotPassword(ForgotPasswordRequest $request): JsonResponse

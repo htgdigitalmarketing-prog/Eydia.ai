@@ -23,6 +23,10 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/public/plans', [\App\Modules\Billing\Controllers\PublicPlansController::class, 'index'])
         ->middleware('throttle:60,1');
 
+    // Public mobile app config (forced-update + maintenance switch).
+    Route::get('/app/config', [\App\Modules\Mobile\Controllers\AppConfigController::class, 'index'])
+        ->middleware('throttle:60,1');
+
     // Auth module (public + auth:api-protected endpoints).
     require __DIR__ . '/modules/auth.php';
 

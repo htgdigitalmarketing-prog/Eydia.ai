@@ -20,6 +20,13 @@ Route::prefix('auth')->group(function () {
         // Mobile-OTP login (alternative to email + password).
         Route::post('/otp/request', [AuthController::class, 'requestOtp']);
         Route::post('/otp/verify', [AuthController::class, 'verifyOtp']);
+        // Native Google sign-in (Android SDK sends an ID token). Public like login.
+        Route::post('/google', [GoogleAuthController::class, 'native']);
+        // Refresh is public so an EXPIRED token (still inside the refresh window)
+        // can be renewed — the token is read from the Authorization header.
+        Route::post('/refresh', [AuthController::class, 'refresh']);
+        // One-time web login hand-off public landing (for in-app payments).
+        Route::get('/mobile-login/{code}', [\App\Modules\Auth\Controllers\MobileAuthController::class, 'mobileLogin']);
     });
 
     // Google OAuth (browser redirect flow — public, no auth:api).
@@ -38,6 +45,9 @@ Route::prefix('auth')->group(function () {
         Route::put('/profile', [AuthController::class, 'updateProfile']);
         Route::post('/change-password', [AuthController::class, 'changePassword']);
         Route::post('/logout', [AuthController::class, 'logout']);
-        Route::post('/refresh', [AuthController::class, 'refresh']);
+        // One-time signed web-login link (open the web billing page already signed in).
+        Route::post('/web-session', [\App\Modules\Auth\Controllers\MobileAuthController::class, 'webSession']);
+        // Account deletion (Google Play requirement).
+        Route::delete('/account', [\App\Modules\Auth\Controllers\MobileAuthController::class, 'deleteAccount']);
     });
 });

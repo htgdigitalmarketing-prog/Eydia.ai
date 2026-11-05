@@ -123,7 +123,7 @@ class GbpSyncService
     {
         $count = 0;
         foreach ($this->provider->listReviews($integration, $location->google_location_id) as $r) {
-            GbpReview::updateOrCreate(
+            $review = GbpReview::updateOrCreate(
                 [
                     'gbp_location_id' => $location->id,
                     'google_review_id' => $r['reviewId'],
@@ -140,6 +140,25 @@ class GbpSyncService
                     'reviewed_at' => $r['time'],
                 ]
             );
+
+            // Push the mobile app a notification for genuinely new reviews (and
+            // flag low-star ones so the owner can respond fast). Only for reviews
+            // left in the last 2 days, so the first full import doesn't spam.
+            $fresh = ! empty($r['time']) && \Illuminate\Support\Carbon::parse($r['time'])->gt(now()->subDays(2));
+            if ($review->wasRecentlyCreated && $fresh) {
+                try {
+                    $rating = (int) $r['rating'];
+                    $low = $rating > 0 && $rating <= 2;
+                    app(\App\Modules\Mobile\Services\PushNotificationService::class)->notifyTenant(
+                        $integration->tenant_id,
+                        $low ? "⚠️ New {$rating}★ review" : "⭐ New review",
+                        trim(($r['name'] ?: 'A customer') . ' left ' . ($rating ? $rating . '★' : 'a review') . ($r['comment'] ? ': ' . \Illuminate\Support\Str::limit($r['comment'], 80) : '')),
+                        ['type' => $low ? 'gbp_review_low' : 'gbp_review', 'id' => $review->uuid],
+                    );
+                } catch (\Throwable $e) {
+                    // notifications are non-critical
+                }
+            }
             $count++;
         }
 

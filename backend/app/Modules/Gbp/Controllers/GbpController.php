@@ -189,10 +189,47 @@ class GbpController extends Controller
             $query->where('rating', (int) $rating);
         }
 
+        // Paginated mode (mobile infinite scroll) only when page/per_page is sent;
+        // otherwise keep the existing capped-list shape the web app expects.
+        if ($request->filled('page') || $request->filled('per_page')) {
+            $perPage = min(50, max(1, (int) $request->query('per_page', 20)));
+            $p = $query->paginate($perPage);
+
+            return $this->ok([
+                'reviews' => collect($p->items())->map(fn (GbpReview $r) => $this->reviewArray($r))->all(),
+                'meta' => ['total' => $p->total(), 'per_page' => $p->perPage(), 'current_page' => $p->currentPage(), 'last_page' => $p->lastPage()],
+            ]);
+        }
+
         $reviews = $query->limit(200)->get();
 
         return $this->ok([
             'reviews' => $reviews->map(fn (GbpReview $r) => $this->reviewArray($r))->all(),
+        ]);
+    }
+
+    /**
+     * Lightweight location list for the mobile app's location switcher — the full
+     * data otherwise only comes inside the heavy /gbp/overview response.
+     */
+    public function locations(Request $request): JsonResponse
+    {
+        $locations = GbpLocation::query()
+            ->withCount('reviews')
+            ->withAvg('reviews as reviews_avg_rating', 'rating')
+            ->orderByDesc('review_count')
+            ->get();
+
+        return $this->ok([
+            'locations' => $locations->map(fn (GbpLocation $l) => [
+                'id' => $l->uuid,
+                'name' => $l->name,
+                'address' => $l->address,
+                'rating' => round((float) ($l->reviews_avg_rating ?? $l->rating), 1),
+                'review_count' => (int) ($l->reviews_count ?? $l->review_count),
+                'is_hidden' => (bool) $l->is_hidden,
+                'last_synced_at' => $l->last_synced_at?->toIso8601String(),
+            ])->all(),
         ]);
     }
 

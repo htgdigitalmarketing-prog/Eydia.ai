@@ -65,6 +65,16 @@ class GbpPhotoController extends Controller
             $query->whereHas('location', fn ($q) => $q->where('uuid', $loc));
         }
 
+        if ($request->filled('page') || $request->filled('per_page')) {
+            $perPage = min(50, max(1, (int) $request->query('per_page', 20)));
+            $p = $query->paginate($perPage);
+
+            return $this->ok([
+                'photos' => collect($p->items())->map(fn (GbpPhoto $photo) => $this->arr($photo))->all(),
+                'meta' => ['total' => $p->total(), 'per_page' => $p->perPage(), 'current_page' => $p->currentPage(), 'last_page' => $p->lastPage()],
+            ]);
+        }
+
         return $this->ok(['photos' => $query->limit(200)->get()->map(fn (GbpPhoto $p) => $this->arr($p))->all()]);
     }
 

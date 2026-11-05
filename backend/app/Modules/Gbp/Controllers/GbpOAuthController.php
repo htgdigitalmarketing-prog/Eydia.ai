@@ -42,6 +42,9 @@ class GbpOAuthController extends Controller
         Cache::put('gbp_oauth:' . $state, [
             'tenant_id' => $request->user()->tenant_id,
             'user_id' => $request->user()->id,
+            // When the mobile app starts the connect (?mobile=1), the callback
+            // returns via the eydia:// deep link instead of a web URL.
+            'mobile' => $request->boolean('mobile'),
         ], now()->addMinutes(15));
 
         $params = http_build_query([
@@ -64,14 +67,22 @@ class GbpOAuthController extends Controller
     {
         $return = $this->frontend(config('services.google.gbp.return_path', '/gbp'));
 
+        // Peek at the state to know whether this flow was started by the mobile
+        // app (we need the mobile flag before pulling the entry for real).
+        $state = $request->query('state');
+        $peek = $state ? Cache::get('gbp_oauth:' . $state) : null;
+        $mobile = (bool) ($peek['mobile'] ?? false);
+        $done = fn (string $status): RedirectResponse => $mobile
+            ? redirect('eydia://gbp-connected?status=' . $status)
+            : redirect($return . '?gbp_connect=' . $status);
+
         if ($request->filled('error')) {
-            return redirect($return . '?gbp_connect=cancelled');
+            return $done('cancelled');
         }
 
-        $state = $request->query('state');
         $stored = $state ? Cache::pull('gbp_oauth:' . $state) : null;
         if (! $stored || empty($stored['tenant_id'])) {
-            return redirect($return . '?gbp_connect=invalid_state');
+            return $done('invalid_state');
         }
 
         $res = Http::asForm()->post('https://oauth2.googleapis.com/token', [
@@ -83,7 +94,7 @@ class GbpOAuthController extends Controller
         ]);
 
         if (! $res->successful()) {
-            return redirect($return . '?gbp_connect=token_failed');
+            return $done('token_failed');
         }
 
         $tokens = $res->json();
@@ -101,7 +112,7 @@ class GbpOAuthController extends Controller
             ]
         );
 
-        return redirect($return . '?gbp_connect=success');
+        return $done('success');
     }
 
     /** Connection status for the Settings UI. */
@@ -109,12 +120,20 @@ class GbpOAuthController extends Controller
     {
         $integration = Integration::where('provider', Integration::GOOGLE_GBP)->first();
 
+        $connected = (bool) $integration?->isConnected();
+
         return $this->ok([
             'configured' => GoogleGbpProvider::configured(),
-            'connected' => (bool) $integration?->isConnected(),
+            'connected' => $connected,
             'status' => $integration?->status,
             'account' => $integration?->external_account_name,
             'last_synced_at' => $integration?->last_synced_at?->toIso8601String(),
+            // Extra fields for the mobile app (the web ignores them).
+            'google_email' => $integration?->meta['email'] ?? $integration?->external_account_name,
+            'connected_at' => $integration?->created_at?->toIso8601String(),
+            // Token present but no longer valid → the app shows a reconnect prompt.
+            'needs_reconnect' => $integration ? ! $connected : false,
+            'last_error' => $integration?->meta['last_error'] ?? null,
         ]);
     }
 

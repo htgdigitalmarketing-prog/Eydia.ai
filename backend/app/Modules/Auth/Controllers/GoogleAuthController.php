@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Auth\Actions\RegisterTenantAction;
 use App\Modules\Auth\DTOs\RegisterData;
+use App\Modules\Auth\Resources\UserResource;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -110,6 +112,57 @@ class GoogleAuthController extends Controller
     }
 
     /** Match an existing user by Google id or email; otherwise provision a tenant. */
+    /**
+     * Native Google sign-in for the mobile app: it posts a Google ID token from
+     * the Android SDK. We verify the token with Google, require it was issued for
+     * our mobile client and the email is verified, then reuse the same
+     * find-or-create flow as the browser callback and return a JWT exactly like
+     * /auth/login. Web flows are untouched.
+     */
+    public function native(Request $request): JsonResponse
+    {
+        $data = $request->validate(['id_token' => ['required', 'string']]);
+
+        $res = Http::acceptJson()->get('https://oauth2.googleapis.com/tokeninfo', ['id_token' => $data['id_token']]);
+        if (! $res->successful()) {
+            return $this->fail('Google sign-in failed — the token is invalid or expired.', [], 401, 'token_invalid');
+        }
+        $info = $res->json();
+
+        $expectedAud = config('services.google.mobile_client_id');
+        if ($expectedAud && ($info['aud'] ?? null) !== $expectedAud) {
+            return $this->fail('This Google token was not issued for the Eydia app.', [], 401, 'token_invalid');
+        }
+        $verified = $info['email_verified'] ?? false;
+        if ($verified !== true && $verified !== 'true') {
+            return $this->fail('Your Google email address is not verified.', [], 401, 'token_invalid');
+        }
+        if (empty($info['email'])) {
+            return $this->fail('Your Google account did not share an email address.', [], 422, 'token_invalid');
+        }
+
+        $user = $this->findOrCreateUser([
+            'email' => $info['email'],
+            'name' => $info['name'] ?? null,
+            'sub' => $info['sub'] ?? null,
+            'picture' => $info['picture'] ?? null,
+        ], null);
+
+        if ($user->status === 'disabled') {
+            return $this->fail('This account has been disabled.', [], 403, 'tenant_suspended');
+        }
+
+        $token = auth('api')->login($user);
+        $user->forceFill(['last_login_at' => now()])->saveQuietly();
+
+        return $this->ok([
+            'user' => new UserResource($user->load('tenant')),
+            'token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => auth('api')->factory()->getTTL() * 60,
+        ]);
+    }
+
     private function findOrCreateUser(array $profile, ?string $refreshToken): User
     {
         $email = $profile['email'];

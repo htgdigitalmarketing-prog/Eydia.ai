@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Route;
 // Google Business Profile / Reviews dashboard. Gated by plan feature 'dash_gbp'.
 Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
     Route::get('/overview', [GbpController::class, 'overview']);
+    // Lightweight location list (mobile location switcher).
+    Route::get('/locations', [GbpController::class, 'locations']);
     Route::get('/reviews', [GbpController::class, 'reviews']);
     Route::post('/reviews/{uuid}/reply', [GbpController::class, 'reply']);
     Route::post('/reviews/{uuid}/suggest', [GbpController::class, 'suggestReply']);

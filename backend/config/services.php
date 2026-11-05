@@ -95,6 +95,9 @@ return [
     'google' => [
         'client_id'     => env('GOOGLE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
+        // Web OAuth client id the Android app passes as serverClientId; the ID
+        // token it sends to /auth/google must have this as its `aud`.
+        'mobile_client_id' => env('GOOGLE_MOBILE_CLIENT_ID'),
         // Where Google sends the user back — must exactly match the "Authorized
         // redirect URI" in the Google Cloud console, e.g.
         // https://main.heltog.com/api/v1/auth/google/callback

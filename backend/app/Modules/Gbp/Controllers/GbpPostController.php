@@ -215,6 +215,18 @@ class GbpPostController extends Controller
             $query->whereHas('location', fn ($q) => $q->where('uuid', $loc));
         }
 
+        // Paginated (mobile) only when page/per_page is sent; the web keeps the
+        // existing capped-list + counts shape.
+        if ($request->filled('page') || $request->filled('per_page')) {
+            $perPage = min(50, max(1, (int) $request->query('per_page', 20)));
+            $p = $query->paginate($perPage);
+
+            return $this->ok([
+                'posts' => collect($p->items())->map(fn (GbpPost $post) => $this->arr($post))->all(),
+                'meta' => ['total' => $p->total(), 'per_page' => $p->perPage(), 'current_page' => $p->currentPage(), 'last_page' => $p->lastPage()],
+            ]);
+        }
+
         $posts = $query->limit(200)->get();
 
         return $this->ok([

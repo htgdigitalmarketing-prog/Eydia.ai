@@ -70,11 +70,18 @@ class AuthService extends BaseService
         auth('api')->logout();
     }
 
+    /**
+     * Refresh the access token. Works for a valid token AND for an expired one
+     * that is still inside the refresh window (so the mobile app keeps users
+     * signed in). Throws TokenExpiredException when the token is beyond the
+     * refresh window, or JWTException when it is malformed/invalid.
+     */
     public function refresh(): array
     {
         $token = auth('api')->refresh();
+        $user = auth('api')->setToken($token)->user();
 
-        return $this->tokenResponse(auth('api')->user(), $token);
+        return $this->tokenResponse($user, $token);
     }
 
     /** Send a password-reset link. Always reports success to avoid user enumeration. */
