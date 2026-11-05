@@ -37,9 +37,76 @@ class RazorpayWebhookController extends Controller
 
         if ($event === 'payment.captured') {
             $this->handlePaymentCaptured($payload);
+        } elseif (in_array($event, ['subscription.charged', 'subscription.activated'], true)) {
+            $this->handleSubscriptionCharged($payload);
+        } elseif (in_array($event, ['subscription.cancelled', 'subscription.completed', 'subscription.halted'], true)) {
+            $this->handleSubscriptionEnded($payload);
         }
 
         return response()->json(['status' => 'ok'], 200);
+    }
+
+    /**
+     * Autopay renewal (or first charge): Razorpay auto-charged the mandate, so
+     * extend the tenant's subscription period by its cycle.
+     */
+    private function handleSubscriptionCharged(array $payload): void
+    {
+        $sub = $payload['subscription']['entity'] ?? [];
+        $subId = $sub['id'] ?? null;
+        $notes = $sub['notes'] ?? [];
+        $tenantId = (int) ($notes['tenant_id'] ?? 0);
+        $cycle = \App\Support\BillingCycle::normalize($notes['cycle'] ?? null);
+        $planUuid = $notes['plan_uuid'] ?? null;
+
+        if (! $subId || ! $tenantId) {
+            Log::warning('razorpay.webhook: subscription.charged missing fields', compact('subId', 'tenantId'));
+
+            return;
+        }
+
+        $plan = $planUuid ? Plan::where('uuid', $planUuid)->first() : null;
+        $months = \App\Support\BillingCycle::months($cycle);
+
+        $subscription = Subscription::withoutGlobalScopes()
+            ->where('tenant_id', $tenantId)
+            ->where(fn ($q) => $q->where('gateway_subscription_id', $subId)->orWhereNull('gateway_subscription_id'))
+            ->latest('id')->first();
+
+        $attributes = [
+            'status' => 'active',
+            'gateway' => 'razorpay',
+            'gateway_subscription_id' => $subId,
+            'current_period_start' => now(),
+            'current_period_end' => now()->addMonths($months),
+            'cancelled_at' => null,
+        ];
+        if ($plan) {
+            $attributes['plan_id'] = $plan->id;
+        }
+
+        if ($subscription) {
+            $subscription->update($attributes);
+        } else {
+            Subscription::create(array_merge($attributes, ['tenant_id' => $tenantId]));
+        }
+
+        Log::info('razorpay.webhook: autopay renewed', ['tenant' => $tenantId, 'sub' => $subId, 'cycle' => $cycle]);
+    }
+
+    /** Autopay cancelled/halted — mark the subscription so access ends at period end. */
+    private function handleSubscriptionEnded(array $payload): void
+    {
+        $sub = $payload['subscription']['entity'] ?? [];
+        $subId = $sub['id'] ?? null;
+        if (! $subId) {
+            return;
+        }
+        $subscription = Subscription::withoutGlobalScopes()->where('gateway_subscription_id', $subId)->latest('id')->first();
+        if ($subscription) {
+            $subscription->update(['cancelled_at' => now(), 'ends_at' => $subscription->current_period_end]);
+            Log::info('razorpay.webhook: autopay cancelled', ['sub' => $subId]);
+        }
     }
 
     private function handlePaymentCaptured(array $payload): void

@@ -20,4 +20,7 @@ Route::prefix('billing')->group(function () {
     Route::post('/subscribe', [BillingController::class, 'subscribe']);
     Route::post('/order', [BillingController::class, 'createOrder']);
     Route::post('/verify', [BillingController::class, 'verifyPayment']);
+    // Autopay (recurring Razorpay subscription / mandate).
+    Route::post('/subscribe-auto', [BillingController::class, 'subscribeAuto']);
+    Route::post('/verify-subscription', [BillingController::class, 'verifySubscription']);
 });

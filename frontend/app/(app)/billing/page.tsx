@@ -35,6 +35,8 @@ export default function BillingPage() {
   // Billing-details step before payment
   const [billTarget, setBillTarget] = useState<PlanItem | null>(null);
   const [billForm, setBillForm] = useState<BillingDetails>({ name: "", email: "", phone: "", address: "", gstin: "" });
+  const [cycle, setCycle] = useState<"monthly" | "quarterly" | "yearly">("monthly");
+  const [autopay, setAutopay] = useState(true);
   const [viewInvoice, setViewInvoice] = useState<InvoiceItem | null>(null);
 
   const load = useCallback(async () => {
@@ -103,7 +105,10 @@ export default function BillingPage() {
     setError(null);
     try {
       const billing: BillingDetails = { ...billForm, gstin: billForm.gstin || undefined };
-      const order = await api.billing.order(token, plan.id, billing);
+      // Autopay → recurring Razorpay subscription; otherwise a one-time order.
+      const order = autopay
+        ? await api.billing.subscribeAuto(token, plan.id, billing, cycle)
+        : await api.billing.order(token, plan.id, billing, cycle);
 
       // Free plan — assigned immediately, invoice generated, no checkout.
       if (order.free) {
@@ -123,27 +128,34 @@ export default function BillingPage() {
       }
 
       const RazorpayCtor = (window as unknown as { Razorpay: new (opts: unknown) => { open: () => void } }).Razorpay;
+      const useAutopay = autopay && !!order.subscription_id;
       const rzp = new RazorpayCtor({
         key: order.key_id,
-        amount: order.amount,
-        currency: order.currency,
-        order_id: order.order_id,
+        ...(useAutopay ? { subscription_id: order.subscription_id } : { amount: order.amount, currency: order.currency, order_id: order.order_id }),
         name: "Eydia.ai",
-        description: `${plan.name} plan`,
+        description: `${plan.name} plan · ${CYCLES[cycle].label}${useAutopay ? " (autopay)" : ""}`,
         prefill: { name: billing.name, email: billing.email, contact: billing.phone },
         theme: { color: "#5b6bf5" },
-        handler: async (resp: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => {
+        handler: async (resp: { razorpay_order_id?: string; razorpay_subscription_id?: string; razorpay_payment_id: string; razorpay_signature: string }) => {
           try {
-            const v = await api.billing.verify(token, {
-              plan_id: plan.id,
-              billing,
-              razorpay_order_id: resp.razorpay_order_id,
-              razorpay_payment_id: resp.razorpay_payment_id,
-              razorpay_signature: resp.razorpay_signature,
-            });
-            setBillTarget(null);
-            setSubscription(v.subscription);
-            flash(v.message);
+            if (useAutopay) {
+              const v = await api.billing.verifySubscription(token, {
+                plan_id: plan.id, cycle, billing,
+                razorpay_subscription_id: resp.razorpay_subscription_id ?? order.subscription_id ?? "",
+                razorpay_payment_id: resp.razorpay_payment_id,
+                razorpay_signature: resp.razorpay_signature,
+              });
+              setBillTarget(null); setSubscription(v.subscription);
+              flash(`Autopay set up — you're on the ${plan.name} plan (${CYCLES[cycle].label}).`);
+            } else {
+              const v = await api.billing.verify(token, {
+                plan_id: plan.id, cycle, billing,
+                razorpay_order_id: resp.razorpay_order_id ?? "",
+                razorpay_payment_id: resp.razorpay_payment_id,
+                razorpay_signature: resp.razorpay_signature,
+              });
+              setBillTarget(null); setSubscription(v.subscription); flash(v.message);
+            }
             await load();
           } catch (err) {
             setError((err as ApiError).message);
@@ -161,11 +173,20 @@ export default function BillingPage() {
     }
   }
 
-  // GST preview for the billing modal.
+  // Cycle pricing — matches the backend (months × monthly price × (1 − discount)).
+  const CYCLES = {
+    monthly: { label: "Monthly", months: 1, discount: 0 },
+    quarterly: { label: "Quarterly", months: 3, discount: 0.1 },
+    yearly: { label: "Yearly", months: 12, discount: 0.2 },
+  } as const;
+
+  // GST preview for the billing modal (reflects the chosen cycle).
   const quote = (() => {
-    const price = billTarget?.price ?? 0;
+    const monthly = billTarget?.price ?? 0;
+    const c = CYCLES[cycle];
+    const price = Math.round(monthly * c.months * (1 - c.discount));
     const gst = Math.round(price * gstRate) / 100;
-    return { base: price, gst, total: price + gst };
+    return { base: price, gst, total: price + gst, saved: Math.round(monthly * c.months) - price };
   })();
   const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -340,10 +361,37 @@ export default function BillingPage() {
                 <input value={billForm.gstin ?? ""} onChange={(e) => setBillForm((f) => ({ ...f, gstin: e.target.value }))} placeholder="22AAAAA0000A1Z5" />
               </div>
 
+              {/* Billing cycle */}
+              <div className="field">
+                <label>Billing cycle</label>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {(["monthly", "quarterly", "yearly"] as const).map((c) => {
+                    const off = CYCLES[c].discount * 100;
+                    const on = cycle === c;
+                    return (
+                      <button type="button" key={c} onClick={() => setCycle(c)} style={{
+                        flex: 1, minWidth: 92, cursor: "pointer", padding: "9px 10px", borderRadius: 10, fontSize: 13, fontWeight: 700,
+                        border: `2px solid ${on ? "var(--accent)" : "var(--border)"}`, background: on ? "color-mix(in srgb, var(--accent) 8%, #fff)" : "#fff",
+                      }}>
+                        {CYCLES[c].label}
+                        {off > 0 && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#0a7d47" }}>Save {off}%</div>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Autopay */}
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "4px 0 10px", cursor: "pointer", fontSize: 13.5 }}>
+                <input type="checkbox" checked={autopay} onChange={(e) => setAutopay(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />
+                <span><strong>Autopay</strong> — renew automatically every {CYCLES[cycle].label.toLowerCase().replace("ly", "")} via Razorpay (UPI / card mandate). Uncheck to pay once manually.</span>
+              </label>
+
               <div style={{ background: "#f4f8f7", borderRadius: 10, padding: "12px 14px", margin: "6px 0 14px", fontSize: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span className="muted">Plan ({billTarget.name})</span><span>{inr(quote.base)}</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span className="muted">{billTarget.name} · {CYCLES[cycle].label}</span><span>{inr(quote.base)}</span></div>
+                {quote.saved > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>You save</span><span>−{inr(quote.saved)}</span></div>}
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span className="muted">GST ({gstRate}%)</span><span>{inr(quote.gst)}</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, borderTop: "1px solid var(--border)", paddingTop: 6 }}><span>Total payable</span><span>{inr(quote.total)}</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, borderTop: "1px solid var(--border)", paddingTop: 6 }}><span>{autopay ? "Charged now, then auto" : "Total payable"}</span><span>{inr(quote.total)}</span></div>
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>

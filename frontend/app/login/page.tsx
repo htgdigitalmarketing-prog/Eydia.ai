@@ -21,6 +21,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState<"password" | "otp">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -140,7 +141,13 @@ export default function LoginPage() {
             </div>
             <div className="field">
               <label>Password</label>
-              <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" />
+              <div style={{ position: "relative" }}>
+                <input type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="••••••••" style={{ width: "100%", paddingRight: 44 }} />
+                <button type="button" onClick={() => setShowPassword((v) => !v)} aria-label={showPassword ? "Hide password" : "Show password"}
+                  style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--muted)", padding: 4 }}>
+                  {showPassword ? "🙈" : "👁️"}
+                </button>
+              </div>
             </div>
             <button className="btn" disabled={loading}>{loading ? "Signing in…" : "Sign in"}</button>
           </form>

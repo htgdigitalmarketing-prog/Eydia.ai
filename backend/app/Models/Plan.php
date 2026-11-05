@@ -18,12 +18,13 @@ class Plan extends Model
     protected $fillable = [
         'name', 'slug', 'description', 'billing_period', 'price', 'currency',
         'limits', 'features', 'trial_days', 'is_active', 'is_public',
-        'sort_order', 'stripe_price_id', 'razorpay_plan_id',
+        'sort_order', 'stripe_price_id', 'razorpay_plan_id', 'meta',
     ];
 
     protected $casts = [
         'limits' => 'array',
         'features' => 'array',
+        'meta' => 'array',
         'price' => 'decimal:2',
         'is_active' => 'boolean',
         'is_public' => 'boolean',

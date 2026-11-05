@@ -18,6 +18,7 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
   function update(key: keyof typeof form, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -67,12 +68,16 @@ export default function RegisterPage() {
           </div>
           <div className="field">
             <label>Password</label>
-            <input type="password" value={form.password} onChange={(e) => update("password", e.target.value)} required placeholder="Min 8 chars, mixed case + number" />
+            <div style={{ position: "relative" }}>
+              <input type={showPw ? "text" : "password"} value={form.password} onChange={(e) => update("password", e.target.value)} required placeholder="Min 8 chars, mixed case + number" style={{ width: "100%", paddingRight: 44 }} />
+              <button type="button" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? "Hide password" : "Show password"}
+                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--muted)", padding: 4 }}>{showPw ? "🙈" : "👁️"}</button>
+            </div>
             {fieldErrors.password && <div style={{ color: "#e02424", fontSize: 12, marginTop: 4 }}>{fieldErrors.password[0]}</div>}
           </div>
           <div className="field">
             <label>Confirm password</label>
-            <input type="password" value={form.password_confirmation} onChange={(e) => update("password_confirmation", e.target.value)} required placeholder="Repeat password" />
+            <input type={showPw ? "text" : "password"} value={form.password_confirmation} onChange={(e) => update("password_confirmation", e.target.value)} required placeholder="Repeat password" />
           </div>
           <button className="btn" disabled={loading}>{loading ? "Creating…" : "Create workspace"}</button>
         </form>

@@ -395,10 +395,16 @@ export const api = {
       request<{ invoices: InvoiceItem[]; meta: PaginationMeta }>("/billing/invoices", { token }),
     subscribe: (token: string, planId: string) =>
       request<{ subscription: SubscriptionItem2 }>("/billing/subscribe", { method: "POST", body: { plan_id: planId }, token }),
-    order: (token: string, planId: string, billing: BillingDetails) =>
-      request<RazorpayOrder>("/billing/order", { method: "POST", body: { plan_id: planId, billing }, token }),
-    verify: (token: string, body: { plan_id: string; billing: BillingDetails; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
+    order: (token: string, planId: string, billing: BillingDetails, cycle = "monthly") =>
+      request<RazorpayOrder>("/billing/order", { method: "POST", body: { plan_id: planId, billing, cycle }, token }),
+    verify: (token: string, body: { plan_id: string; cycle?: string; billing: BillingDetails; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
       request<{ message: string; subscription: SubscriptionItem2; invoice: InvoiceItem }>("/billing/verify", { method: "POST", body, token }),
+    // Autopay (recurring Razorpay subscription / mandate).
+    subscribeAuto: (token: string, planId: string, billing: BillingDetails, cycle = "monthly") =>
+      request<RazorpayOrder & { autopay?: boolean; subscription_id?: string; short_url?: string | null }>(
+        "/billing/subscribe-auto", { method: "POST", body: { plan_id: planId, billing, cycle }, token }),
+    verifySubscription: (token: string, body: { plan_id: string; cycle?: string; billing: BillingDetails; razorpay_subscription_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
+      request<{ subscription: SubscriptionItem2; invoice: InvoiceItem }>("/billing/verify-subscription", { method: "POST", body, token }),
   },
 
   team: {
@@ -1758,6 +1764,9 @@ export type PlanItem = {
 
 export type RazorpayOrder = {
   free: boolean;
+  autopay?: boolean;
+  subscription_id?: string;
+  short_url?: string | null;
   subscription?: SubscriptionItem2;
   invoice?: InvoiceItem;
   order_id?: string;

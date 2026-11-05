@@ -123,16 +123,17 @@ class BillingController extends Controller
         $this->authorize('billing.manage');
 
         $data = $request->validate(array_merge(
-            ['plan_id' => ['required', 'string', 'exists:plans,uuid']],
+            ['plan_id' => ['required', 'string', 'exists:plans,uuid'], 'cycle' => ['sometimes', 'string']],
             $this->billingRules(),
         ));
+        $cycle = \App\Support\BillingCycle::normalize($data['cycle'] ?? null);
 
         $plan = Plan::where('uuid', $data['plan_id'])->where('is_active', true)->firstOrFail();
-        [$base, $rate, $tax, $total] = $this->amounts($plan);
+        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle);
 
         // Free plan — no payment needed, assign and invoice (₹0) right away.
         if ($total <= 0) {
-            $subscription = $this->applyPlan($plan, $request->user()->tenant_id);
+            $subscription = $this->applyPlan($plan, $request->user()->tenant_id, $cycle);
             $invoice = $this->generateInvoice($subscription, $plan, $data['billing'], $base, $rate, $tax, $total, 'free', null);
             return $this->ok([
                 'free' => true,
@@ -156,7 +157,7 @@ class BillingController extends Controller
                 'amount' => $total, // paise, incl GST
                 'currency' => $plan->currency ?: 'INR',
                 'receipt' => 'plan_' . $plan->uuid . '_' . now()->timestamp,
-                'notes' => ['plan' => $plan->name, 'tenant_id' => (string) $request->user()->tenant_id],
+                'notes' => ['plan' => $plan->name, 'tenant_id' => (string) $request->user()->tenant_id, 'cycle' => $cycle],
             ]);
 
         if ($response->failed()) {
@@ -174,9 +175,93 @@ class BillingController extends Controller
             'subtotal' => $base,
             'tax' => $tax,
             'gst_rate' => $rate,
+            'cycle' => $cycle,
             'currency' => $plan->currency ?: 'INR',
             'key_id' => $key,
             'plan' => $this->planArray($plan),
+        ]);
+    }
+
+    /**
+     * Start AUTOPAY: create a Razorpay subscription the customer authorises once,
+     * then Razorpay auto-charges every cycle. Returns the subscription id the
+     * frontend opens in Razorpay checkout.
+     */
+    public function subscribeAuto(Request $request, \App\Modules\Billing\Services\RazorpaySubscriptionService $razor): JsonResponse
+    {
+        $this->authorize('billing.manage');
+
+        $data = $request->validate(array_merge(
+            ['plan_id' => ['required', 'string', 'exists:plans,uuid'], 'cycle' => ['sometimes', 'string']],
+            $this->billingRules(),
+        ));
+        $cycle = \App\Support\BillingCycle::normalize($data['cycle'] ?? null);
+        $plan = Plan::where('uuid', $data['plan_id'])->where('is_active', true)->firstOrFail();
+
+        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle);
+        if ($total <= 0) {
+            // Free plan — no mandate needed.
+            $subscription = $this->applyPlan($plan, $request->user()->tenant_id, $cycle);
+            $this->generateInvoice($subscription, $plan, $data['billing'], $base, $rate, $tax, $total, 'free', null);
+
+            return $this->ok(['free' => true, 'subscription' => $this->subscriptionArray($subscription)]);
+        }
+
+        $sub = $razor->createSubscription($plan, $cycle, $request->user()->tenant_id, $data['billing']);
+        if (! $sub) {
+            return $this->fail($razor->getLastError() ?? 'Could not start autopay.', [], 502);
+        }
+
+        return $this->ok([
+            'free' => false,
+            'autopay' => true,
+            'subscription_id' => $sub['id'],
+            'short_url' => $sub['short_url'],
+            'key_id' => config('services.razorpay.key'),
+            'amount' => $total,
+            'cycle' => $cycle,
+            'plan' => $this->planArray($plan),
+        ]);
+    }
+
+    /**
+     * Confirm autopay after the customer authorised the mandate. Verifies the
+     * Razorpay signature (payment_id|subscription_id), activates the plan and
+     * links the subscription so renewals via webhook keep it active.
+     */
+    public function verifySubscription(Request $request, \App\Modules\Billing\Services\RazorpaySubscriptionService $razor): JsonResponse
+    {
+        $this->authorize('billing.manage');
+
+        $data = $request->validate(array_merge([
+            'plan_id' => ['required', 'string', 'exists:plans,uuid'],
+            'cycle' => ['sometimes', 'string'],
+            'razorpay_subscription_id' => ['required', 'string'],
+            'razorpay_payment_id' => ['required', 'string'],
+            'razorpay_signature' => ['required', 'string'],
+        ], $this->billingRules()));
+        $cycle = \App\Support\BillingCycle::normalize($data['cycle'] ?? null);
+
+        if (! $razor->verifySignature($data['razorpay_subscription_id'], $data['razorpay_payment_id'], $data['razorpay_signature'])) {
+            Log::warning('billing.verifySubscription: signature mismatch', ['sub' => $data['razorpay_subscription_id']]);
+
+            return $this->fail('Autopay verification failed. If money was deducted it will be refunded automatically.', [], 422);
+        }
+
+        $plan = Plan::where('uuid', $data['plan_id'])->where('is_active', true)->firstOrFail();
+        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle);
+
+        $subscription = $this->applyPlan($plan, $request->user()->tenant_id, $cycle, [
+            'gateway' => 'razorpay',
+            'gateway_subscription_id' => $data['razorpay_subscription_id'],
+        ]);
+        $invoice = $this->generateInvoice($subscription, $plan, $data['billing'], $base, $rate, $tax, $total, 'paid', $data['razorpay_payment_id']);
+
+        Log::info('billing.verifySubscription: autopay active', ['plan' => $plan->name, 'sub' => $data['razorpay_subscription_id']]);
+
+        return $this->ok([
+            'subscription' => $this->subscriptionArray($subscription),
+            'invoice' => $this->invoiceArray($invoice),
         ]);
     }
 
@@ -190,10 +275,12 @@ class BillingController extends Controller
 
         $data = $request->validate(array_merge([
             'plan_id' => ['required', 'string', 'exists:plans,uuid'],
+            'cycle' => ['sometimes', 'string'],
             'razorpay_order_id' => ['required', 'string'],
             'razorpay_payment_id' => ['required', 'string'],
             'razorpay_signature' => ['required', 'string'],
         ], $this->billingRules()));
+        $cycle = \App\Support\BillingCycle::normalize($data['cycle'] ?? null);
 
         $secret = config('services.razorpay.secret');
         $expected = hash_hmac('sha256', $data['razorpay_order_id'] . '|' . $data['razorpay_payment_id'], (string) $secret);
@@ -206,8 +293,8 @@ class BillingController extends Controller
         Log::info('billing.verify: signature valid, applying plan', ['payment_id' => $data['razorpay_payment_id'], 'tenant' => $request->user()->tenant_id]);
 
         $plan = Plan::where('uuid', $data['plan_id'])->where('is_active', true)->firstOrFail();
-        [$base, $rate, $tax, $total] = $this->amounts($plan);
-        $subscription = $this->applyPlan($plan, $request->user()->tenant_id);
+        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle);
+        $subscription = $this->applyPlan($plan, $request->user()->tenant_id, $cycle);
         $invoice = $this->generateInvoice($subscription, $plan, $data['billing'], $base, $rate, $tax, $total, 'paid', $data['razorpay_payment_id']);
 
         Log::info('billing.verify: plan activated', ['plan' => $plan->name, 'subscription_id' => $subscription->id]);
@@ -233,11 +320,13 @@ class BillingController extends Controller
     }
 
     /** @return array{0:int,1:int,2:int,3:int} [base, gstRate, tax, total] in paise. */
-    private function amounts(Plan $plan): array
+    private function amounts(Plan $plan, ?string $cycle = null): array
     {
         // Plan price is GST-INCLUSIVE — the displayed price is what the customer
-        // pays; the base/GST split is derived from it.
-        $g = \App\Support\Gst::inclusivePaise((float) $plan->price, (int) InvoiceSetting::current()->gst_rate);
+        // pays; the base/GST split is derived from it. A longer cycle multiplies
+        // the monthly price and applies its discount.
+        $price = $cycle ? \App\Support\BillingCycle::price((float) $plan->price, $cycle) : (float) $plan->price;
+        $g = \App\Support\Gst::inclusivePaise($price, (int) InvoiceSetting::current()->gst_rate);
 
         return [$g['base'], $g['rate'], $g['tax'], $g['total']];
     }
@@ -292,14 +381,17 @@ class BillingController extends Controller
     }
 
     /** Create or update the tenant's subscription to point at the given plan. */
-    private function applyPlan(Plan $plan, int $tenantId): Subscription
+    private function applyPlan(Plan $plan, int $tenantId, ?string $cycle = null, array $gateway = []): Subscription
     {
-        $attributes = [
+        $months = $cycle ? \App\Support\BillingCycle::months($cycle) : ($plan->billing_period === 'yearly' ? 12 : 1);
+
+        $attributes = array_merge([
             'plan_id' => $plan->id,
             'status' => 'active',
             'current_period_start' => now(),
-            'current_period_end' => $plan->billing_period === 'yearly' ? now()->addYear() : now()->addMonth(),
-        ];
+            'current_period_end' => now()->addMonths($months),
+            'cancelled_at' => null,
+        ], $gateway);
 
         $subscription = Subscription::latest('id')->first();
         if ($subscription) {
