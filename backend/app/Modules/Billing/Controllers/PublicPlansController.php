@@ -29,7 +29,9 @@ class PublicPlansController extends Controller
                 'price' => (float) $p->price,
                 'currency' => $p->currency ?: 'INR',
                 'trial_days' => $p->trial_days,
-                'features' => array_values($p->features ?? []),
+                // Keyed feature map (e.g. {"dash_gbp":true,...}) so the pricing
+                // page can label each enabled capability.
+                'features' => (object) ($p->features ?? []),
                 'limits' => $p->limits ?? [],
             ])->values(),
         ]);

@@ -1345,7 +1345,7 @@ export type PublicPlan = {
   price: number;
   currency: string;
   trial_days: number;
-  features: string[];
+  features: Record<string, boolean>;
   limits: Record<string, number | boolean>;
 };
 
