@@ -53,8 +53,11 @@ class MobileAuthController extends Controller
             return redirect($this->frontend('/login', ['error' => 'link_expired']));
         }
 
+        // Do NOT call auth('api')->logout() here: login() set this token on the
+        // guard, so logout() would blacklist the very token we just issued and the
+        // web app would receive a dead (401) token. The guard is request-scoped,
+        // so nothing persists between requests anyway.
         $token = auth('api')->login($user);
-        auth('api')->logout(); // the token travels in the URL; don't keep a guard session
 
         return redirect($this->frontend('/auth/callback', [
             'token' => $token,
