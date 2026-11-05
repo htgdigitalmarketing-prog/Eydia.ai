@@ -123,19 +123,20 @@ class GoogleAuthController extends Controller
     {
         $data = $request->validate(['id_token' => ['required', 'string']]);
 
+        // The audience check must NOT be skippable — without a configured mobile
+        // client id a token issued to any app would log in. Require it up front
+        // (fail closed, before we even call Google).
+        $expectedAud = config('services.google.mobile_client_id');
+        if (! $expectedAud) {
+            return $this->fail('Google sign-in is not configured.', [], 503, 'not_configured');
+        }
+
         $res = Http::acceptJson()->get('https://oauth2.googleapis.com/tokeninfo', ['id_token' => $data['id_token']]);
         if (! $res->successful()) {
             return $this->fail('Google sign-in failed — the token is invalid or expired.', [], 401, 'token_invalid');
         }
         $info = $res->json();
 
-        // The audience check must NOT be skippable — without a configured mobile
-        // client id a token issued to any app would log in. Require it to be set
-        // and to match exactly.
-        $expectedAud = config('services.google.mobile_client_id');
-        if (! $expectedAud) {
-            return $this->fail('Google sign-in is not configured.', [], 503, 'not_configured');
-        }
         if (($info['aud'] ?? null) !== $expectedAud) {
             return $this->fail('This Google token was not issued for the Eydia app.', [], 401, 'token_invalid');
         }
