@@ -46,14 +46,19 @@ export function EmbeddedSignupButton({
   useEffect(() => {
     // Capture the WABA / phone id that Meta posts back during the flow.
     function onMessage(event: MessageEvent) {
-      if (typeof event.origin !== "string" || !event.origin.endsWith("facebook.com")) return;
+      // Embedded Signup messages come from facebook.com (www / web / m).
+      if (typeof event.origin !== "string" || !event.origin.includes("facebook.com")) return;
       try {
         const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (data?.type === "WA_EMBEDDED_SIGNUP" && data?.data) {
-          sessionInfo.current = {
-            waba_id: data.data.waba_id,
-            phone_number_id: data.data.phone_number_id,
-          };
+        if (data?.type === "WA_EMBEDDED_SIGNUP") {
+          const d = data.data ?? data;
+          const waba = d?.waba_id ?? d?.business_id;
+          if (waba) {
+            sessionInfo.current = {
+              waba_id: waba,
+              phone_number_id: d?.phone_number_id,
+            };
+          }
         }
       } catch {
         /* not our message */
@@ -98,7 +103,7 @@ export function EmbeddedSignupButton({
     sessionInfo.current = {};
     try {
     window.FB.login(
-      (response: any) => {
+      async (response: any) => {
         const code = response?.authResponse?.code;
         if (!code) {
           // Surface Meta's own status so the cause is clear (often a domain /
@@ -112,9 +117,16 @@ export function EmbeddedSignupButton({
           );
           return;
         }
-        const waba = sessionInfo.current.waba_id;
+        // The WABA id arrives via a separate postMessage event that can land a
+        // moment AFTER this login callback — wait up to ~5s for it instead of
+        // failing immediately.
+        let waba = sessionInfo.current.waba_id;
+        for (let i = 0; i < 25 && !waba; i++) {
+          await new Promise((r) => setTimeout(r, 200));
+          waba = sessionInfo.current.waba_id;
+        }
         if (!waba) {
-          onError("Could not read the WhatsApp Business Account from Meta. Please try again.");
+          onError("Facebook signed in, but didn't return your WhatsApp Business Account. Make sure you selected (or created) a WhatsApp Business Account and a phone number in the popup, then try again — or use manual connect below.");
           return;
         }
         onComplete({ code, waba_id: waba, phone_number_id: sessionInfo.current.phone_number_id ?? null });
