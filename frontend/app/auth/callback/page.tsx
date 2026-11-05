@@ -9,10 +9,15 @@ export default function GoogleCallbackPage() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    const token = new URLSearchParams(window.location.search).get("token");
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
     if (token) {
       saveToken(token);
-      router.replace("/dashboard");
+      // The mobile "Continue on web" hand-off passes a whitelisted `next`
+      // (billing pages). Normal web Google login has no `next` → /dashboard.
+      const next = params.get("next");
+      const allowed = ["/billing", "/plans", "/buy-credits"];
+      router.replace(next && allowed.includes(next) ? next : "/dashboard");
     } else {
       setError(true);
       const t = setTimeout(() => router.replace("/login"), 1800);
