@@ -110,8 +110,11 @@ export function EmbeddedSignupButton({
     }
     sessionInfo.current = {};
     try {
+    // IMPORTANT: the Facebook JS SDK rejects an async function here
+    // ("Expression is of type asyncfunction, not function"), so this callback
+    // must be a plain function. The waba-id wait is done in an async IIFE inside.
     window.FB.login(
-      async (response: any) => {
+      (response: any) => {
         const code = response?.authResponse?.code;
         if (!code) {
           // Surface Meta's own status so the cause is clear (often a domain /
@@ -128,16 +131,18 @@ export function EmbeddedSignupButton({
         // The WABA id arrives via a separate postMessage event that can land a
         // moment AFTER this login callback — wait up to ~5s for it instead of
         // failing immediately.
-        let waba = sessionInfo.current.waba_id;
-        for (let i = 0; i < 25 && !waba; i++) {
-          await new Promise((r) => setTimeout(r, 200));
-          waba = sessionInfo.current.waba_id;
-        }
-        if (!waba) {
-          onError("Facebook signed in, but didn't return your WhatsApp Business Account. Make sure you selected (or created) a WhatsApp Business Account and a phone number in the popup, then try again — or use manual connect below.");
-          return;
-        }
-        onComplete({ code, waba_id: waba, phone_number_id: sessionInfo.current.phone_number_id ?? null });
+        void (async () => {
+          let waba = sessionInfo.current.waba_id;
+          for (let i = 0; i < 25 && !waba; i++) {
+            await new Promise((r) => setTimeout(r, 200));
+            waba = sessionInfo.current.waba_id;
+          }
+          if (!waba) {
+            onError("Facebook signed in, but didn't return your WhatsApp Business Account. Make sure you selected (or created) a WhatsApp Business Account and a phone number in the popup, then try again — or use manual connect below.");
+            return;
+          }
+          onComplete({ code, waba_id: waba, phone_number_id: sessionInfo.current.phone_number_id ?? null });
+        })();
       },
       {
         config_id: configId,
