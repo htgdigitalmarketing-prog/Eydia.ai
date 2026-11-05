@@ -129,8 +129,14 @@ class GoogleAuthController extends Controller
         }
         $info = $res->json();
 
+        // The audience check must NOT be skippable — without a configured mobile
+        // client id a token issued to any app would log in. Require it to be set
+        // and to match exactly.
         $expectedAud = config('services.google.mobile_client_id');
-        if ($expectedAud && ($info['aud'] ?? null) !== $expectedAud) {
+        if (! $expectedAud) {
+            return $this->fail('Google sign-in is not configured.', [], 503, 'not_configured');
+        }
+        if (($info['aud'] ?? null) !== $expectedAud) {
             return $this->fail('This Google token was not issued for the Eydia app.', [], 401, 'token_invalid');
         }
         $verified = $info['email_verified'] ?? false;
