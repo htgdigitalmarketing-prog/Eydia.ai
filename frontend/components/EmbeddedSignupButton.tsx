@@ -100,6 +100,14 @@ export function EmbeddedSignupButton({
       onError("Facebook SDK is still loading. Please try again in a moment.");
       return;
     }
+    if (!appId) {
+      onError("WhatsApp isn't configured (Meta App ID is missing). Set META_APP_ID on the server, or use manual connect below.");
+      return;
+    }
+    if (!configId) {
+      onError("WhatsApp isn't configured (Meta login configuration is missing). Set META_CONFIG_ID to your Facebook Login for Business configuration ID on the server, then clear the config cache — or use manual connect below.");
+      return;
+    }
     sessionInfo.current = {};
     try {
     window.FB.login(
@@ -138,8 +146,11 @@ export function EmbeddedSignupButton({
         extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
       }
     );
-    } catch {
-      onError("Could not open the Facebook sign-up dialog.");
+    } catch (e: any) {
+      // Surface Meta's real reason (usually an invalid config_id or the SDK not
+      // being initialised) instead of a generic message.
+      const reason = e?.message ? ": " + e.message : "";
+      onError("Could not open the Facebook sign-up dialog" + reason + ". Check the Meta login configuration (META_CONFIG_ID), or use manual connect below.");
     }
   }
 
