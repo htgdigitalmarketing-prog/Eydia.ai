@@ -92,7 +92,9 @@ export default function WhatsAppPage() {
       // Show the backend message (it explains when the WABA connected but no
       // phone number was found yet).
       setNotice(res?.message || "WhatsApp connected via Meta Embedded Signup.");
-      setShowForm(false);
+      // Keep the connect form open when no number was added, so the user can add
+      // it manually (paste the Phone number ID) without starting over.
+      setShowForm((res?.numbers_count ?? 1) === 0);
       await load();
     } catch (err) {
       setError((err as ApiError).message);
