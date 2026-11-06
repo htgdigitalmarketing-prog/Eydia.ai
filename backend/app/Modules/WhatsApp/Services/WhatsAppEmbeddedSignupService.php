@@ -52,7 +52,22 @@ class WhatsAppEmbeddedSignupService extends BaseService
                 ],
             );
 
-            foreach ($this->fetchPhoneNumbers($wabaId, $token) as $number) {
+            // List the WABA's numbers. If that comes back empty (common right
+            // after creating a new number, or when the list endpoint is limited)
+            // but Meta gave us the selected phone_number_id, fetch it directly so
+            // the number still registers.
+            $numbers = $this->fetchPhoneNumbers($wabaId, $token);
+            if ($numbers === [] && $phoneNumberId) {
+                $single = $this->fetchSinglePhoneNumber($phoneNumberId, $token);
+                if ($single) {
+                    $numbers = [$single];
+                }
+            }
+
+            foreach ($numbers as $number) {
+                if (empty($number['id'])) {
+                    continue;
+                }
                 $phone = WhatsappPhoneNumber::withoutGlobalScopes()
                     ->withTrashed()
                     ->updateOrCreate(
@@ -118,10 +133,36 @@ class WhatsAppEmbeddedSignupService extends BaseService
 
     private function fetchPhoneNumbers(string $wabaId, string $token): array
     {
-        return Http::withToken($token)->acceptJson()
+        $res = Http::withToken($token)->acceptJson()
             ->get("{$this->graphBase()}/{$wabaId}/phone_numbers", [
                 'fields' => 'id,display_phone_number,verified_name,quality_rating',
-            ])
-            ->json('data') ?? [];
+            ]);
+
+        if (! $res->successful()) {
+            \Illuminate\Support\Facades\Log::warning('wa embedded signup: phone_numbers list failed', [
+                'waba_id' => $wabaId, 'status' => $res->status(), 'error' => $res->json('error.message'),
+            ]);
+        }
+
+        return $res->json('data') ?? [];
+    }
+
+    /** Fetch one phone number's details by id (fallback when the list is empty). */
+    private function fetchSinglePhoneNumber(string $phoneNumberId, string $token): ?array
+    {
+        $res = Http::withToken($token)->acceptJson()
+            ->get("{$this->graphBase()}/{$phoneNumberId}", [
+                'fields' => 'id,display_phone_number,verified_name,quality_rating',
+            ]);
+
+        if (! $res->successful() || ! $res->json('id')) {
+            \Illuminate\Support\Facades\Log::warning('wa embedded signup: single phone fetch failed', [
+                'phone_number_id' => $phoneNumberId, 'status' => $res->status(), 'error' => $res->json('error.message'),
+            ]);
+
+            return null;
+        }
+
+        return $res->json();
     }
 }

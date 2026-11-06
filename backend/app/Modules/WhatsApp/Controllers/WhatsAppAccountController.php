@@ -75,7 +75,17 @@ class WhatsAppAccountController extends Controller
             $request->input('phone_number_id'),
         );
 
-        return $this->ok(['account' => new WhatsappAccountResource($waba->load('phoneNumbers'))], 201);
+        $waba->load('phoneNumbers');
+        $count = $waba->phoneNumbers->count();
+        $message = $count > 0
+            ? 'WhatsApp connected — ' . $count . ' number(s) added.'
+            : 'WhatsApp Business Account connected, but no phone number was found on it yet. Add and verify a number in Meta WhatsApp Manager, then click “Connect WhatsApp” again to pull it in.';
+
+        return $this->ok([
+            'account' => new WhatsappAccountResource($waba),
+            'numbers_count' => $count,
+            'message' => $message,
+        ], 201);
     }
 
     public function sync(Request $request, WhatsappPhoneNumber $number): JsonResponse

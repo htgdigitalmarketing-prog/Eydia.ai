@@ -92,7 +92,7 @@ export const api = {
     embeddedSignup: (
       token: string,
       body: { code: string; waba_id: string; phone_number_id: string | null }
-    ) => request<{ account: unknown }>("/whatsapp/embedded-signup", { method: "POST", body, token }),
+    ) => request<{ account: unknown; numbers_count?: number; message?: string }>("/whatsapp/embedded-signup", { method: "POST", body, token }),
     sync: (token: string, id: string) =>
       request<{ number: WaNumber }>(`/whatsapp/numbers/${id}/sync`, { method: "POST", token }),
     sendTest: (

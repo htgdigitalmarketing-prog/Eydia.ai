@@ -88,8 +88,10 @@ export default function WhatsAppPage() {
     if (!token) return;
     setError(null);
     try {
-      await api.whatsapp.embeddedSignup(token, r);
-      setNotice("WhatsApp connected via Meta Embedded Signup.");
+      const res = await api.whatsapp.embeddedSignup(token, r);
+      // Show the backend message (it explains when the WABA connected but no
+      // phone number was found yet).
+      setNotice(res?.message || "WhatsApp connected via Meta Embedded Signup.");
       setShowForm(false);
       await load();
     } catch (err) {
