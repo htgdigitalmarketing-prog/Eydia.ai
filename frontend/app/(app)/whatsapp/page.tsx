@@ -277,6 +277,10 @@ export default function WhatsAppPage() {
                 <div className="row" style={{ alignItems: "center" }}>
                   <span style={{ flex: 2 }}>
                     <b>{n.display_phone_number}</b>{n.is_default && <span className="badge" style={{ marginLeft: 8 }}>default</span>}
+                    {/* Meta gives every new WABA a free test number (+1 555 00000…). Flag it. */}
+                    {/^\+?1?\s?555\s?0{3,}/.test((n.display_phone_number || "").replace(/[^0-9+ ]/g, "")) && (
+                      <span className="badge" style={{ marginLeft: 8, background: "#fff4e5", color: "#8a5a00" }} title="This is Meta's free test number — it can only message a few pre-verified recipients. Add your real, verified number in Meta WhatsApp Manager.">⚠️ Test number</span>
+                    )}
                     <div className="muted" style={{ fontSize: 12 }}>{n.waba?.name}</div>
                   </span>
                   <span style={{ flex: 1 }}><QualityBadge rating={n.quality_rating} /></span>
