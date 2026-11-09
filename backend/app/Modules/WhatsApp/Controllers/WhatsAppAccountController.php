@@ -95,6 +95,21 @@ class WhatsAppAccountController extends Controller
         return $this->ok(['number' => new WhatsappNumberResource($this->accounts->syncNumber($number))]);
     }
 
+    /** Pull in any numbers added to the WABA after connecting (e.g. a real number). */
+    public function refreshNumbers(Request $request): JsonResponse
+    {
+        $this->authorize('whatsapp.manage');
+
+        $added = $this->accounts->refreshNumbers($this->tenantId($request));
+
+        return $this->ok([
+            'added' => $added,
+            'message' => $added > 0
+                ? "Pulled {$added} number(s) from Meta."
+                : 'No new numbers found. Add & verify your number in Meta WhatsApp Manager first, then try again.',
+        ]);
+    }
+
     public function register(Request $request, WhatsappPhoneNumber $number): JsonResponse
     {
         $this->authorize('whatsapp.manage');

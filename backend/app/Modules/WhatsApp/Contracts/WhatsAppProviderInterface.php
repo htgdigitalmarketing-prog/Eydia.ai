@@ -21,6 +21,9 @@ interface WhatsAppProviderInterface
 
     public function getPhoneNumber(string $phoneNumberId): array;
 
+    /** All phone numbers on a WABA (for pulling in newly-added numbers). */
+    public function listPhoneNumbers(string $wabaId): array;
+
     public function registerPhoneNumber(string $phoneNumberId, string $pin): array;
 
     public function subscribeApp(string $wabaId): array;

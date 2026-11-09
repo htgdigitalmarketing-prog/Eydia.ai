@@ -95,6 +95,8 @@ export const api = {
     ) => request<{ account: unknown; numbers_count?: number; message?: string }>("/whatsapp/embedded-signup", { method: "POST", body, token }),
     sync: (token: string, id: string) =>
       request<{ number: WaNumber }>(`/whatsapp/numbers/${id}/sync`, { method: "POST", token }),
+    refreshNumbers: (token: string) =>
+      request<{ added: number; message: string }>("/whatsapp/numbers/refresh", { method: "POST", token }),
     sendTest: (
       token: string,
       id: string,

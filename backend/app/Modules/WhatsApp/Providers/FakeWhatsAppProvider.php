@@ -52,6 +52,11 @@ class FakeWhatsAppProvider implements WhatsAppProviderInterface
         return ['id' => $phoneNumberId, 'display_phone_number' => '15550000000', 'quality_rating' => 'GREEN'];
     }
 
+    public function listPhoneNumbers(string $wabaId): array
+    {
+        return [];
+    }
+
     public function registerPhoneNumber(string $phoneNumberId, string $pin): array
     {
         return ['success' => true];

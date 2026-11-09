@@ -90,6 +90,15 @@ class MetaWhatsAppProvider implements WhatsAppProviderInterface
             fn (PendingRequest $g) => $g->get("/{$phoneNumberId}", ['fields' => $fields]));
     }
 
+    public function listPhoneNumbers(string $wabaId): array
+    {
+        $fields = 'id,display_phone_number,verified_name,quality_rating,code_verification_status';
+        $res = $this->perform('GET', "/{$wabaId}/phone_numbers", ['fields' => $fields],
+            fn (PendingRequest $g) => $g->get("/{$wabaId}/phone_numbers", ['fields' => $fields]));
+
+        return $res['data'] ?? [];
+    }
+
     public function registerPhoneNumber(string $phoneNumberId, string $pin): array
     {
         $body = ['messaging_product' => 'whatsapp', 'pin' => $pin];

@@ -15,6 +15,8 @@ Route::prefix('whatsapp')->group(function () {
     Route::get('/config', [WhatsAppAccountController::class, 'config']);
     Route::get('/numbers', [WhatsAppAccountController::class, 'numbers']);
     Route::get('/accounts', [WhatsAppAccountController::class, 'accounts']);
+    // Re-pull all WABA numbers from Meta (brings in a real number added later).
+    Route::post('/numbers/refresh', [WhatsAppAccountController::class, 'refreshNumbers']);
 
     Route::post('/connect-manual', [WhatsAppAccountController::class, 'connectManual']);
     Route::post('/embedded-signup', [WhatsAppAccountController::class, 'embeddedSignup']);

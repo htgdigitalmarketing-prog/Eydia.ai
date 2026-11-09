@@ -111,6 +111,49 @@ class WhatsAppAccountService extends BaseService
      * Pull the latest phone metadata (display number, quality rating, verified
      * name, verification status) from Meta and persist it.
      */
+    /**
+     * Re-pull every phone number on each of the tenant's WABAs from Meta and
+     * upsert them. Use this when a real number was added to the WABA after the
+     * initial connect (so Eydia only had the free test number) — it brings the
+     * newly-added number in without reconnecting. Returns the number added.
+     */
+    public function refreshNumbers(int $tenantId): int
+    {
+        $added = 0;
+        $wabas = WhatsappBusinessAccount::where('tenant_id', $tenantId)->get();
+
+        foreach ($wabas as $waba) {
+            $provider = $this->factory->for($waba);
+            foreach ($provider->listPhoneNumbers($waba->waba_id) as $number) {
+                if (empty($number['id'])) {
+                    continue;
+                }
+                $existed = WhatsappPhoneNumber::withoutGlobalScopes()->withTrashed()
+                    ->where('phone_number_id', $number['id'])->exists();
+
+                $phone = WhatsappPhoneNumber::withoutGlobalScopes()->withTrashed()->updateOrCreate(
+                    ['phone_number_id' => $number['id']],
+                    [
+                        'tenant_id' => $tenantId,
+                        'whatsapp_business_account_id' => $waba->id,
+                        'display_phone_number' => $number['display_phone_number'] ?? '',
+                        'verified_name' => $number['verified_name'] ?? null,
+                        'quality_rating' => $number['quality_rating'] ?? null,
+                        'status' => 'connected',
+                    ],
+                );
+                if ($phone->trashed()) {
+                    $phone->restore();
+                }
+                if (! $existed) {
+                    $added++;
+                }
+            }
+        }
+
+        return $added;
+    }
+
     public function syncNumber(WhatsappPhoneNumber $phone): WhatsappPhoneNumber
     {
         $provider = $this->factory->for($phone->businessAccount()->firstOrFail());

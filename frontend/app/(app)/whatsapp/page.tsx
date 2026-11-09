@@ -113,6 +113,19 @@ export default function WhatsAppPage() {
     }
   }
 
+  async function refreshNumbers() {
+    const token = getToken();
+    if (!token) return;
+    setError(null);
+    try {
+      const res = await api.whatsapp.refreshNumbers(token);
+      setNotice(res.message);
+      await load();
+    } catch (err) {
+      setError((err as ApiError).message);
+    }
+  }
+
   async function subscribeApp(id: string) {
     const token = getToken();
     if (!token) return;
@@ -259,7 +272,10 @@ export default function WhatsAppPage() {
       )}
 
       <div className="panel">
-        <h2>Connected numbers</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <h2 style={{ margin: 0 }}>Connected numbers</h2>
+          <button className="btn-mini" onClick={refreshNumbers} title="Pull in a number you added to this WhatsApp Business Account after connecting (e.g. your real number).">↻ Pull numbers from Meta</button>
+        </div>
         {loading ? (
           <p className="muted">Loading…</p>
         ) : numbers.length === 0 ? (
