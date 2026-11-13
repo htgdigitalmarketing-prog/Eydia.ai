@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, ContactItem, TagItem } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
-import { UpgradePrompt, planAllows } from "@/components/PlanGate";
-import { useUser } from "@/lib/user-context";
 
 type ImportRow = { phone: string; name?: string; email?: string; company?: string; tag_list?: string };
 
@@ -30,7 +28,6 @@ function splitLine(line: string): string[] {
 }
 
 export default function ContactsPage() {
-  const gateUser = useUser();
   const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -237,7 +234,8 @@ export default function ContactsPage() {
 
   const parsedImportCount = parseCSV(importText).length;
 
-  if (!planAllows(gateUser.plan_limits, "max_contacts")) return <UpgradePrompt title="Contacts" feature="Contacts" />;
+  // Freemium: viewing contacts (incl. auto-captured leads) is free; adding or
+  // importing is gated server-side and prompts an upgrade via the global UpgradeModal.
 
   return (
     <>

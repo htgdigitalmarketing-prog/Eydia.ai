@@ -6,72 +6,78 @@ use App\Modules\Gbp\Controllers\GbpPhotoController;
 use App\Modules\Gbp\Controllers\GbpPostController;
 use Illuminate\Support\Facades\Route;
 
-// Google Business Profile / Reviews dashboard. Gated by plan feature 'dash_gbp'.
-Route::prefix('gbp')->middleware('feature:dash_gbp')->group(function () {
-    Route::get('/overview', [GbpController::class, 'overview']);
-    // Lightweight location list (mobile location switcher).
-    Route::get('/locations', [GbpController::class, 'locations']);
-    Route::get('/reviews', [GbpController::class, 'reviews']);
-    Route::post('/reviews/{uuid}/reply', [GbpController::class, 'reply']);
-    Route::post('/reviews/{uuid}/suggest', [GbpController::class, 'suggestReply']);
-    Route::post('/sync', [GbpController::class, 'sync']);
-
-    // One-click AI optimization of the profile.
-    Route::post('/optimize', [GbpController::class, 'optimize']);
-
-    // Hide / restore a synced location (an agency Google account can manage many).
-    Route::post('/locations/{uuid}/hidden', [GbpController::class, 'setLocationHidden']);
-    // Keep only this location, hide all others (one-click).
-    Route::post('/locations/{uuid}/only', [GbpController::class, 'keepOnlyLocation']);
-    // Permanently remove a synced location (e.g. from a different Google account).
-    Route::delete('/locations/{uuid}', [GbpController::class, 'destroyLocation']);
-
-    // Business Information editor (About / Contact / Location / Hours / More).
-    Route::get('/profile', [GbpController::class, 'profile']);
-    Route::put('/profile', [GbpController::class, 'updateProfile']);
-    // AI: rewrite the business description for local SEO.
-    Route::post('/profile/ai-rewrite', [GbpController::class, 'aiRewriteProfile']);
-    // AI: analyse the connected business and set up the WHOLE profile automatically.
-    Route::post('/profile/auto-setup', [GbpController::class, 'autoSetupProfile']);
-
-    // Automation control centre (ON/OFF switches + cadence + QR review-assist).
-    Route::get('/automation', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'show']);
-    Route::put('/automation', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'update']);
-    // Run the enabled automations right now (instead of waiting for the scheduler).
-    Route::post('/automation/run', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'runNow']);
-
-    // Business insights (performance metrics) + CSV export.
-    Route::get('/insights', [GbpController::class, 'insights']);
-    Route::get('/insights/export', [GbpController::class, 'insightsCsv']);
-
-    // Google audit / health score.
-    Route::get('/health', [GbpController::class, 'health']);
-
-    // Image upload for posts & photos (drag & drop / browse).
-    Route::post('/upload', [GbpController::class, 'uploadImage']);
-
-    // Instant business website + GBP report generator (public URL).
-    Route::get('/site', [GbpController::class, 'siteStatus']);
-    Route::post('/site/generate', [GbpController::class, 'generateSite']);
-
-    // GBP posts (localPosts).
-    Route::get('/posts', [GbpPostController::class, 'index']);
-    Route::post('/posts/generate', [GbpPostController::class, 'generate']); // AI caption
-    Route::post('/posts/auto-plan', [GbpPostController::class, 'autoPlan']); // AI batch + schedule
-    Route::post('/posts', [GbpPostController::class, 'store']);
-    Route::put('/posts/{uuid}', [GbpPostController::class, 'update']);
-    Route::post('/posts/{uuid}/publish', [GbpPostController::class, 'publish']);
-    Route::delete('/posts/{uuid}', [GbpPostController::class, 'destroy']);
-
-    // GBP photos (media).
-    Route::get('/photos', [GbpPhotoController::class, 'index']);
-    Route::post('/photos/caption', [GbpPhotoController::class, 'caption']); // AI caption
-    Route::post('/photos', [GbpPhotoController::class, 'store']);
-    Route::post('/photos/{uuid}/publish', [GbpPhotoController::class, 'publish']);
-    Route::delete('/photos/{uuid}', [GbpPhotoController::class, 'destroy']);
-
-    // Connect / inspect / disconnect the tenant's Google Business Profile.
+/*
+| Google Business Profile / Reviews dashboard.
+|
+| FREEMIUM: connecting, syncing and VIEWING the profile/reviews/insights is free
+| for any signed-in tenant (no plan required) so clients can explore their data
+| before buying. Every PAID action (reply, post, photo, edit, automation, AI,
+| optimize) sits behind 'feature:dash_gbp' — which also 403s tenants without a
+| plan, so it doubles as the paywall (frontend turns that into an upgrade prompt).
+*/
+Route::prefix('gbp')->group(function () {
+    // ── FREE: connect / inspect / disconnect ────────────────────────────────
     Route::get('/connect', [GbpOAuthController::class, 'connect']);
     Route::get('/connection', [GbpOAuthController::class, 'status']);
     Route::delete('/connection', [GbpOAuthController::class, 'disconnect']);
+
+    // ── FREE: view + sync business data ─────────────────────────────────────
+    Route::get('/overview', [GbpController::class, 'overview']);
+    Route::get('/locations', [GbpController::class, 'locations']);
+    Route::get('/reviews', [GbpController::class, 'reviews']);
+    Route::post('/sync', [GbpController::class, 'sync']);
+    Route::get('/profile', [GbpController::class, 'profile']);
+    Route::get('/insights', [GbpController::class, 'insights']);
+    Route::get('/insights/export', [GbpController::class, 'insightsCsv']);
+    Route::get('/health', [GbpController::class, 'health']);
+    Route::get('/site', [GbpController::class, 'siteStatus']);
+    Route::get('/posts', [GbpPostController::class, 'index']);
+    Route::get('/photos', [GbpPhotoController::class, 'index']);
+    // Automation control centre is VIEWABLE for free ("visible but disabled");
+    // toggling it on / running it is paid (below).
+    Route::get('/automation', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'show']);
+
+    // ── PAID: every write / AI / publish action needs the GBP plan feature ───
+    Route::middleware('feature:dash_gbp')->group(function () {
+        // Reviews.
+        Route::post('/reviews/{uuid}/reply', [GbpController::class, 'reply']);
+        Route::post('/reviews/{uuid}/suggest', [GbpController::class, 'suggestReply']);
+
+        // One-click AI optimization of the profile.
+        Route::post('/optimize', [GbpController::class, 'optimize']);
+
+        // Location management.
+        Route::post('/locations/{uuid}/hidden', [GbpController::class, 'setLocationHidden']);
+        Route::post('/locations/{uuid}/only', [GbpController::class, 'keepOnlyLocation']);
+        Route::delete('/locations/{uuid}', [GbpController::class, 'destroyLocation']);
+
+        // Business Information editor.
+        Route::put('/profile', [GbpController::class, 'updateProfile']);
+        Route::post('/profile/ai-rewrite', [GbpController::class, 'aiRewriteProfile']);
+        Route::post('/profile/auto-setup', [GbpController::class, 'autoSetupProfile']);
+
+        // Automation control (enable / cadence / run now).
+        Route::put('/automation', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'update']);
+        Route::post('/automation/run', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'runNow']);
+
+        // Image upload for posts & photos.
+        Route::post('/upload', [GbpController::class, 'uploadImage']);
+
+        // Instant business website generator.
+        Route::post('/site/generate', [GbpController::class, 'generateSite']);
+
+        // GBP posts (localPosts).
+        Route::post('/posts/generate', [GbpPostController::class, 'generate']); // AI caption
+        Route::post('/posts/auto-plan', [GbpPostController::class, 'autoPlan']); // AI batch + schedule
+        Route::post('/posts', [GbpPostController::class, 'store']);
+        Route::put('/posts/{uuid}', [GbpPostController::class, 'update']);
+        Route::post('/posts/{uuid}/publish', [GbpPostController::class, 'publish']);
+        Route::delete('/posts/{uuid}', [GbpPostController::class, 'destroy']);
+
+        // GBP photos (media).
+        Route::post('/photos/caption', [GbpPhotoController::class, 'caption']); // AI caption
+        Route::post('/photos', [GbpPhotoController::class, 'store']);
+        Route::post('/photos/{uuid}/publish', [GbpPhotoController::class, 'publish']);
+        Route::delete('/photos/{uuid}', [GbpPhotoController::class, 'destroy']);
+    });
 });

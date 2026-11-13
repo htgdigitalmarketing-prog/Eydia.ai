@@ -134,6 +134,63 @@ export function ExpiredBlock() {
   );
 }
 
+/**
+ * Non-blocking top banner shown when the tenant has no active plan (no-plan OR
+ * expired). Freemium: they can still explore and connect; this nudges them to
+ * subscribe to unlock paid features.
+ */
+export function SubscribeBanner({ expired }: { expired?: boolean }) {
+  return (
+    <div style={{ background: "#eef0ff", color: "var(--accent-dark)", padding: "10px 18px", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid #dde1ff" }}>
+      <span>
+        {expired ? (
+          <><strong>Your plan has expired.</strong> You can still explore and connect your accounts — subscribe to use paid features again.</>
+        ) : (
+          <><strong>You&apos;re exploring Eydia for free.</strong> Connect WhatsApp &amp; Google and explore your data — subscribe to unlock sending, chatbots, campaigns, posting &amp; more.</>
+        )}
+      </span>
+      <Link href="/billing" className="btn" style={{ fontSize: 13, padding: "6px 18px", whiteSpace: "nowrap", textDecoration: "none" }}>
+        View Plans
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * Global "Upgrade to continue" modal. Mounted once in the app shell; it listens
+ * for the `eydia:upgrade` window event the API layer fires whenever a PAID action
+ * is blocked (plan_required / feature_not_included). This means every gated
+ * action anywhere in the app prompts for a plan with no per-page wiring.
+ */
+export function UpgradeModal() {
+  const [msg, setMsg] = useState<string | null>(null);
+  useEffect(() => {
+    const onUpgrade = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { message?: string } | undefined;
+      setMsg(detail?.message || "This is a paid feature.");
+    };
+    window.addEventListener("eydia:upgrade", onUpgrade);
+    return () => window.removeEventListener("eydia:upgrade", onUpgrade);
+  }, []);
+
+  if (msg === null) return null;
+  return (
+    <div className="msg-info-overlay" onClick={() => setMsg(null)} style={{ zIndex: 300 }}>
+      <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440, textAlign: "center" }}>
+        <div style={{ fontSize: 46 }}>🔒</div>
+        <h2 style={{ margin: "10px 0 6px" }}>Upgrade to continue</h2>
+        <p className="muted" style={{ marginBottom: 20 }}>{msg} Purchase a plan to unlock it.</p>
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
+          <Link href="/billing" className="btn" style={{ width: "auto", padding: "11px 24px", textDecoration: "none" }} onClick={() => setMsg(null)}>
+            View Plans &amp; Upgrade
+          </Link>
+          <button type="button" className="btn-mini" onClick={() => setMsg(null)}>Maybe later</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function NoPlanGate({ user, onActivated }: { user: User; onActivated: () => void }) {
   const [plans, setPlans] = useState<PlanItem[]>([]);
   const [gstRate, setGstRate] = useState(18);

@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useUser } from "@/lib/user-context";
-import { AccessDenied, hasFeature } from "@/components/PlanGate";
 import { PageHeader } from "@/components/PageHeader";
 import { api, ApiError, GbpProfile, GbpHours } from "@/lib/api";
 import { getToken } from "@/lib/auth";
@@ -21,8 +19,8 @@ const DAY_LABEL: Record<string, string> = {
 };
 
 export default function GbpProfilePage() {
-  const user = useUser();
-  if (!hasFeature(user, "dash_gbp")) return <AccessDenied dashboard="Google Reviews / GBP" />;
+  // Freemium: viewing business info is free; saving edits is gated server-side
+  // and prompts an upgrade via the global UpgradeModal.
   return <Editor />;
 }
 

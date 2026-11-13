@@ -4,8 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, BulkSend, BulkSendDetail, CampaignItem, CampaignDetail, TemplateItem, TagItem } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
-import { UpgradePrompt, planAllows } from "@/components/PlanGate";
-import { useUser } from "@/lib/user-context";
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
   draft: { bg: "#eef1f2", fg: "#667781" },
@@ -55,7 +53,6 @@ function downloadCsv(filename: string, headers: string[], rows: (string | number
 type Tab = "campaigns" | "bulk";
 
 export default function CampaignsPage() {
-  const gateUser = useUser();
   const [tab, setTab] = useState<Tab>("campaigns");
   const [campaigns, setCampaigns] = useState<CampaignItem[]>([]);
   const [sends, setSends] = useState<BulkSend[]>([]);
@@ -420,7 +417,8 @@ export default function CampaignsPage() {
     );
   }
 
-  if (!planAllows(gateUser.plan_limits, "max_campaigns")) return <UpgradePrompt title="Campaigns" feature="Campaigns" />;
+  // Freemium: browsing campaigns is free; creating/running is gated server-side
+  // and prompts an upgrade via the global UpgradeModal.
 
   return (
     <>

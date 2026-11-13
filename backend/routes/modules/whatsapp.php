@@ -36,10 +36,12 @@ Route::prefix('whatsapp')->group(function () {
     Route::post('/conversations/{conversation}/send-media', [InboxController::class, 'sendMedia']);
     Route::delete('/conversations/{conversation}/messages/{message}', [InboxController::class, 'deleteMessage']);
 
-    // Bulk send
-    Route::get('/bulk-sends', [BulkSendController::class, 'index']);
-    Route::get('/bulk-sends/{uuid}', [BulkSendController::class, 'show']);
-    Route::post('/bulk-sends/{uuid}/retry', [BulkSendController::class, 'retry']);
-    Route::post('/bulk-send', [BulkSendController::class, 'store']);
-    Route::post('/bulk-send/upload-header', [BulkSendController::class, 'uploadHeader']);
+    // Bulk send — PAID. Requires an active plan (bulk messaging is a paid feature).
+    Route::middleware('plan')->group(function () {
+        Route::get('/bulk-sends', [BulkSendController::class, 'index']);
+        Route::get('/bulk-sends/{uuid}', [BulkSendController::class, 'show']);
+        Route::post('/bulk-sends/{uuid}/retry', [BulkSendController::class, 'retry']);
+        Route::post('/bulk-send', [BulkSendController::class, 'store']);
+        Route::post('/bulk-send/upload-header', [BulkSendController::class, 'uploadHeader']);
+    });
 });

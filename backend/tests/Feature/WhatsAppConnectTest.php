@@ -42,32 +42,70 @@ class WhatsAppConnectTest extends TestCase
         return $token;
     }
 
-    public function test_tenant_without_a_plan_cannot_use_whatsapp(): void
+    /** Register a tenant owner with NO subscription (freemium / explore mode). */
+    private function freeUser(string $email = 'free@acme.test'): string
     {
-        $token = $this->postJson('/api/v1/auth/register', [
-            'company_name' => 'NoPlan', 'name' => 'Owner', 'email' => 'noplan@acme.test',
+        return $this->postJson('/api/v1/auth/register', [
+            'company_name' => 'NoPlan', 'name' => 'Owner', 'email' => $email,
             'password' => 'Password123', 'password_confirmation' => 'Password123',
         ])->json('data.token');
-
-        $this->withHeader('Authorization', "Bearer {$token}")
-            ->postJson('/api/v1/whatsapp/connect-manual', $this->payload())
-            ->assertStatus(403)
-            ->assertJsonPath('code', 'plan_required');
-
-        $this->withHeader('Authorization', "Bearer {$token}")
-            ->getJson('/api/v1/billing/plans')
-            ->assertOk();
-
-        $this->assertSame(0, WhatsappPhoneNumber::withoutGlobalScopes()->count());
     }
 
-    public function test_expired_plan_blocks_whatsapp(): void
+    /**
+     * Freemium: a tenant without a plan can connect a number and view the
+     * dashboard, but bulk messaging (a paid feature) is blocked.
+     */
+    public function test_tenant_without_a_plan_can_connect_and_view_but_not_bulk_send(): void
+    {
+        $token = $this->freeUser();
+        $h = $this->withHeader('Authorization', "Bearer {$token}");
+
+        // FREE: connect a number manually.
+        $h->postJson('/api/v1/whatsapp/connect-manual', $this->payload())->assertCreated();
+        $this->assertSame(1, WhatsappPhoneNumber::withoutGlobalScopes()->count());
+
+        // FREE: view numbers + inbox conversations.
+        $h->getJson('/api/v1/whatsapp/numbers')->assertOk();
+        $h->getJson('/api/v1/whatsapp/conversations')->assertOk();
+
+        // FREE: still able to reach billing to buy a plan.
+        $h->getJson('/api/v1/billing/plans')->assertOk();
+
+        // PAID: bulk messaging is blocked without a plan.
+        $h->postJson('/api/v1/whatsapp/bulk-send', [])
+            ->assertStatus(403)
+            ->assertJsonPath('code', 'plan_required');
+    }
+
+    /** Freemium: view/list endpoints are free, write endpoints need a plan. */
+    public function test_tenant_without_a_plan_can_view_but_not_create_templates_or_campaigns(): void
+    {
+        $token = $this->freeUser('free2@acme.test');
+        $h = $this->withHeader('Authorization', "Bearer {$token}");
+
+        // FREE: browse templates & campaigns.
+        $h->getJson('/api/v1/templates')->assertOk();
+        $h->getJson('/api/v1/campaigns')->assertOk();
+
+        // PAID: creating them is blocked without a plan.
+        $h->postJson('/api/v1/templates', [])
+            ->assertStatus(403)->assertJsonPath('code', 'plan_required');
+        $h->postJson('/api/v1/campaigns', [])
+            ->assertStatus(403)->assertJsonPath('code', 'plan_required');
+    }
+
+    /** Expired plan behaves like freemium: viewing is free, paid actions blocked. */
+    public function test_expired_plan_allows_viewing_but_blocks_paid_actions(): void
     {
         $token = $this->owner();
         Subscription::withoutGlobalScopes()->update(['current_period_end' => now()->subDay()]);
+        $h = $this->withHeader('Authorization', "Bearer {$token}");
 
-        $this->withHeader('Authorization', "Bearer {$token}")
-            ->getJson('/api/v1/whatsapp/numbers')
+        // FREE even when expired: viewing connected numbers.
+        $h->getJson('/api/v1/whatsapp/numbers')->assertOk();
+
+        // PAID blocked when expired.
+        $h->postJson('/api/v1/whatsapp/bulk-send', [])
             ->assertStatus(403)
             ->assertJsonPath('code', 'plan_required');
     }

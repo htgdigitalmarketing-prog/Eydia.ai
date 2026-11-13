@@ -43,23 +43,28 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         require __DIR__ . '/modules/admin.php';
         require __DIR__ . '/modules/devices.php';
 
+        // Freemium: these modules are reachable without a plan so a client can
+        // connect, sync and EXPLORE their dashboards. Each file gates only its
+        // PAID actions (create/send/publish/edit) behind the 'plan' / 'feature'
+        // middleware internally — viewing and connecting stay free.
+        require __DIR__ . '/modules/whatsapp.php';
+        require __DIR__ . '/modules/contacts.php';
+        require __DIR__ . '/modules/templates.php';
+        require __DIR__ . '/modules/campaigns.php';
+        require __DIR__ . '/modules/automations.php';
+        require __DIR__ . '/modules/chatbot.php';
+        require __DIR__ . '/modules/gbp.php';
+
         Route::middleware('plan')->group(function () {
             require __DIR__ . '/modules/assistant.php';
             require __DIR__ . '/modules/ai.php';
-            require __DIR__ . '/modules/whatsapp.php';
-            require __DIR__ . '/modules/contacts.php';
-            require __DIR__ . '/modules/templates.php';
             require __DIR__ . '/modules/analytics.php';
-            require __DIR__ . '/modules/campaigns.php';
-            require __DIR__ . '/modules/automations.php';
-            require __DIR__ . '/modules/chatbot.php';
             require __DIR__ . '/modules/agents.php';
             require __DIR__ . '/modules/team.php';
             require __DIR__ . '/modules/social.php';
 
             // JayVisionX unified dashboards (plan-feature gated inside each file).
             require __DIR__ . '/modules/leads.php';
-            require __DIR__ . '/modules/gbp.php';
             require __DIR__ . '/modules/seo.php';
             require __DIR__ . '/modules/ads.php';
             require __DIR__ . '/modules/invoicing.php';

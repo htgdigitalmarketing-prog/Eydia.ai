@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useUser } from "@/lib/user-context";
-import { AccessDenied, hasFeature } from "@/components/PlanGate";
 import { PageHeader } from "@/components/PageHeader";
 import { api, ApiError, GbpAutomationResponse, GbpAutomationSettings } from "@/lib/api";
 import { getToken } from "@/lib/auth";
@@ -15,8 +13,8 @@ const FEATURES: { key: keyof GbpAutomationSettings; title: string; desc: string;
 ];
 
 export default function GbpAutomationPage() {
-  const user = useUser();
-  if (!hasFeature(user, "dash_gbp")) return <AccessDenied dashboard="Google Reviews / GBP" />;
+  // Freemium: automation is visible to explore; enabling/running it is gated
+  // server-side and prompts an upgrade via the global UpgradeModal.
   return <Dashboard />;
 }
 

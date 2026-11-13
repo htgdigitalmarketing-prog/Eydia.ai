@@ -1,8 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useUser } from "@/lib/user-context";
-import { AccessDenied, hasFeature } from "@/components/PlanGate";
 import { PageHeader } from "@/components/PageHeader";
 import {
   api, ApiError, GbpConnection, GbpOverview, GbpReviewItem,
@@ -22,8 +20,9 @@ const TABS = [
 ];
 
 export default function GbpPage() {
-  const user = useUser();
-  if (!hasFeature(user, "dash_gbp")) return <AccessDenied dashboard="Google Reviews / GBP" />;
+  // Freemium: viewing reviews / business data is free for everyone. Paid actions
+  // (reply, post, upload, edit, optimize) are gated server-side and prompt an
+  // upgrade via the global UpgradeModal.
   return <GbpDashboard />;
 }
 

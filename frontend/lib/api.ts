@@ -7,7 +7,14 @@ export type ApiError = {
   message: string;
   errors?: Record<string, string[]>;
   status: number;
+  /** Backend error code, e.g. "plan_required" | "feature_not_included". */
+  code?: string;
 };
+
+// Error codes the backend returns when a PAID action is attempted without a
+// qualifying plan. We surface these as a global "Upgrade" prompt so any gated
+// action triggers it without per-call wiring.
+const UPGRADE_CODES = new Set(["plan_required", "feature_not_included"]);
 
 async function request<T>(
   path: string,
@@ -36,7 +43,13 @@ async function request<T>(
       message: json?.message ?? `Request failed (${res.status})`,
       errors: json?.errors,
       status: res.status,
+      code: json?.code,
     };
+    // A paid feature was hit without a qualifying plan → ask the shell to show
+    // the upgrade prompt. Every page gets this for free (no per-call handling).
+    if (err.code && UPGRADE_CODES.has(err.code) && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: err.code, message: err.message } }));
+    }
     throw err;
   }
 

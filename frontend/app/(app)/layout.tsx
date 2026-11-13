@@ -8,7 +8,7 @@ import { getToken, clearToken } from "@/lib/auth";
 import { COMMON_NAV, ACCOUNT_NAV, SUPER_ADMIN_NAV, visibleItems, groupForPath, NavItem } from "@/lib/nav";
 import { UserContext } from "@/lib/user-context";
 import { Preloader } from "@/components/Preloader";
-import { NoPlanGate, ExpiredBanner, ExpiredBlock, isAllowedWhenExpired } from "@/components/PlanGate";
+import { SubscribeBanner, UpgradeModal } from "@/components/PlanGate";
 import { AssistantWidget } from "@/components/AssistantWidget";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -152,11 +152,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     user.subscription?.status === "active" ||
     user.subscription?.status === "trialing";
 
-  const isExpired = !hasActivePlan && user.subscription?.status === "expired";
+  const isExpired = user.subscription?.status === "expired";
 
-  if (!hasActivePlan && !isExpired) {
-    return <NoPlanGate user={user} onActivated={refreshUser} />;
-  }
+  // Freemium: never block the shell. A tenant with no plan (or an expired one)
+  // can log in, connect their accounts and explore every dashboard; attempting a
+  // PAID action prompts an upgrade (handled globally by <UpgradeModal/>).
 
   return (
     <UserContext.Provider value={user}>
@@ -221,11 +221,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </aside>
         <main className="main">
           <TopBar user={user} onMenuToggle={() => setSidebarOpen((v) => !v)} />
-          {isExpired && <ExpiredBanner planName={user.subscription?.plan_name ?? null} />}
+          {!hasActivePlan && <SubscribeBanner expired={isExpired} />}
           <div className="main-content">
-            {isExpired && !isAllowedWhenExpired(pathname) ? <ExpiredBlock /> : children}
+            {children}
           </div>
         </main>
+        <UpgradeModal />
       </div>
     </UserContext.Provider>
   );
