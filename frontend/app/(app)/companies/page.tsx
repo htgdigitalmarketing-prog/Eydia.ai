@@ -116,10 +116,10 @@ export default function CompaniesPage() {
 
   async function changePlan(c: Company, planId: string) {
     const token = getToken();
-    if (!token || !planId) return;
+    if (!token) return; // empty planId is valid — it means "— No plan —" (remove plan)
     try {
       await api.admin.assignPlan(token, c.id, planId);
-      flash("Plan updated.");
+      flash(planId ? "Plan updated." : "Plan removed.");
       await load();
     } catch (err) {
       setError((err as ApiError).message);

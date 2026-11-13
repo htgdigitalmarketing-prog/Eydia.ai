@@ -76,12 +76,34 @@ class CompanyController extends Controller
         }
     }
 
+    /**
+     * Remove a tenant's plan ("— No plan —"): cancel its latest subscription so
+     * planFor() returns null and the tenant drops to the free/explore state.
+     */
+    private function clearTenantPlan(int $tenantId): void
+    {
+        $sub = Subscription::withoutGlobalScopes()->where('tenant_id', $tenantId)->latest('id')->first();
+        if ($sub) {
+            $sub->update(['status' => 'cancelled', 'current_period_end' => now()]);
+        }
+    }
+
     public function assignPlan(Request $request, string $uuid): JsonResponse
     {
         $this->ensureSuperAdmin($request);
-        $data = $request->validate(['plan_id' => ['required', 'string', 'exists:plans,uuid']]);
         $tenant = $this->findTenant($uuid);
-        $this->setTenantPlan($tenant->id, $data['plan_id']);
+
+        // An empty/absent plan_id means "— No plan —" → remove the plan. Handle it
+        // before validation so an empty string doesn't trip the `exists` rule.
+        $planId = $request->input('plan_id');
+        if (empty($planId)) {
+            $this->clearTenantPlan($tenant->id);
+
+            return $this->ok(['message' => 'Plan removed.']);
+        }
+
+        $request->validate(['plan_id' => ['string', 'exists:plans,uuid']]);
+        $this->setTenantPlan($tenant->id, $planId);
 
         return $this->ok(['message' => 'Plan assigned.']);
     }
