@@ -85,7 +85,7 @@ export const api = {
   ping: (token: string) => request<{ pong: boolean; tenant_id: number }>("/ping", { token }),
 
   // Public pricing for the marketing landing page (no auth).
-  publicPlans: () => request<{ plans: PublicPlan[] }>("/public/plans"),
+  publicPlans: () => request<{ plans: PublicPlan[]; offer: PricingOffer; gst_rate: number }>("/public/plans"),
 
   health: () => request<{ status: string }>("/health"),
 
@@ -467,6 +467,19 @@ export const api = {
       request<{ message: string; company: Company }>(`/admin/companies/${id}`, { method: "PUT", body, token }),
     payments: (token: string) =>
       request<{ payments: AdminPayment[]; stats: { count: number; paid: number; revenue: string } }>("/admin/payments", { token }),
+
+    billingSettings: (token: string) =>
+      request<{ settings: AdminBillingSettings }>("/admin/billing-settings", { token }),
+    updateBillingSettings: (token: string, body: Partial<AdminBillingSettings>) =>
+      request<{ settings: AdminBillingSettings; message: string }>("/admin/billing-settings", { method: "PUT", body, token }),
+    coupons: (token: string) =>
+      request<{ coupons: AdminCoupon[] }>("/admin/coupons", { token }),
+    createCoupon: (token: string, body: Record<string, unknown>) =>
+      request<{ coupon: AdminCoupon }>("/admin/coupons", { method: "POST", body, token }),
+    updateCoupon: (token: string, id: string, body: Record<string, unknown>) =>
+      request<{ coupon: AdminCoupon }>(`/admin/coupons/${id}`, { method: "PUT", body, token }),
+    deleteCoupon: (token: string, id: string) =>
+      request<{ message: string }>(`/admin/coupons/${id}`, { method: "DELETE", token }),
 
     plans: (token: string) =>
       request<{ plans: AdminPlan[]; limit_keys: string[]; feature_keys: string[] }>("/admin/plans", { token }),
@@ -1270,6 +1283,31 @@ export type AdminPayment = {
   issued_at: string | null;
 };
 
+export type AdminBillingSettings = {
+  cycle_discounts: Record<string, number>;
+  enabled_cycles: string[];
+  offer_label: string | null;
+  offer_ends_at: string | null;
+  offer_active: boolean;
+  available_cycles: { key: string; label: string; months: number }[];
+};
+
+export type AdminCoupon = {
+  id: string;
+  code: string;
+  type: "percent" | "flat";
+  value: number;
+  max_discount: number | null;
+  min_amount: number | null;
+  max_uses: number | null;
+  used_count: number;
+  cycles: string[] | null;
+  starts_at: string | null;
+  expires_at: string | null;
+  is_active: boolean;
+  live: boolean;
+};
+
 export type AdminPlan = {
   id: string;
   name: string;
@@ -1354,6 +1392,17 @@ export type User = {
   last_login_at: string | null;
 };
 
+export type CyclePrice = {
+  key: string;
+  label: string;
+  months: number;
+  list: number;          // undiscounted (struck-through)
+  price: number;         // after the backend-managed cycle discount
+  per_month: number;
+  discount_percent: number;
+};
+export type PricingOffer = { active: boolean; label: string | null; ends_at: string | null };
+
 export type PublicPlan = {
   id: string;
   name: string;
@@ -1364,6 +1413,7 @@ export type PublicPlan = {
   trial_days: number;
   features: Record<string, boolean>;
   limits: Record<string, number | boolean>;
+  cycle_prices: CyclePrice[];
 };
 
 export type AuthPayload = {

@@ -80,6 +80,7 @@ export const SUPER_ADMIN_NAV: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: "▤" },
   { label: "Companies", href: "/companies", icon: "🏢" },
   { label: "Plans", href: "/plans", icon: "💳" },
+  { label: "Pricing & Coupons", href: "/pricing-admin", icon: "🏷️" },
   { label: "Credit Packs", href: "/credit-packs", icon: "⚡" },
   { label: "Payments", href: "/payments", icon: "₹" },
   { label: "Settings", href: "/settings", icon: "⚙" },

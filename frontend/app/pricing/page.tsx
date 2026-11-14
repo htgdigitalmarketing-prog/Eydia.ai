@@ -1,19 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { api, PublicPlan } from "@/lib/api";
+import { api, CyclePrice, PricingOffer, PublicPlan } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 
-// Public pricing page — plan cards with a monthly / quarterly / yearly selector
-// (quarterly 10% off, yearly 20% off, matching checkout) and a feature list.
-
-const CYCLES = {
-  monthly: { label: "Monthly", months: 1, discount: 0, per: "mo" },
-  quarterly: { label: "Quarterly", months: 3, discount: 0.1, per: "3 mo" },
-  yearly: { label: "Yearly", months: 12, discount: 0.2, per: "yr" },
-} as const;
-type CycleKey = keyof typeof CYCLES;
+// Public pricing page. Cycles, per-cycle discounts and the limited-time launch
+// offer (countdown) are all BACKEND-MANAGED (/public/plans).
 
 const FEATURE_LABELS: Record<string, string> = {
   dash_whatsapp: "WhatsApp Marketing", dash_gbp: "Google Reviews / GBP", dash_leads: "Lead Management",
@@ -21,24 +14,49 @@ const FEATURE_LABELS: Record<string, string> = {
   chatbot: "AI Chatbot", automations: "Automations", api_access: "API access", seo: "SEO toolkit", ads: "Ad reports", invoicing: "Invoicing",
 };
 
+const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+
+function Countdown({ endsAt }: { endsAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const ms = new Date(endsAt).getTime() - now;
+  if (ms <= 0) return null;
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 800 }}>
+      {d > 0 ? `${d}d ` : ""}{pad(h)}:{pad(m)}:{pad(sec)}
+    </span>
+  );
+}
+
 export default function PricingPage() {
   const [plans, setPlans] = useState<PublicPlan[]>([]);
-  const [cycle, setCycle] = useState<CycleKey>("yearly");
+  const [offer, setOffer] = useState<PricingOffer | null>(null);
+  const [cycle, setCycle] = useState<string>("");
   const [loggedIn, setLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const grad = "linear-gradient(120deg,#16b6f2 0%,#2160ef 40%,#6a22f0 78%,#ad17e6 100%)";
 
   useEffect(() => {
     setLoggedIn(!!getToken());
-    api.publicPlans().then((r) => setPlans(r.plans)).catch(() => {}).finally(() => setLoading(false));
+    api.publicPlans().then((r) => {
+      setPlans(r.plans);
+      setOffer(r.offer ?? null);
+      // Default to the cycle with the biggest discount (usually yearly).
+      const cps = r.plans[0]?.cycle_prices ?? [];
+      const best = [...cps].sort((a, b) => b.discount_percent - a.discount_percent)[0];
+      setCycle(best?.key ?? cps[0]?.key ?? "monthly");
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
+  const cycles: CyclePrice[] = useMemo(() => plans[0]?.cycle_prices ?? [], [plans]);
   const start = loggedIn ? "/billing" : "/register";
-  const inr = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
-  const priceFor = (monthly: number) => {
-    const c = CYCLES[cycle];
-    return Math.round(monthly * c.months * (1 - c.discount));
-  };
+  const cp = (p: PublicPlan) => p.cycle_prices.find((c) => c.key === cycle) ?? p.cycle_prices[0];
 
   return (
     <div style={{ background: "#f6f7fb", color: "#0f1b2d", fontFamily: "Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif", minHeight: "100vh" }}>
@@ -50,7 +68,6 @@ export default function PricingPage() {
         @media(max-width:860px){.pr-grid{grid-template-columns:1fr;}}
       `}</style>
 
-      {/* Header */}
       <header style={{ position: "sticky", top: 0, zIndex: 20, background: "rgba(246,247,251,.85)", backdropFilter: "blur(10px)", borderBottom: "1px solid #eceef6" }}>
         <div className="pr-wrap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 66 }}>
           <Link href="/"><img src="/eydia-logo.png" alt="Eydia.ai" style={{ height: 34 }} /></Link>
@@ -58,27 +75,30 @@ export default function PricingPage() {
         </div>
       </header>
 
-      {/* Hero */}
       <section style={{ background: grad, color: "#fff", padding: "54px 0 70px", textAlign: "center" }}>
         <div className="pr-wrap">
+          {offer?.active && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 10, background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.3)", borderRadius: 999, padding: "7px 16px", marginBottom: 14, fontSize: 13.5, fontWeight: 800 }}>
+              ⚡ {offer.label || "LAUNCH PRICE — LIMITED TIME"}
+              {offer.ends_at && <span style={{ background: "#fff", color: "#2160ef", borderRadius: 999, padding: "2px 10px" }}>ENDS IN <Countdown endsAt={offer.ends_at} /></span>}
+            </div>
+          )}
           <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", opacity: .85 }}>Plans &amp; pricing</div>
           <h1 style={{ fontSize: 40, fontWeight: 900, margin: "8px 0 10px", letterSpacing: "-.02em" }}>Your next stage of growth starts here</h1>
           <p style={{ opacity: .93, maxWidth: 560, margin: "0 auto 22px" }}>Start with Google visibility or put all three Eydia AI agents to work. Cancel anytime.</p>
-          {/* Cycle toggle */}
-          <div style={{ display: "inline-flex", background: "rgba(255,255,255,.16)", borderRadius: 999, padding: 4, gap: 4 }}>
-            {(Object.keys(CYCLES) as CycleKey[]).map((c) => (
-              <button key={c} onClick={() => setCycle(c)} style={{
+          <div style={{ display: "inline-flex", background: "rgba(255,255,255,.16)", borderRadius: 999, padding: 4, gap: 4, flexWrap: "wrap" }}>
+            {cycles.map((c) => (
+              <button key={c.key} onClick={() => setCycle(c.key)} style={{
                 border: "none", cursor: "pointer", padding: "9px 18px", borderRadius: 999, fontSize: 13.5, fontWeight: 800,
-                background: cycle === c ? "#fff" : "transparent", color: cycle === c ? "#2160ef" : "#fff",
+                background: cycle === c.key ? "#fff" : "transparent", color: cycle === c.key ? "#2160ef" : "#fff",
               }}>
-                {CYCLES[c].label}{CYCLES[c].discount > 0 && <span style={{ fontSize: 11, marginLeft: 5, color: cycle === c ? "#16a34a" : "#dff7e6" }}>−{CYCLES[c].discount * 100}%</span>}
+                {c.label}{c.discount_percent > 0 && <span style={{ fontSize: 11, marginLeft: 5, color: cycle === c.key ? "#16a34a" : "#dff7e6" }}>−{c.discount_percent}%</span>}
               </button>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Plans */}
       <section style={{ padding: "40px 0 60px", marginTop: -40 }}>
         <div className="pr-wrap">
           {loading ? (
@@ -86,22 +106,22 @@ export default function PricingPage() {
           ) : (
             <div className="pr-grid">
               {plans.map((p, i) => {
+                const price = cp(p);
+                const total = price?.price ?? p.price;
                 const featured = i === 1 || plans.length === 1;
-                const total = priceFor(p.price);
-                const perMonth = CYCLES[cycle].months > 1 ? Math.round(total / CYCLES[cycle].months) : total;
-                const saved = Math.round(p.price * CYCLES[cycle].months) - total;
                 const on = Object.entries(p.features || {}).filter(([, v]) => v).map(([k]) => FEATURE_LABELS[k]).filter(Boolean);
                 return (
                   <div key={p.id} className="pr-card" style={{ padding: 26, position: "relative", ...(featured ? { border: "2px solid #2160ef", boxShadow: "0 20px 50px rgba(33,96,239,.12)" } : {}) }}>
                     {featured && <span style={{ position: "absolute", top: -12, left: "50%", transform: "translateX(-50%)", background: grad, color: "#fff", fontSize: 11.5, fontWeight: 800, padding: "4px 12px", borderRadius: 999 }}>MOST POPULAR</span>}
                     <div style={{ fontSize: 13, fontWeight: 800, color: "#4c57d8", textTransform: "uppercase", letterSpacing: ".06em" }}>{p.name}</div>
                     {p.description && <div style={{ color: "#7b8498", fontSize: 13, marginTop: 4, minHeight: 34 }}>{p.description}</div>}
-                    <div style={{ margin: "14px 0 2px" }}>
+                    <div style={{ margin: "14px 0 2px", display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                      {total > 0 && price && price.discount_percent > 0 && <span style={{ color: "#aab2c3", textDecoration: "line-through", fontSize: 16 }}>{inr(price.list)}</span>}
                       <span style={{ fontSize: 38, fontWeight: 900 }}>{total === 0 ? "Free" : inr(total)}</span>
-                      {total > 0 && <span style={{ color: "#7b8498", fontSize: 14 }}> / {CYCLES[cycle].per}</span>}
+                      {total > 0 && price && price.discount_percent > 0 && <span style={{ background: "#fff4e5", color: "#8a5a00", borderRadius: 8, padding: "2px 8px", fontSize: 12, fontWeight: 800 }}>{price.discount_percent}% OFF</span>}
                     </div>
-                    {total > 0 && CYCLES[cycle].months > 1 && <div style={{ fontSize: 12.5, color: "#16a34a", fontWeight: 700 }}>{inr(perMonth)}/mo · you save {inr(saved)}</div>}
-                    <div style={{ fontSize: 12, color: "#9aa3b5" }}>incl. GST</div>
+                    {total > 0 && price && price.months > 1 && <div style={{ fontSize: 12.5, color: "#16a34a", fontWeight: 700 }}>{inr(price.per_month)}/month</div>}
+                    <div style={{ fontSize: 12, color: "#9aa3b5" }}>incl. GST · billed for the full term</div>
                     <Link href={start} className="pr-btn" style={{ width: "100%", marginTop: 16, padding: "12px", ...(featured ? { background: grad, color: "#fff" } : { background: "#eef1ff", color: "#2160ef" }) }}>{total === 0 ? "Start free" : "Get started"} →</Link>
                     <div style={{ marginTop: 18, display: "grid", gap: 9 }}>
                       {on.map((f) => (
@@ -114,7 +134,7 @@ export default function PricingPage() {
             </div>
           )}
           <div style={{ textAlign: "center", marginTop: 26, color: "#7b8498", fontSize: 13 }}>
-            Prices billed for the full term. Autopay renews automatically — cancel anytime from Billing.
+            Autopay renews automatically — cancel anytime from Billing. Have a coupon? Apply it at checkout.
           </div>
         </div>
       </section>
