@@ -3,6 +3,8 @@
 namespace App\Modules\WhatsApp\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Conversation;
+use App\Models\Message;
 use App\Models\WhatsappPhoneNumber;
 use App\Modules\WhatsApp\Requests\ConnectManualRequest;
 use App\Modules\WhatsApp\Requests\EmbeddedSignupRequest;
@@ -52,6 +54,37 @@ class WhatsAppAccountController extends Controller
             'accounts' => WhatsappAccountResource::collection(
                 $this->accounts->accountsFor($this->tenantId($request))
             ),
+        ]);
+    }
+
+    /**
+     * Compact WhatsApp home summary for the mobile app (and web). Free (no plan):
+     * connected numbers + inbox/message counts so the dashboard can render before
+     * the client buys a plan. Heavier analytics stay on /analytics/*.
+     */
+    public function overview(Request $request): JsonResponse
+    {
+        $this->authorize('whatsapp.view');
+        $tenantId = $this->tenantId($request);
+        $today = now()->startOfDay();
+
+        $numbers = $this->accounts->numbersFor($tenantId);
+
+        return $this->ok([
+            'numbers' => WhatsappNumberResource::collection($numbers),
+            'numbers_count' => $numbers->count(),
+            'default_number' => WhatsappNumberResource::collection(
+                $numbers->where('is_default', true)->values()
+            )->first(),
+            'conversations' => [
+                'total' => Conversation::count(),
+                'open' => Conversation::where('status', 'open')->count(),
+                'unread' => (int) Conversation::sum('unread_count'),
+            ],
+            'messages_today' => [
+                'inbound' => Message::where('direction', 'inbound')->where('created_at', '>=', $today)->count(),
+                'outbound' => Message::where('direction', 'outbound')->where('created_at', '>=', $today)->count(),
+            ],
         ]);
     }
 

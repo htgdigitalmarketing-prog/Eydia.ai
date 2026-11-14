@@ -77,6 +77,22 @@ class WhatsAppConnectTest extends TestCase
             ->assertJsonPath('code', 'plan_required');
     }
 
+    /** The mobile WhatsApp home summary is free (no plan) and tenant-scoped. */
+    public function test_overview_summary_is_free(): void
+    {
+        $token = $this->freeUser('ov@acme.test');
+        $h = $this->withHeader('Authorization', "Bearer {$token}");
+        $h->postJson('/api/v1/whatsapp/connect-manual', $this->payload())->assertCreated();
+
+        $h->getJson('/api/v1/whatsapp/overview')
+            ->assertOk()
+            ->assertJsonPath('data.numbers_count', 1)
+            ->assertJsonStructure(['data' => [
+                'numbers', 'numbers_count', 'conversations' => ['total', 'open', 'unread'],
+                'messages_today' => ['inbound', 'outbound'],
+            ]]);
+    }
+
     /** Freemium: view/list endpoints are free, write endpoints need a plan. */
     public function test_tenant_without_a_plan_can_view_but_not_create_templates_or_campaigns(): void
     {
