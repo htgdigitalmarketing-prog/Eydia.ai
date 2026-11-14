@@ -9,6 +9,7 @@ use App\Models\Tenant;
 use App\Models\User;
 use App\Modules\Auth\Actions\RegisterTenantAction;
 use App\Modules\Auth\DTOs\RegisterData;
+use App\Modules\Auth\Resources\UserResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -106,6 +107,28 @@ class CompanyController extends Controller
         $this->setTenantPlan($tenant->id, $planId);
 
         return $this->ok(['message' => 'Plan assigned.']);
+    }
+
+    /**
+     * "View as" — issue a token for a company's owner so a super admin can open
+     * that client's dashboard from the admin panel. The admin's own token stays
+     * valid (the app keeps it and restores it on exit).
+     */
+    public function impersonate(Request $request, string $uuid): JsonResponse
+    {
+        $this->ensureSuperAdmin($request);
+        $tenant = $this->findTenant($uuid);
+
+        $owner = User::where('tenant_id', $tenant->id)->orderBy('id')->first();
+        abort_if($owner === null, 404, 'This company has no owner account to view as.');
+
+        $token = auth('api')->login($owner);
+
+        return $this->ok([
+            'token' => $token,
+            'user' => new UserResource($owner->load('tenant')),
+            'company' => $tenant->company_name ?? $tenant->name,
+        ]);
     }
 
     public function store(Request $request): JsonResponse

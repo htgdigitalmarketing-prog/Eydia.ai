@@ -94,4 +94,32 @@ class CompanyPlanTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors('plan_id');
     }
+
+    public function test_super_admin_can_impersonate_a_company_owner(): void
+    {
+        $tenant = $this->tenantWithPlan();
+        $owner = User::withoutGlobalScopes()->where('tenant_id', $tenant->id)->orderBy('id')->first();
+
+        $res = $this->actingAs($this->superAdmin(), 'api')
+            ->postJson("/api/v1/admin/companies/{$tenant->uuid}/impersonate")
+            ->assertOk()
+            ->assertJsonPath('data.user.email', $owner->email)
+            ->assertJsonStructure(['data' => ['token', 'user', 'company']]);
+
+        // The returned token authenticates as that owner.
+        $this->withHeader('Authorization', "Bearer {$res->json('data.token')}")
+            ->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.user.email', $owner->email);
+    }
+
+    public function test_non_admin_cannot_impersonate(): void
+    {
+        $tenant = $this->tenantWithPlan();
+        $owner = User::withoutGlobalScopes()->where('tenant_id', $tenant->id)->orderBy('id')->first();
+
+        $this->actingAs($owner, 'api')
+            ->postJson("/api/v1/admin/companies/{$tenant->uuid}/impersonate")
+            ->assertStatus(403);
+    }
 }

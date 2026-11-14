@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/PageHeader";
 import {
   api, ApiError, GbpConnection, GbpOverview, GbpReviewItem,
@@ -1404,6 +1405,8 @@ function GbpConnectBar() {
   const [conn, setConn] = useState<GbpConnection | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const user = useUser();
+  const hasPlan = user.is_super_admin || user.subscription?.status === "active" || user.subscription?.status === "trialing";
 
   const load = useCallback(() => { const token = getToken(); if (!token) return; api.gbp.connection(token).then(setConn).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
@@ -1417,22 +1420,32 @@ function GbpConnectBar() {
 
   if (!conn) return null;
   const connected = conn.connected;
+  // Highlight the Connect CTA for clients who haven't bought a plan and haven't
+  // connected yet, so it's obvious how to get started.
+  const highlight = conn.configured && !connected && !hasPlan;
   return (
-    <div className="panel" style={{ padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", borderLeft: `3px solid ${connected ? "var(--green)" : "var(--border)"}` }}>
-      <span style={{ fontSize: 20 }}>{connected ? "🟢" : "🔗"}</span>
-      <div style={{ flex: 1, minWidth: 200 }}>
-        <strong style={{ fontSize: 14 }}>Google Business Profile</strong>
-        <div className="muted" style={{ fontSize: 12.5 }}>
-          {!conn.configured ? "Not configured on the server (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)."
-            : connected ? `Connected${conn.last_synced_at ? ` · last synced ${new Date(conn.last_synced_at).toLocaleString()}` : ""}.`
-            : "Connect your Google account to sync locations & reviews and post to Google."}
+    <>
+      {highlight && <style>{`@keyframes eydiaPulse{0%,100%{box-shadow:0 0 0 0 rgba(91,107,245,.45)}50%{box-shadow:0 0 0 12px rgba(91,107,245,0)}}`}</style>}
+      <div className="panel" style={{
+        padding: "12px 16px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        borderLeft: `3px solid ${connected ? "var(--green)" : highlight ? "var(--accent)" : "var(--border)"}`,
+        ...(highlight ? { border: "2px solid var(--accent)", background: "linear-gradient(135deg,#eef0ff,#f7f8ff)", animation: "eydiaPulse 2s infinite" } : {}),
+      }}>
+        <span style={{ fontSize: highlight ? 26 : 20 }}>{connected ? "🟢" : "🔗"}</span>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <strong style={{ fontSize: 14 }}>Google Business Profile</strong>
+          <div className="muted" style={{ fontSize: 12.5 }}>
+            {!conn.configured ? "Not configured on the server (set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)."
+              : connected ? `Connected${conn.last_synced_at ? ` · last synced ${new Date(conn.last_synced_at).toLocaleString()}` : ""}.`
+              : "Connect your Google account to sync locations & reviews and post to Google. It's free to connect."}
+          </div>
+          {msg && <div className="muted" style={{ fontSize: 12.5, marginTop: 4, color: "var(--green)" }}>{msg}</div>}
         </div>
-        {msg && <div className="muted" style={{ fontSize: 12.5, marginTop: 4, color: "var(--green)" }}>{msg}</div>}
+        {conn.configured && (connected
+          ? <button className="btn-mini" disabled={busy} onClick={disconnect}>Disconnect</button>
+          : <button className={highlight ? "btn" : "btn-mini"} style={highlight ? { width: "auto", padding: "10px 22px" } : undefined} disabled={busy} onClick={connect}>{busy ? "Redirecting…" : "Connect Google"}</button>)}
       </div>
-      {conn.configured && (connected
-        ? <button className="btn-mini" disabled={busy} onClick={disconnect}>Disconnect</button>
-        : <button className="btn-mini" disabled={busy} onClick={connect}>{busy ? "Redirecting…" : "Connect Google"}</button>)}
-    </div>
+    </>
   );
 }
 

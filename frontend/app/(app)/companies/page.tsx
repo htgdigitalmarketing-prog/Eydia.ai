@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, ApiError, Company, CompanyUser } from "@/lib/api";
-import { getToken } from "@/lib/auth";
+import { getToken, startImpersonation } from "@/lib/auth";
 import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingBlock } from "@/components/Preloader";
@@ -38,6 +38,19 @@ export default function CompaniesPage() {
   useEffect(() => { setFilterPlan(sp.get("plan") ?? ""); }, [sp]);
 
   const isSuper = !!me.is_super_admin;
+
+  function viewDashboard(c: Company) {
+    const token = getToken();
+    if (!token) return;
+    api.admin.impersonate(token, c.id)
+      .then((res) => {
+        // Keep the admin token, run the app as this client, hard-reload so the
+        // whole app re-fetches /auth/me as them.
+        startImpersonation(token, res.token);
+        window.location.href = "/dashboard";
+      })
+      .catch((err) => setError((err as ApiError).message));
+  }
 
   function openEdit(c: Company) {
     setEditing(c);
@@ -277,7 +290,12 @@ export default function CompaniesPage() {
               )}
               {filtered.map((c) => (
                 <tr key={c.id} style={{ borderBottom: "1px solid #f4f6f7" }}>
-                  <td style={{ padding: "12px 14px", fontWeight: 600 }}>{c.name}</td>
+                  <td style={{ padding: "12px 14px", fontWeight: 600 }}>
+                    <button type="button" onClick={() => viewDashboard(c)} title="Open this client's dashboard"
+                      style={{ background: "none", border: "none", padding: 0, font: "inherit", fontWeight: 600, color: "var(--accent-dark)", cursor: "pointer", textAlign: "left" }}>
+                      {c.name}
+                    </button>
+                  </td>
                   <td style={{ padding: "12px 14px" }}>
                     <div style={{ fontSize: 13 }}>{c.owner_name ?? "—"}</div>
                     <div className="muted" style={{ fontSize: 12 }}>{c.owner_email}</div>
@@ -300,7 +318,8 @@ export default function CompaniesPage() {
                     }}>{c.status}</span>
                   </td>
                   <td style={{ padding: "12px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
-                    <button className="btn-mini" onClick={() => openEdit(c)}>Edit</button>
+                    <button className="btn-mini" style={{ background: "var(--accent)", color: "#fff", border: "none" }} title="Open this client's dashboard" onClick={() => viewDashboard(c)}>View</button>
+                    <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => openEdit(c)}>Edit</button>
                     <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => openUsers(c)}>Users</button>
                     <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => topUpCredits(c)}>+ Credits</button>
                     <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => toggleCompany(c)}>{c.status === "suspended" ? "Reactivate" : "Suspend"}</button>

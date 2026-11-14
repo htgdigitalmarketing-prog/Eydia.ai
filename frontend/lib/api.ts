@@ -455,6 +455,8 @@ export const api = {
       request<{ message: string; status: string }>(`/admin/companies/${id}/toggle`, { method: "POST", token }),
     assignPlan: (token: string, id: string, planId: string) =>
       request<{ message: string }>(`/admin/companies/${id}/plan`, { method: "POST", body: { plan_id: planId }, token }),
+    impersonate: (token: string, id: string) =>
+      request<{ token: string; user: User; company: string }>(`/admin/companies/${id}/impersonate`, { method: "POST", token }),
     removeCompany: (token: string, id: string) =>
       request<{ message: string }>(`/admin/companies/${id}`, { method: "DELETE", token }),
     companyUsers: (token: string, id: string) =>

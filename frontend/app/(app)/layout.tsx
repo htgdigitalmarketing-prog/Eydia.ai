@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { api, ApiError, User } from "@/lib/api";
-import { getToken, clearToken } from "@/lib/auth";
+import { getToken, clearToken, isImpersonating, stopImpersonation } from "@/lib/auth";
 import { COMMON_NAV, ACCOUNT_NAV, SUPER_ADMIN_NAV, visibleItems, groupForPath, NavItem } from "@/lib/nav";
 import { UserContext } from "@/lib/user-context";
 import { Preloader } from "@/components/Preloader";
@@ -113,6 +113,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [impersonating, setImpersonating] = useState(false);
+
+  useEffect(() => { setImpersonating(isImpersonating()); }, []);
+
+  function exitImpersonation() {
+    stopImpersonation();
+    window.location.href = "/companies"; // hard reload so /auth/me is the admin again
+  }
 
   useEffect(() => {
     const token = getToken();
@@ -221,7 +229,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </aside>
         <main className="main">
           <TopBar user={user} onMenuToggle={() => setSidebarOpen((v) => !v)} />
-          {!hasActivePlan && <SubscribeBanner expired={isExpired} />}
+          {impersonating && (
+            <div style={{ background: "#2b2b8f", color: "#fff", padding: "9px 18px", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <span>👁 Viewing <strong>{user.tenant?.company_name ?? user.tenant?.name ?? "this client"}</strong>&apos;s dashboard as admin.</span>
+              <button onClick={exitImpersonation} className="btn" style={{ fontSize: 13, padding: "5px 16px", background: "#fff", color: "#2b2b8f", whiteSpace: "nowrap" }}>Exit to admin</button>
+            </div>
+          )}
+          {!hasActivePlan && !impersonating && <SubscribeBanner expired={isExpired} />}
           <div className="main-content">
             {children}
           </div>

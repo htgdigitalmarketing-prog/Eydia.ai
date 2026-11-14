@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, WaConfig, WaNumber } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/PageHeader";
 import { EmbeddedSignupButton } from "@/components/EmbeddedSignupButton";
 
@@ -46,6 +47,8 @@ export default function WhatsAppPage() {
   const [tokenId, setTokenId] = useState<string | null>(null);
   const [tokenVal, setTokenVal] = useState("");
   const [updatingToken, setUpdatingToken] = useState(false);
+  const user = useUser();
+  const hasPlan = user.is_super_admin || user.subscription?.status === "active" || user.subscription?.status === "trialing";
 
   const load = useCallback(async () => {
     const token = getToken();
@@ -226,6 +229,18 @@ export default function WhatsAppPage() {
             </div>
           )}
         </div>
+      )}
+
+      {!hasPlan && !loading && numbers.length === 0 && !showForm && (
+        <>
+          <style>{`@keyframes eydiaPulse{0%,100%{box-shadow:0 0 0 0 rgba(91,107,245,.45)}50%{box-shadow:0 0 0 12px rgba(91,107,245,0)}}`}</style>
+          <div className="panel" style={{ border: "2px solid var(--accent)", background: "linear-gradient(135deg,#eef0ff,#f7f8ff)", textAlign: "center", animation: "eydiaPulse 2s infinite" }}>
+            <div style={{ fontSize: 40 }}>📲</div>
+            <h2 style={{ margin: "6px 0 4px" }}>Connect your WhatsApp number</h2>
+            <p className="muted" style={{ marginTop: 0 }}>It&apos;s free — connect your number to open your inbox and explore every feature. You can buy a plan later.</p>
+            <button className="btn" style={{ width: "auto", padding: "12px 28px" }} onClick={() => { setShowForm(true); setNotice(null); }}>+ Connect WhatsApp</button>
+          </div>
+        </>
       )}
 
       {showForm && (

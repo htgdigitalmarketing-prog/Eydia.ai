@@ -17,6 +17,8 @@ Route::prefix('admin')->middleware('super_admin')->group(function () {
     // Platform-wide payment history (all companies).
     Route::get('/payments', [CompanyController::class, 'payments']);
     Route::post('/companies/{uuid}/plan', [CompanyController::class, 'assignPlan']);
+    // "View as" — open a company's dashboard from the admin panel.
+    Route::post('/companies/{uuid}/impersonate', [CompanyController::class, 'impersonate']);
     Route::post('/companies/{uuid}/credits', [CompanyController::class, 'addCredits']);
     Route::get('/companies/{uuid}/users', [CompanyController::class, 'users']);
     Route::post('/companies/{uuid}/users/{userUuid}/reset-password', [CompanyController::class, 'resetUserPassword']);
