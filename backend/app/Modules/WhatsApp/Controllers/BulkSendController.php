@@ -22,6 +22,7 @@ class BulkSendController extends Controller
         $this->authorize('whatsapp.manage');
 
         $sends = BulkSend::with('phoneNumber')
+            ->withCount(['recipients as delivered_count' => fn ($q) => $q->where('status', 'delivered')])
             ->orderByDesc('created_at')
             ->paginate($request->integer('per_page', 20));
 
@@ -51,7 +52,10 @@ class BulkSendController extends Controller
             $this->service->continueAfterResponse($send);
         }
 
-        return $this->ok(['bulk_send' => $send->load(['phoneNumber', 'recipients'])]);
+        $send->load(['phoneNumber', 'recipients'])
+            ->loadCount(['recipients as delivered_count' => fn ($q) => $q->where('status', 'delivered')]);
+
+        return $this->ok(['bulk_send' => $send]);
     }
 
     public function store(Request $request): JsonResponse
@@ -165,7 +169,10 @@ class BulkSendController extends Controller
         $send = BulkSend::where('uuid', $uuid)->firstOrFail();
         $result = $this->service->retryFailed($send);
 
-        return $this->ok(['bulk_send' => $result->load(['phoneNumber', 'recipients'])]);
+        $result->load(['phoneNumber', 'recipients'])
+            ->loadCount(['recipients as delivered_count' => fn ($q) => $q->where('status', 'delivered')]);
+
+        return $this->ok(['bulk_send' => $result]);
     }
 
     /** HEADER format (TEXT/IMAGE/VIDEO/DOCUMENT) of a template, or null if none. */

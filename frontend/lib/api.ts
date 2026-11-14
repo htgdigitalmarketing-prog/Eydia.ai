@@ -1472,6 +1472,7 @@ export type BulkSend = {
   status: string;
   total: number;
   sent_count: number;
+  delivered_count: number;
   failed_count: number;
   phone_number?: { id: string; display_phone_number: string } | null;
   created_at: string | null;
