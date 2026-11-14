@@ -4,8 +4,11 @@ namespace App\Modules\Auth\Services;
 
 use App\Models\LoginOtp;
 use App\Models\User;
+use App\Modules\Auth\Actions\RegisterTenantAction;
+use App\Modules\Auth\DTOs\RegisterData;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -20,13 +23,16 @@ class OtpService
     private const MAX_ATTEMPTS = 5;
     private const RESEND_COOLDOWN_SECONDS = 30;
 
-    public function __construct(private readonly OtpSender $sender) {}
+    public function __construct(
+        private readonly OtpSender $sender,
+        private readonly RegisterTenantAction $registerTenant,
+    ) {}
 
     /**
      * Generate and send a code. Returns ['dev_code' => string|null] — the code is
      * only echoed back in the local environment so developers can test.
      */
-    public function request(string $rawPhone): array
+    public function request(string $rawPhone, bool $allowRegister = false): array
     {
         $phone = $this->normalize($rawPhone);
         if ($phone === '') {
@@ -49,9 +55,14 @@ class OtpService
             'expires_at' => now()->addMinutes(self::TTL_MINUTES),
         ]);
 
-        // Only actually deliver when the number belongs to a real user.
+        // Deliver with the FULL number (country code included) so WhatsApp/SMS can
+        // reach it. Existing users get it via their account; a NEW number gets it
+        // only on a registration request (sent from the platform OTP number / SMS).
+        $fullDigits = preg_replace('/\D+/', '', $rawPhone) ?: $phone;
         if ($user) {
-            $this->sender->send($user, $phone, $code);
+            $this->sender->send($user, $fullDigits, $code);
+        } elseif ($allowRegister) {
+            $this->sender->send(null, $fullDigits, $code);
         }
 
         // In local/testing, echo the code back so developers can complete the flow
@@ -64,7 +75,7 @@ class OtpService
      *   'invalid'    — no live code, too many attempts, or wrong code
      *   'no_account' — the code was right but no user has this number
      */
-    public function verify(string $rawPhone, string $code): User|string
+    public function verify(string $rawPhone, string $code, bool $allowRegister = false): User|string
     {
         $phone = $this->normalize($rawPhone);
 
@@ -87,8 +98,32 @@ class OtpService
         $otp->update(['consumed_at' => now()]);
 
         $user = $this->findUserByPhone($phone);
+        if ($user) {
+            return $user;
+        }
 
-        return $user ?? 'no_account';
+        // Registration-by-OTP: provision a minimal workspace for this number; the
+        // customer completes company name / email etc. later from their profile.
+        if ($allowRegister) {
+            return $this->registerByPhone($rawPhone);
+        }
+
+        return 'no_account';
+    }
+
+    /** Create a minimal phone-only workspace (details filled later in profile). */
+    private function registerByPhone(string $rawPhone): User
+    {
+        $full = preg_replace('/\D+/', '', $rawPhone) ?: '';
+
+        return $this->registerTenant->execute(new RegisterData(
+            companyName: 'My Workspace',
+            name: 'New User',
+            // Synthetic unique placeholder — the customer sets a real email later.
+            email: 'otp_' . $full . '@users.eydia.in',
+            password: Str::random(40),
+            phone: '+' . $full,
+        ));
     }
 
     /** Digits only; keeps the trailing 10 (local number) as the match key. */

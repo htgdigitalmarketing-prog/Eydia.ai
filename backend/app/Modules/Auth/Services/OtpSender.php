@@ -44,10 +44,12 @@ class OtpSender
     private function sendViaWhatsApp(?User $user, string $phone, string $code): bool
     {
         $template = config('services.otp.whatsapp_template');
-        if (! $template || ! $user || ! $user->tenant_id) {
+        if (! $template) {
             return false;
         }
 
+        // $user may be null during registration — senderNumber falls back to the
+        // configured platform OTP number in that case.
         $number = $this->senderNumber($user);
         if (! $number) {
             return false;
@@ -91,13 +93,19 @@ class OtpSender
      * on ONE account for all tenants). Otherwise it uses the user's own tenant's
      * connected number.
      */
-    private function senderNumber(User $user): ?WhatsappPhoneNumber
+    private function senderNumber(?User $user): ?WhatsappPhoneNumber
     {
         $platformId = config('services.otp.whatsapp_phone_number_id');
         if ($platformId) {
             return WhatsappPhoneNumber::withoutGlobalScopes()
                 ->where('phone_number_id', $platformId)
                 ->first();
+        }
+
+        // No platform number configured → can only send from an existing user's
+        // own connected number (so registration OTPs need the platform number).
+        if (! $user || ! $user->tenant_id) {
+            return null;
         }
 
         return WhatsappPhoneNumber::withoutGlobalScopes()

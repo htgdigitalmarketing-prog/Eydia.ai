@@ -26,11 +26,17 @@ class AuthController extends Controller
     /** Send a one-time login code to a mobile number. */
     public function requestOtp(Request $request): JsonResponse
     {
-        $data = $request->validate(['phone' => ['required', 'string', 'max:20']]);
+        $data = $request->validate([
+            'phone' => ['required', 'string', 'max:20'],
+            'register' => ['sometimes', 'boolean'],
+        ]);
 
-        $result = $this->otp->request($data['phone']);
+        $register = (bool) ($data['register'] ?? false);
+        $result = $this->otp->request($data['phone'], $register);
 
-        $payload = ['message' => 'If this number is registered, a login code has been sent.'];
+        $payload = ['message' => $register
+            ? 'We sent a verification code to your WhatsApp.'
+            : 'If this number is registered, a login code has been sent.'];
         if (! empty($result['dev_code'])) {
             $payload['dev_code'] = $result['dev_code']; // local environment only
         }
@@ -44,9 +50,10 @@ class AuthController extends Controller
         $data = $request->validate([
             'phone' => ['required', 'string', 'max:20'],
             'code' => ['required', 'string', 'size:6'],
+            'register' => ['sometimes', 'boolean'],
         ]);
 
-        $result = $this->otp->verify($data['phone'], $data['code']);
+        $result = $this->otp->verify($data['phone'], $data['code'], (bool) ($data['register'] ?? false));
 
         if ($result === 'no_account') {
             return $this->fail('This mobile number is not linked to any account. Save it on your profile (or sign in with email), then try again.', [], 422);

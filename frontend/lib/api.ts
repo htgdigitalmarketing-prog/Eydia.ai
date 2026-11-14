@@ -68,10 +68,10 @@ export const api = {
   login: (body: { email: string; password: string }) =>
     request<AuthPayload>("/auth/login", { method: "POST", body }),
 
-  requestOtp: (body: { phone: string }) =>
+  requestOtp: (body: { phone: string; register?: boolean }) =>
     request<{ message: string; dev_code?: string }>("/auth/otp/request", { method: "POST", body }),
 
-  verifyOtp: (body: { phone: string; code: string }) =>
+  verifyOtp: (body: { phone: string; code: string; register?: boolean }) =>
     request<AuthPayload>("/auth/otp/verify", { method: "POST", body }),
 
   me: (token: string) => request<{ user: User }>("/auth/me", { token }),

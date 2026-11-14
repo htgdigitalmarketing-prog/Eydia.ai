@@ -6,37 +6,45 @@ import Link from "next/link";
 import { api, ApiError } from "@/lib/api";
 import { saveToken } from "@/lib/auth";
 
+/**
+ * Sign-up by mobile number + WhatsApp OTP only. The workspace is created on
+ * verify; the customer fills company name / email etc. later from their profile.
+ */
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({
-    company_name: "",
-    name: "",
-    email: "",
-    password: "",
-    password_confirmation: "",
-  });
+  const [step, setStep] = useState<"phone" | "code">("phone");
+  const [phone, setPhone] = useState("+91 ");
+  const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showPw, setShowPw] = useState(false);
 
-  function update(key: keyof typeof form, value: string) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  async function onSubmit(e: React.FormEvent) {
+  async function sendCode(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    setFieldErrors({});
+    setNotice(null);
     setLoading(true);
     try {
-      const data = await api.register(form);
+      const res = await api.requestOtp({ phone, register: true });
+      setStep("code");
+      setNotice(res?.dev_code ? `Dev code: ${res.dev_code}` : "We sent a 6-digit code to your WhatsApp.");
+    } catch (err) {
+      setError((err as ApiError).message ?? "Could not send the code. Check the number and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function verify(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await api.verifyOtp({ phone, code, register: true });
       saveToken(data.token);
       router.push("/dashboard");
     } catch (err) {
-      const apiErr = err as ApiError;
-      setError(apiErr.message ?? "Registration failed");
-      if (apiErr.errors) setFieldErrors(apiErr.errors);
+      setError((err as ApiError).message ?? "That code is invalid or expired.");
     } finally {
       setLoading(false);
     }
@@ -48,39 +56,54 @@ export default function RegisterPage() {
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 6 }}>
           <img src="/eydia-logo.png" alt="Eydia.ai — Automate · Engage · Grow" style={{ width: "100%", maxWidth: 210, height: "auto", display: "block" }} />
         </div>
-        <p className="subtitle" style={{ textAlign: "center" }}>Create your company workspace</p>
+        <p className="subtitle" style={{ textAlign: "center" }}>Sign up with your mobile number</p>
 
         {error && <div className="error">{error}</div>}
+        {notice && <div className="panel" style={{ background: "#e7f7ef", borderColor: "#b6e6cd", color: "#0a7d47", padding: "10px 14px", fontSize: 14 }}>{notice}</div>}
 
-        <form onSubmit={onSubmit}>
-          <div className="field">
-            <label>Company name</label>
-            <input value={form.company_name} onChange={(e) => update("company_name", e.target.value)} required placeholder="Acme Realty" />
-          </div>
-          <div className="field">
-            <label>Your name</label>
-            <input value={form.name} onChange={(e) => update("name", e.target.value)} required placeholder="Jane Doe" />
-          </div>
-          <div className="field">
-            <label>Email</label>
-            <input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} required placeholder="you@company.com" />
-            {fieldErrors.email && <div style={{ color: "#e02424", fontSize: 12, marginTop: 4 }}>{fieldErrors.email[0]}</div>}
-          </div>
-          <div className="field">
-            <label>Password</label>
-            <div style={{ position: "relative" }}>
-              <input type={showPw ? "text" : "password"} value={form.password} onChange={(e) => update("password", e.target.value)} required placeholder="Min 8 chars, mixed case + number" style={{ width: "100%", paddingRight: 44 }} />
-              <button type="button" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? "Hide password" : "Show password"}
-                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--muted)", padding: 4 }}>{showPw ? "🙈" : "👁️"}</button>
+        {step === "phone" ? (
+          <form onSubmit={sendCode}>
+            <div className="field">
+              <label>Mobile number</label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required
+                placeholder="+91 98765 43210"
+                autoComplete="tel"
+              />
             </div>
-            {fieldErrors.password && <div style={{ color: "#e02424", fontSize: 12, marginTop: 4 }}>{fieldErrors.password[0]}</div>}
-          </div>
-          <div className="field">
-            <label>Confirm password</label>
-            <input type={showPw ? "text" : "password"} value={form.password_confirmation} onChange={(e) => update("password_confirmation", e.target.value)} required placeholder="Repeat password" />
-          </div>
-          <button className="btn" disabled={loading}>{loading ? "Creating…" : "Create workspace"}</button>
-        </form>
+            <p className="muted" style={{ fontSize: 12.5, marginTop: -4, marginBottom: 12 }}>
+              We&apos;ll send a one-time code to this number on WhatsApp. You can add your
+              company name &amp; email later from your profile.
+            </p>
+            <button className="btn" disabled={loading}>{loading ? "Sending…" : "Send code on WhatsApp"}</button>
+          </form>
+        ) : (
+          <form onSubmit={verify}>
+            <div className="field">
+              <label>Enter the 6-digit code</label>
+              <input
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                required
+                inputMode="numeric"
+                maxLength={6}
+                placeholder="______"
+                autoFocus
+                style={{ letterSpacing: 6, textAlign: "center", fontSize: 18 }}
+              />
+            </div>
+            <button className="btn" disabled={loading || code.length !== 6}>{loading ? "Verifying…" : "Verify & create workspace"}</button>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontSize: 13 }}>
+              <button type="button" onClick={() => { setStep("phone"); setCode(""); setError(null); setNotice(null); }}
+                style={{ background: "none", border: "none", color: "var(--accent-dark)", cursor: "pointer", padding: 0 }}>← Change number</button>
+              <button type="button" onClick={(e) => sendCode(e as unknown as React.FormEvent)} disabled={loading}
+                style={{ background: "none", border: "none", color: "var(--accent-dark)", cursor: "pointer", padding: 0 }}>Resend code</button>
+            </div>
+          </form>
+        )}
 
         <div className="switch">
           Already have an account? <Link href="/login">Sign in</Link>

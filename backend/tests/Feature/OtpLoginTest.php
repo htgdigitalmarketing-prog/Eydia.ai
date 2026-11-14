@@ -103,4 +103,37 @@ class OtpLoginTest extends TestCase
         $this->postJson('/api/v1/auth/otp/verify', ['phone' => '9000000000', 'code' => $code])
             ->assertStatus(422);
     }
+
+    public function test_otp_register_creates_a_minimal_workspace_for_a_new_number(): void
+    {
+        $phone = '+919811112222';
+
+        $code = $this->postJson('/api/v1/auth/otp/request', ['phone' => $phone, 'register' => true])
+            ->assertOk()
+            ->json('data.dev_code');
+        $this->assertNotNull($code);
+
+        $this->postJson('/api/v1/auth/otp/verify', ['phone' => $phone, 'code' => $code, 'register' => true])
+            ->assertOk()
+            ->assertJsonStructure(['data' => ['token', 'user' => ['id', 'phone']]]);
+
+        $user = User::withoutGlobalScopes()->where('phone', $phone)->first();
+        $this->assertNotNull($user);
+        $this->assertTrue($user->hasRole('tenant-owner'));
+        $this->assertNotNull($user->tenant_id);
+    }
+
+    public function test_otp_without_register_flag_never_creates_an_account(): void
+    {
+        $phone = '+919833334444';
+
+        $code = $this->postJson('/api/v1/auth/otp/request', ['phone' => $phone])
+            ->assertOk()->json('data.dev_code');
+
+        // Login-only (no register flag) → unknown number is rejected, no account made.
+        $this->postJson('/api/v1/auth/otp/verify', ['phone' => $phone, 'code' => $code])
+            ->assertStatus(422);
+
+        $this->assertNull(User::withoutGlobalScopes()->where('phone', $phone)->first());
+    }
 }
