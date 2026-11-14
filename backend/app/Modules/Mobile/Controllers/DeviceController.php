@@ -43,6 +43,17 @@ class DeviceController extends Controller
             ],
         );
 
+        // Cap at 10 devices per user — drop the oldest beyond that (keeps the one
+        // we just registered, which is now the most recently used).
+        $keep = DeviceToken::where('user_id', $request->user()->id)
+            ->orderByDesc('last_used_at')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->pluck('id');
+        DeviceToken::where('user_id', $request->user()->id)
+            ->whereNotIn('id', $keep)
+            ->delete();
+
         return $this->ok(['device' => ['id' => $device->uuid]], 201);
     }
 

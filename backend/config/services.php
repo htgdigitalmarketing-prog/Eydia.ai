@@ -69,6 +69,16 @@ return [
     // Mobile push. Expo needs no key; legacy FCM needs FCM_SERVER_KEY.
     'fcm' => [
         'key' => env('FCM_SERVER_KEY'),
+        // FCM HTTP v1 (new). Off by default — the new code path only runs when
+        // PUSH_FCM_ENABLED=true AND a readable service-account JSON is configured.
+        'v1_enabled' => (bool) env('PUSH_FCM_ENABLED', false),
+        'credentials_path' => env('FCM_CREDENTIALS_PATH'),
+    ],
+
+    // Mobile push targeting. Off by default — when true, event pushes go only to
+    // the relevant users (permission/assignment aware) instead of tenant-wide.
+    'push' => [
+        'targeted' => (bool) env('PUSH_TARGETED_RECIPIENTS', false),
     ],
 
     // Mobile-OTP login delivery. Prefers WhatsApp (an approved template sent from

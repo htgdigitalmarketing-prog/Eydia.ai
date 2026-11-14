@@ -149,7 +149,7 @@ class GbpSyncService
                 try {
                     $rating = (int) $r['rating'];
                     $low = $rating > 0 && $rating <= 2;
-                    app(\App\Modules\Mobile\Services\PushNotificationService::class)->notifyTenant(
+                    app(\App\Modules\Mobile\Services\PushNotificationService::class)->notifyGbpReview(
                         $integration->tenant_id,
                         $low ? "⚠️ New {$rating}★ review" : "⭐ New review",
                         trim(($r['name'] ?: 'A customer') . ' left ' . ($rating ? $rating . '★' : 'a review') . ($r['comment'] ? ': ' . \Illuminate\Support\Str::limit($r['comment'], 80) : '')),

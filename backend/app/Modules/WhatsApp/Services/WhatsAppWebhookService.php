@@ -168,17 +168,8 @@ class WhatsAppWebhookService extends BaseService
             $this->log($event, 'warning', 'chatbot.failed', 'Chatbot auto-reply error: ' . $e->getMessage());
         }
 
-        // Mobile push notification (best-effort — never blocks message intake).
-        try {
-            app(\App\Modules\Mobile\Services\PushNotificationService::class)->notifyTenant(
-                $tenantId,
-                $contact->name ?: $waId,
-                $body ?: "[{$msgType}]",
-                ['type' => 'whatsapp_message', 'conversation_id' => $conversation->uuid],
-            );
-        } catch (\Throwable $e) {
-            $this->log($event, 'warning', 'push.failed', 'Push notification error: ' . $e->getMessage());
-        }
+        // Mobile push runs AFTER the response (in the terminating block below) so
+        // it never adds latency to, or can never fail, the webhook intake.
 
         // Hot-lead detection and automations each make their own (sometimes AI)
         // calls. They don't need to block the customer's reply — the chatbot reply
@@ -195,6 +186,19 @@ class WhatsAppWebhookService extends BaseService
             $conversation = Conversation::withoutGlobalScopes()->find($conversationId);
             if (! $contact || ! $conversation) {
                 return;
+            }
+
+            // Mobile push for the new inbound message (best-effort, after response).
+            try {
+                app(\App\Modules\Mobile\Services\PushNotificationService::class)->notifyConversation(
+                    $conversation,
+                    $contact->name ?: ($contact->wa_id ?? 'WhatsApp'),
+                    $bodyText !== '' ? $bodyText : "[{$type}]",
+                    ['type' => 'whatsapp_message', 'conversation_id' => $conversation->uuid],
+                    'conversations.view',
+                );
+            } catch (\Throwable $e) {
+                Log::warning('push: inbound notify failed: ' . $e->getMessage());
             }
 
             try {

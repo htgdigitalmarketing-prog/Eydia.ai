@@ -114,7 +114,7 @@ class ChatbotEngine
             if ($matched) {
                 Log::info('chatbot: rule matched', ['chatbot' => $chatbot->id, 'keyword' => $matched->keyword]);
                 $this->sendResponse($phone, $to, $matched, $conversation, $contact);
-                $this->applyLeadActions($phone, $contact, $matched);
+                $this->applyLeadActions($phone, $contact, $matched, $conversation);
                 $this->leadFlow->scheduleForBranch($phone, $conversation, $contact, $chatbot, $matched);
             } elseif (! empty($chatbot->welcome_buttons) && $chatbot->welcome_message) {
                 // Button-driven flow: re-show the welcome menu for a first message
@@ -244,7 +244,7 @@ class ChatbotEngine
      * contact, set its pipeline stage and funnel tag, and notify the team when
      * the lead asks to talk to a human.
      */
-    private function applyLeadActions(WhatsappPhoneNumber $phone, Contact $contact, ChatbotRule $rule): void
+    private function applyLeadActions(WhatsappPhoneNumber $phone, Contact $contact, ChatbotRule $rule, ?Conversation $conversation = null): void
     {
         if (! $rule->set_tag && ! $rule->set_stage && ! $rule->notify_agent) {
             return;
@@ -281,12 +281,16 @@ class ChatbotEngine
 
         if ($rule->notify_agent) {
             try {
-                app(\App\Modules\Mobile\Services\PushNotificationService::class)->notifyTenant(
-                    $phone->tenant_id,
-                    'Lead wants to talk to a human',
-                    ($contact->name ?: $number ?: 'A lead') . ' asked to talk to your team on WhatsApp.',
-                    ['type' => 'lead_handoff'],
-                );
+                $push = app(\App\Modules\Mobile\Services\PushNotificationService::class);
+                $title = 'Lead wants to talk to a human';
+                $body = ($contact->name ?: $number ?: 'A lead') . ' asked to talk to your team on WhatsApp.';
+                $data = ['type' => 'lead_handoff'];
+
+                if ($conversation) {
+                    $push->notifyConversation($conversation, $title, $body, $data, 'conversations.reply');
+                } else {
+                    $push->notifyTenant($phone->tenant_id, $title, $body, $data);
+                }
             } catch (\Throwable $e) {
                 Log::warning('chatbot: handoff notify failed: ' . $e->getMessage());
             }
