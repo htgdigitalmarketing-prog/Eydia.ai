@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, WorkflowItem, WorkflowDetail, WfNodeData, WfEdgeData, WfExecution } from "@/lib/api";
+import { api, ApiError, WorkflowItem, WorkflowDetail, WfNodeData, WfEdgeData, WfExecution, TemplateItem } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -119,6 +119,16 @@ export default function AutomationsPage() {
   }, []);
 
   useEffect(() => { loadWorkflows(); }, [loadWorkflows]);
+
+  // Approved templates power the "Send template" node dropdown (best-effort).
+  const [approvedTemplates, setApprovedTemplates] = useState<TemplateItem[]>([]);
+  useEffect(() => {
+    const token = getToken();
+    if (!token) return;
+    api.templates.list(token, { status: "APPROVED" })
+      .then((res) => setApprovedTemplates(res.templates))
+      .catch(() => {});
+  }, []);
 
   async function createWorkflow(e: React.FormEvent) {
     e.preventDefault();
@@ -574,13 +584,36 @@ export default function AutomationsPage() {
 
                   {(selNode.type === "send_template") && (
                     <div className="field">
-                      <label style={{ fontSize: 12 }}>Template name</label>
-                      <input
-                        value={(selNode.config?.template_name as string) ?? ""}
-                        onChange={(e) => updateNodeConfig(selNode.node_key, { ...selNode.config, template_name: e.target.value })}
-                        placeholder="test_welcome"
-                        style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13 }}
-                      />
+                      <label style={{ fontSize: 12 }}>Template</label>
+                      {approvedTemplates.length > 0 ? (
+                        <select
+                          value={(selNode.config?.template_name as string) ?? ""}
+                          onChange={(e) => {
+                            const t = approvedTemplates.find((x) => x.name === e.target.value);
+                            updateNodeConfig(selNode.node_key, {
+                              ...selNode.config,
+                              template_name: e.target.value,
+                              language: t?.language ?? (selNode.config?.language as string) ?? "en_US",
+                            });
+                          }}
+                          style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13 }}
+                        >
+                          <option value="">— Select an approved template —</option>
+                          {approvedTemplates.map((t) => (
+                            <option key={`${t.name}:${t.language}`} value={t.name}>{t.name} ({t.language})</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <>
+                          <input
+                            value={(selNode.config?.template_name as string) ?? ""}
+                            onChange={(e) => updateNodeConfig(selNode.node_key, { ...selNode.config, template_name: e.target.value })}
+                            placeholder="test_welcome"
+                            style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13 }}
+                          />
+                          <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>No approved templates yet — type the exact name, or get one approved first.</p>
+                        </>
+                      )}
                     </div>
                   )}
 

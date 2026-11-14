@@ -313,4 +313,29 @@ class BulkSendTest extends TestCase
         // An unknown wamid is a safe no-op (not a bulk recipient).
         $svc->syncRecipientStatus('unknown-wamid', 'delivered');
     }
+
+    /** bulk:reconcile-status replays stored status webhooks to fix past data. */
+    public function test_reconcile_command_replays_stored_status_webhooks(): void
+    {
+        $phone = WhatsappPhoneNumber::withoutGlobalScopes()->firstOrFail();
+        $send = BulkSend::create([
+            'tenant_id' => $phone->tenant_id, 'whatsapp_phone_number_id' => $phone->id,
+            'template_name' => 'hello_world', 'language' => 'en_US', 'status' => 'completed', 'total' => 1,
+        ]);
+        $r = BulkSendRecipient::create(['bulk_send_id' => $send->id, 'phone' => '919000000009', 'status' => 'sent', 'wamid' => 'wamid-OLD']);
+
+        // A delivered status callback that was stored but never reconciled.
+        \App\Models\WebhookEvent::create([
+            'tenant_id' => $phone->tenant_id, 'source' => 'whatsapp', 'event_key' => 'status:wamid-OLD:delivered',
+            'object_type' => 'status', 'payload' => ['status' => ['id' => 'wamid-OLD', 'status' => 'delivered']],
+        ]);
+
+        // Dry-run changes nothing.
+        $this->artisan('bulk:reconcile-status')->assertSuccessful();
+        $this->assertSame('sent', $r->fresh()->status);
+
+        // --apply writes it.
+        $this->artisan('bulk:reconcile-status', ['--apply' => true])->assertSuccessful();
+        $this->assertSame('delivered', $r->fresh()->status);
+    }
 }

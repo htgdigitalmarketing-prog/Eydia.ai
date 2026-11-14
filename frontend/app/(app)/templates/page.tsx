@@ -510,6 +510,11 @@ export default function TemplatesPage() {
                         <input value={btn.example ?? ""} placeholder="Offer code, e.g. SAVE20" onChange={(e) => updateButton(i, { example: e.target.value })}
                           style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13 }} />
                       )}
+                      {btn.type === "QUICK_REPLY" && (
+                        <p className="muted" style={{ fontSize: 11, margin: "6px 0 0" }}>
+                          Quick-reply buttons have only this text — it&apos;s the value sent back when the customer taps it. Catch it with a Chatbot keyword rule or an Automation keyword trigger.
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
