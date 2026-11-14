@@ -15,6 +15,7 @@ Route::post('/credits/packs/confirm', [CreditController::class, 'confirmPack']);
 Route::prefix('billing')->group(function () {
     Route::get('/', [BillingController::class, 'overview']);
     Route::get('/plans', [BillingController::class, 'plans']);
+    Route::post('/quote', [BillingController::class, 'quote']);
     Route::get('/wallet', [BillingController::class, 'wallet']);
     Route::get('/invoices', [BillingController::class, 'invoices']);
     Route::post('/subscribe', [BillingController::class, 'subscribe']);

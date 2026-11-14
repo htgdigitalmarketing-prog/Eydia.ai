@@ -49,8 +49,48 @@ class BillingController extends Controller
             ->get();
 
         return $this->ok([
-            'plans' => $plans->map(fn (Plan $p) => $this->planArray($p)),
+            'plans' => $plans->map(fn (Plan $p) => array_merge($this->planArray($p), [
+                'cycle_prices' => \App\Support\BillingCycle::displayFor((float) $p->price),
+            ])),
+            'offer' => \App\Support\BillingCycle::offerInfo(),
             'gst_rate' => (int) InvoiceSetting::current()->gst_rate,
+        ]);
+    }
+
+    /**
+     * Live price preview for a plan + cycle (+ optional coupon). The pricing page
+     * calls this to show the final payable amount and validate a coupon code.
+     */
+    public function quote(Request $request): JsonResponse
+    {
+        $this->authorize('billing.view');
+
+        $data = $request->validate([
+            'plan_id' => ['required', 'string', 'exists:plans,uuid'],
+            'cycle' => ['sometimes', 'string'],
+            'coupon' => ['sometimes', 'nullable', 'string', 'max:40'],
+        ]);
+        $cycle = \App\Support\BillingCycle::normalize($data['cycle'] ?? null);
+        $plan = Plan::where('uuid', $data['plan_id'])->where('is_active', true)->firstOrFail();
+
+        $list = \App\Support\BillingCycle::listPrice((float) $plan->price, $cycle);
+        $cyclePrice = \App\Support\BillingCycle::price((float) $plan->price, $cycle);
+        $eval = app(\App\Modules\Billing\Services\CouponService::class)
+            ->evaluate($data['coupon'] ?? null, $cyclePrice, $cycle);
+        $g = \App\Support\Gst::inclusivePaise($eval['final'], (int) InvoiceSetting::current()->gst_rate);
+
+        return $this->ok([
+            'cycle' => $cycle,
+            'list_price' => $list,
+            'cycle_price' => $cyclePrice,
+            'cycle_discount_percent' => (int) round(\App\Support\BillingCycle::discount($cycle) * 100),
+            'coupon' => $eval['coupon'] ? ['code' => $eval['coupon']->code, 'discount' => $eval['discount']] : null,
+            'coupon_error' => $eval['error'],
+            'payable' => $eval['final'],   // rupees, GST-inclusive
+            'subtotal_minor' => $g['base'],
+            'tax_minor' => $g['tax'],
+            'total_minor' => $g['total'],
+            'gst_rate' => $g['rate'],
         ]);
     }
 
@@ -129,10 +169,11 @@ class BillingController extends Controller
         $cycle = \App\Support\BillingCycle::normalize($data['cycle'] ?? null);
 
         $plan = Plan::where('uuid', $data['plan_id'])->where('is_active', true)->firstOrFail();
-        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle);
+        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle, $data['coupon'] ?? null);
 
-        // Free plan — no payment needed, assign and invoice (₹0) right away.
+        // Free plan (or a coupon that zeroes it) — assign and invoice (₹0) now.
         if ($total <= 0) {
+            $this->redeemCouponIfAny($data['coupon'] ?? null, $plan, $cycle);
             $subscription = $this->applyPlan($plan, $request->user()->tenant_id, $cycle);
             $invoice = $this->generateInvoice($subscription, $plan, $data['billing'], $base, $rate, $tax, $total, 'free', null);
             return $this->ok([
@@ -198,9 +239,10 @@ class BillingController extends Controller
         $cycle = \App\Support\BillingCycle::normalize($data['cycle'] ?? null);
         $plan = Plan::where('uuid', $data['plan_id'])->where('is_active', true)->firstOrFail();
 
-        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle);
+        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle, $data['coupon'] ?? null);
         if ($total <= 0) {
-            // Free plan — no mandate needed.
+            // Free plan (or coupon that zeroes it) — no mandate needed.
+            $this->redeemCouponIfAny($data['coupon'] ?? null, $plan, $cycle);
             $subscription = $this->applyPlan($plan, $request->user()->tenant_id, $cycle);
             $this->generateInvoice($subscription, $plan, $data['billing'], $base, $rate, $tax, $total, 'free', null);
 
@@ -249,7 +291,8 @@ class BillingController extends Controller
         }
 
         $plan = Plan::where('uuid', $data['plan_id'])->where('is_active', true)->firstOrFail();
-        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle);
+        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle, $data['coupon'] ?? null);
+        $this->redeemCouponIfAny($data['coupon'] ?? null, $plan, $cycle);
 
         $subscription = $this->applyPlan($plan, $request->user()->tenant_id, $cycle, [
             'gateway' => 'razorpay',
@@ -293,7 +336,8 @@ class BillingController extends Controller
         Log::info('billing.verify: signature valid, applying plan', ['payment_id' => $data['razorpay_payment_id'], 'tenant' => $request->user()->tenant_id]);
 
         $plan = Plan::where('uuid', $data['plan_id'])->where('is_active', true)->firstOrFail();
-        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle);
+        [$base, $rate, $tax, $total] = $this->amounts($plan, $cycle, $data['coupon'] ?? null);
+        $this->redeemCouponIfAny($data['coupon'] ?? null, $plan, $cycle);
         $subscription = $this->applyPlan($plan, $request->user()->tenant_id, $cycle);
         $invoice = $this->generateInvoice($subscription, $plan, $data['billing'], $base, $rate, $tax, $total, 'paid', $data['razorpay_payment_id']);
 
@@ -310,6 +354,7 @@ class BillingController extends Controller
     private function billingRules(): array
     {
         return [
+            'coupon' => ['sometimes', 'nullable', 'string', 'max:40'],
             'billing' => ['required', 'array'],
             'billing.name' => ['required', 'string', 'max:255'],
             'billing.email' => ['required', 'email', 'max:255'],
@@ -320,15 +365,42 @@ class BillingController extends Controller
     }
 
     /** @return array{0:int,1:int,2:int,3:int} [base, gstRate, tax, total] in paise. */
-    private function amounts(Plan $plan, ?string $cycle = null): array
+    private function amounts(Plan $plan, ?string $cycle = null, ?string $couponCode = null): array
     {
         // Plan price is GST-INCLUSIVE — the displayed price is what the customer
         // pays; the base/GST split is derived from it. A longer cycle multiplies
-        // the monthly price and applies its discount.
+        // the monthly price and applies its (backend-managed) discount; a valid
+        // coupon then discounts further on top.
         $price = $cycle ? \App\Support\BillingCycle::price((float) $plan->price, $cycle) : (float) $plan->price;
+
+        if ($couponCode) {
+            $eval = app(\App\Modules\Billing\Services\CouponService::class)
+                ->evaluate($couponCode, $price, \App\Support\BillingCycle::normalize($cycle));
+            $price = $eval['final']; // invalid coupon → price unchanged (safe)
+        }
+
         $g = \App\Support\Gst::inclusivePaise($price, (int) InvoiceSetting::current()->gst_rate);
 
         return [$g['base'], $g['rate'], $g['tax'], $g['total']];
+    }
+
+    /** Mark a coupon used once a payment actually succeeded (best-effort). */
+    private function redeemCouponIfAny(?string $couponCode, Plan $plan, ?string $cycle): void
+    {
+        if (! $couponCode) {
+            return;
+        }
+        try {
+            $normalized = \App\Support\BillingCycle::normalize($cycle);
+            $price = \App\Support\BillingCycle::price((float) $plan->price, $normalized);
+            $svc = app(\App\Modules\Billing\Services\CouponService::class);
+            $eval = $svc->evaluate($couponCode, $price, $normalized);
+            if ($eval['coupon'] && ! $eval['error']) {
+                $svc->redeem($eval['coupon']);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('billing.coupon.redeem failed: ' . $e->getMessage());
+        }
     }
 
     /** Create a paid/free invoice snapshotting seller + customer + GST. */
