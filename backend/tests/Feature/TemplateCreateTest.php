@@ -7,6 +7,7 @@ use App\Models\Subscription;
 use App\Models\Template;
 use App\Models\TemplateComponent;
 use App\Models\User;
+use App\Models\WhatsappBusinessAccount;
 use Database\Seeders\PlanSeeder;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Http\UploadedFile;
@@ -95,5 +96,45 @@ class TemplateCreateTest extends TestCase
         $header = TemplateComponent::withoutGlobalScopes()->where('type', 'HEADER')->first();
         $this->assertSame('IMAGE', $header->format);
         $this->assertSame([$handle], $header->example['header_handle']);
+    }
+
+    /** A template PHONE_NUMBER button is normalised to E.164 (Meta #192). */
+    public function test_phone_button_is_normalized_to_e164(): void
+    {
+        $this->authed()->postJson('/api/v1/templates', [
+            'name' => 'call_us', 'language' => 'en', 'category' => 'UTILITY',
+            'body' => 'Call us anytime.',
+            'buttons' => [['type' => 'PHONE_NUMBER', 'text' => 'Call', 'phone_number' => '09876543210']],
+        ])->assertCreated();
+
+        $buttons = TemplateComponent::withoutGlobalScopes()->where('type', 'BUTTONS')->latest('id')->first();
+        $this->assertSame('+919876543210', $buttons->buttons[0]['phone_number']);
+    }
+
+    /**
+     * A tenant that reconnected WhatsApp holds several WABA rows; template create
+     * must target the CONNECTED + most-recent one, never a dead/older row.
+     */
+    public function test_template_targets_connected_latest_waba(): void
+    {
+        $tenantId = User::withoutGlobalScopes()->where('email', 'owner@acme.test')->value('tenant_id');
+
+        // A newer but DISCONNECTED WABA (a dead reconnect) must be skipped…
+        WhatsappBusinessAccount::create([
+            'tenant_id' => $tenantId, 'waba_id' => 'DEAD999', 'name' => 'dead',
+            'access_token' => 'tok-dead-aaaaaaaaaa', 'status' => 'disconnected', 'connected_at' => now()->addDay(),
+        ]);
+        // …and a newer CONNECTED WABA must beat the older one from setUp.
+        $live = WhatsappBusinessAccount::create([
+            'tenant_id' => $tenantId, 'waba_id' => 'LIVE777', 'name' => 'live',
+            'access_token' => 'tok-live-bbbbbbbbbb', 'status' => 'connected', 'connected_at' => now()->addDays(2),
+        ]);
+
+        $this->authed()->postJson('/api/v1/templates', [
+            'name' => 'pick_waba', 'language' => 'en', 'category' => 'UTILITY', 'body' => 'Hi there.',
+        ])->assertCreated();
+
+        $tpl = Template::withoutGlobalScopes()->where('name', 'pick_waba')->first();
+        $this->assertSame($live->id, $tpl->whatsapp_business_account_id);
     }
 }

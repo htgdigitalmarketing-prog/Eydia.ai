@@ -124,8 +124,20 @@ class MetaWhatsAppProvider implements WhatsAppProviderInterface
                 ->post("/{$phoneNumberId}/media", ['messaging_product' => 'whatsapp', 'type' => $mime]));
     }
 
-    public function uploadTemplateMedia(string $appId, string $content, string $mime, string $fileName): string
+    public function uploadTemplateMedia(string $appId, string $content, string $mime, string $fileName, ?string $wabaId = null): string
     {
+        // The handle must be created under the app that OWNS the WABA. For
+        // manually-connected customer WABAs that is the customer's own app, not
+        // our configured META_APP_ID — resolve it from the WABA first.
+        $appId = $this->resolveUploadApp($appId, $wabaId);
+        if ($appId === '') {
+            throw new WhatsAppApiException(
+                userMessage: 'Could not determine the Meta app for this WhatsApp account. Re-connect WhatsApp and try again.',
+                httpStatus: 422,
+                technicalMessage: 'uploadTemplateMedia: no app id resolved (subscribed_apps + debug_token + config all empty)',
+            );
+        }
+
         // Meta resumable upload (two steps). Step 1: start a session.
         $start = Http::withToken($this->token)->baseUrl($this->baseUrl)->acceptJson()->timeout($this->timeout)
             ->post("/{$appId}/uploads", [
@@ -193,6 +205,38 @@ class MetaWhatsAppProvider implements WhatsAppProviderInterface
             'file_size' => $meta['file_size'] ?? null,
             'sha256' => $meta['sha256'] ?? null,
         ];
+    }
+
+    /**
+     * Resolve the app id to create a resumable-upload handle under. Primary source
+     * is the WABA's subscribed_apps (works with the WABA's own token); then
+     * debug_token self-introspection; finally the passed-in fallback (META_APP_ID).
+     */
+    private function resolveUploadApp(string $fallbackAppId, ?string $wabaId): string
+    {
+        if ($wabaId) {
+            try {
+                $res = $this->graph()->get("/{$wabaId}/subscribed_apps");
+                $id = $res->json('data.0.whatsapp_business_api_data.id');
+                if (! empty($id)) {
+                    return (string) $id;
+                }
+            } catch (\Throwable $e) {
+                // fall through to the next source
+            }
+        }
+
+        try {
+            $dbg = $this->graph()->get('/debug_token', ['input_token' => $this->token]);
+            $id = $dbg->json('data.app_id');
+            if (! empty($id)) {
+                return (string) $id;
+            }
+        } catch (\Throwable $e) {
+            // fall through to the configured app id
+        }
+
+        return $fallbackAppId;
     }
 
     /**

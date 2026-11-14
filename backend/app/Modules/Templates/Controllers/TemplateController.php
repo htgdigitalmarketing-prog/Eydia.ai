@@ -88,9 +88,7 @@ class TemplateController extends Controller
         $tenantId = $request->user()->tenant_id;
         app(\App\Modules\Billing\Services\PlanLimitService::class)->assertWithinLimit($tenantId, 'max_templates', 'templates', 'templates');
 
-        $waba = WhatsappBusinessAccount::where('tenant_id', $tenantId)
-            ->when($data['waba_id'] ?? null, fn ($q, $id) => $q->where('uuid', $id)->orWhere('waba_id', $id))
-            ->first();
+        $waba = $this->resolveWaba($tenantId, $data['waba_id'] ?? null);
 
         if (! $waba) {
             return $this->fail('Connect a WhatsApp Business account before creating templates.', [], 422);
@@ -166,27 +164,27 @@ class TemplateController extends Controller
         ]);
 
         $tenantId = $request->user()->tenant_id;
-        $waba = WhatsappBusinessAccount::where('tenant_id', $tenantId)
-            ->when($data['waba_id'] ?? null, fn ($q, $id) => $q->where('uuid', $id)->orWhere('waba_id', $id))
-            ->first();
+        $waba = $this->resolveWaba($tenantId, $data['waba_id'] ?? null);
 
         if (! $waba) {
             return $this->fail('Connect a WhatsApp Business account before uploading a sample.', [], 422);
         }
 
-        $appId = config('services.meta.app_id');
-        if (! $appId) {
-            return $this->fail('Meta app is not configured, so sample uploads are unavailable.', [], 422);
-        }
+        // The resumable-upload handle must be created under the app that OWNS the
+        // WABA. For manually-connected customer WABAs that's the customer's own
+        // app, not our META_APP_ID — the provider resolves it from the WABA's
+        // subscribed_apps, falling back to this configured id.
+        $appId = (string) config('services.meta.app_id');
 
         $file = $request->file('file');
 
         try {
             $handle = $this->factory->for($waba)->uploadTemplateMedia(
-                (string) $appId,
+                $appId,
                 file_get_contents($file->getRealPath()),
                 $file->getMimeType() ?: 'application/octet-stream',
                 $file->getClientOriginalName() ?: 'sample',
+                $waba->waba_id,
             );
         } catch (\Throwable $e) {
             return $this->fail('Could not upload the sample to Meta: ' . $e->getMessage(), [], 422);
@@ -213,6 +211,46 @@ class TemplateController extends Controller
         $template->delete();
 
         return $this->ok(['message' => 'Template deleted.']);
+    }
+
+    /**
+     * Resolve the WhatsApp Business account to create/upload against.
+     *
+     * A tenant can accumulate several WABA rows (every reconnect adds one); the
+     * old ones point at WABA IDs Meta has since deleted. Always prefer a
+     * `connected` account, most recent first, so templates don't POST to a dead
+     * WABA ("Object with ID '<waba>' does not exist"). The explicit id match is
+     * kept inside a nested where so the OR can never break tenant isolation.
+     */
+    private function resolveWaba(int $tenantId, ?string $wabaId): ?WhatsappBusinessAccount
+    {
+        return WhatsappBusinessAccount::where('tenant_id', $tenantId)
+            ->when($wabaId, fn ($q, $id) => $q->where(
+                fn ($w) => $w->where('uuid', $id)->orWhere('waba_id', $id)
+            ))
+            ->orderByRaw("CASE WHEN status = 'connected' THEN 0 ELSE 1 END")
+            ->orderByDesc('connected_at')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Normalise a template PHONE_NUMBER button to E.164 (Meta #192 otherwise):
+     * strip spaces/dashes, drop a leading trunk 0, prepend +91 for a bare
+     * 10-digit Indian mobile, and keep an already-prefixed +number.
+     */
+    private function normalizeButtonPhone(string $raw): string
+    {
+        $raw = trim($raw);
+        if (str_starts_with($raw, '+')) {
+            return '+' . preg_replace('/\D/', '', substr($raw, 1));
+        }
+        $digits = ltrim(preg_replace('/\D/', '', $raw), '0');
+        if (strlen($digits) === 10) {
+            $digits = '91' . $digits;
+        }
+
+        return '+' . $digits;
     }
 
     /** Map the structured request into Meta's Graph "components" array. */
@@ -250,7 +288,7 @@ class TemplateController extends Controller
                 if ($b['type'] === 'URL' && ! empty($b['url'])) {
                     $btn['url'] = $b['url'];
                 } elseif ($b['type'] === 'PHONE_NUMBER' && ! empty($b['phone_number'])) {
-                    $btn['phone_number'] = $b['phone_number'];
+                    $btn['phone_number'] = $this->normalizeButtonPhone($b['phone_number']);
                 } elseif ($b['type'] === 'COPY_CODE') {
                     $btn['example'] = [$b['example'] ?? $b['text']];
                 }

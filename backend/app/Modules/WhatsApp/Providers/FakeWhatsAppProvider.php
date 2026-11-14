@@ -83,7 +83,7 @@ class FakeWhatsAppProvider implements WhatsAppProviderInterface
         ];
     }
 
-    public function uploadTemplateMedia(string $appId, string $content, string $mime, string $fileName): string
+    public function uploadTemplateMedia(string $appId, string $content, string $mime, string $fileName, ?string $wabaId = null): string
     {
         $this->sent[] = ['template_media' => compact('appId', 'mime', 'fileName')];
         return 'FAKE_HANDLE_' . Str::random(16);
