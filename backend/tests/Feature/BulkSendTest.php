@@ -279,4 +279,38 @@ class BulkSendTest extends TestCase
         $this->assertSame('sent', BulkSendRecipient::where('bulk_send_id', $send->id)
             ->where('phone', '919000000002')->value('status'));
     }
+
+    /** A status webhook reconciles bulk recipients even for cold numbers. */
+    public function test_status_webhook_reconciles_bulk_recipients(): void
+    {
+        $phone = WhatsappPhoneNumber::withoutGlobalScopes()->firstOrFail();
+        $send = BulkSend::create([
+            'tenant_id' => $phone->tenant_id, 'whatsapp_phone_number_id' => $phone->id,
+            'template_name' => 'hello_world', 'language' => 'en_US', 'status' => 'processing', 'total' => 2,
+        ]);
+        $r1 = BulkSendRecipient::create(['bulk_send_id' => $send->id, 'phone' => '919000000001', 'status' => 'sent', 'wamid' => 'wamid-A']);
+        $r2 = BulkSendRecipient::create(['bulk_send_id' => $send->id, 'phone' => '919000000002', 'status' => 'sent', 'wamid' => 'wamid-B']);
+
+        $svc = app(\App\Modules\WhatsApp\Services\BulkSendService::class);
+
+        // A delivered webhook for a cold number (no inbox Message) reconciles it.
+        $svc->syncRecipientStatus('wamid-A', 'delivered');
+        $this->assertSame('delivered', $r1->fresh()->status);
+
+        // A late/duplicate `failed` must NOT drag a delivered recipient to failed.
+        $svc->syncRecipientStatus('wamid-A', 'failed', 'too many attempts', '131049');
+        $this->assertSame('delivered', $r1->fresh()->status);
+
+        // A genuine failure on a still-"sent" recipient is recorded.
+        $svc->syncRecipientStatus('wamid-B', 'failed', 'not on WhatsApp', '131026');
+        $this->assertSame('failed', $r2->fresh()->status);
+
+        // Parent counts recount from recipients.
+        $send->refresh();
+        $this->assertSame(1, $send->failed_count);
+        $this->assertSame(1, $send->sent_count); // delivered counts as sent, not pending/failed
+
+        // An unknown wamid is a safe no-op (not a bulk recipient).
+        $svc->syncRecipientStatus('unknown-wamid', 'delivered');
+    }
 }

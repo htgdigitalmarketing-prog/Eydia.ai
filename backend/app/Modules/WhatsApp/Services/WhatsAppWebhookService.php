@@ -234,6 +234,21 @@ class WhatsAppWebhookService extends BaseService
             return;
         }
 
+        // Reconcile a bulk-send recipient FIRST — cold/bulk numbers usually have
+        // no inbox Message row, so doing this after the Message lookup (which
+        // returns early on "no message") would lose their real delivered/failed
+        // outcome and leave them stuck at "sent".
+        try {
+            app(BulkSendService::class)->syncRecipientStatus(
+                $wamid,
+                $statusName,
+                $statusData['errors'][0]['title'] ?? null,
+                isset($statusData['errors'][0]['code']) ? (string) $statusData['errors'][0]['code'] : null,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('bulk.recipient_sync.failed: ' . $e->getMessage());
+        }
+
         $message = Message::withoutGlobalScopes()
             ->where('external_message_id', $wamid)
             ->first();
@@ -269,7 +284,12 @@ class WhatsAppWebhookService extends BaseService
         $currentOrder = $statusOrder[$message->status] ?? 0;
         $newOrder = $statusOrder[$statusName] ?? 0;
 
-        if ($newOrder > $currentOrder || $statusName === 'failed') {
+        // A late/duplicate `failed` must NOT overwrite a message that already
+        // reached delivered/read (a Meta ordering quirk that mis-counted delivered
+        // messages as failed). The event is still logged in message_statuses above.
+        $failedOverride = $statusName === 'failed' && $currentOrder < $statusOrder['delivered'];
+
+        if ($newOrder > $currentOrder || $failedOverride) {
             $updates = ['status' => $statusName];
 
             match ($statusName) {

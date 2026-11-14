@@ -373,4 +373,49 @@ class BulkSendService extends BaseService
         $bulkSend->updated_at = now();
         $bulkSend->save();
     }
+
+    /**
+     * Reconcile a bulk recipient from a Meta status webhook.
+     *
+     * A recipient is marked `sent` the instant Meta accepts it (returns a wamid).
+     * The TRUE outcome (delivered / failed) arrives later via status webhooks —
+     * and for cold/bulk numbers with no inbox message those were previously
+     * dropped, so recipients stayed `sent` forever and the counts were inflated.
+     *
+     * delivered/read → `delivered`; failed → `failed` (but never drag an already
+     * `delivered` recipient back to `failed` on a late/duplicate event). No-op if
+     * the wamid isn't a bulk recipient, so it's safe to call for every status.
+     */
+    public function syncRecipientStatus(string $wamid, string $statusName, ?string $reason = null, ?string $errorCode = null): void
+    {
+        if ($wamid === '') {
+            return;
+        }
+
+        $recipient = BulkSendRecipient::where('wamid', $wamid)->first();
+        if (! $recipient) {
+            return;
+        }
+
+        if (in_array($statusName, ['delivered', 'read'], true)) {
+            if ($recipient->status !== 'delivered') {
+                $recipient->update(['status' => 'delivered']);
+            }
+        } elseif ($statusName === 'failed') {
+            if ($recipient->status !== 'delivered') {
+                $recipient->update([
+                    'status' => 'failed',
+                    'error_message' => $reason ?? $recipient->error_message,
+                    'error_code' => $errorCode ?? $recipient->error_code,
+                ]);
+            }
+        } else {
+            return; // sent / queued — already reflected when Meta accepted it
+        }
+
+        $bulkSend = BulkSend::withoutGlobalScopes()->find($recipient->bulk_send_id);
+        if ($bulkSend) {
+            $this->syncProgress($bulkSend);
+        }
+    }
 }
