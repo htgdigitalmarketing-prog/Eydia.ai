@@ -35,6 +35,7 @@ export default function CompaniesPage() {
   // Plan filter (seeded from ?plan= so the super-admin dashboard can deep-link).
   const sp = useSearchParams();
   const [filterPlan, setFilterPlan] = useState("");
+  const [search, setSearch] = useState("");
   useEffect(() => { setFilterPlan(sp.get("plan") ?? ""); }, [sp]);
 
   const isSuper = !!me.is_super_admin;
@@ -222,11 +223,19 @@ export default function CompaniesPage() {
   }
 
   const active = companies.filter((c) => c.status !== "suspended").length;
-  const filtered = !filterPlan
+  const byPlan = !filterPlan
     ? companies
     : filterPlan === "__none__"
       ? companies.filter((c) => !c.plan_name)
       : companies.filter((c) => c.plan_name === filterPlan);
+  const q = search.trim().toLowerCase();
+  const filtered = !q
+    ? byPlan
+    : byPlan.filter((c) =>
+        [c.name, c.owner_name, c.owner_email, c.plan_name]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q))
+      );
 
   return (
     <div>
@@ -248,7 +257,20 @@ export default function CompaniesPage() {
       {/* Filter by plan (also deep-linked from the dashboard) */}
       {companies.length > 0 && (
         <div className="panel" style={{ padding: 12, marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>Filter by plan</span>
+          <div style={{ position: "relative", flex: "1 1 240px", minWidth: 200 }}>
+            <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 13, opacity: .5 }}>🔍</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search company, owner or email…"
+              style={{ width: "100%", padding: "9px 32px 9px 32px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 13 }}
+            />
+            {search && (
+              <button onClick={() => setSearch("")} title="Clear search" aria-label="Clear search"
+                style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "var(--muted)", lineHeight: 1 }}>×</button>
+            )}
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 600 }}>Plan</span>
           <select value={filterPlan} onChange={(e) => setFilterPlan(e.target.value)}
             style={{ padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 13 }}>
             <option value="">All plans ({companies.length})</option>
@@ -272,10 +294,11 @@ export default function CompaniesPage() {
           <button className="btn" onClick={() => setShowAdd(true)}>Add company</button>
         </div>
       ) : (
-        <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <div className="panel" style={{ padding: 0, overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}>
             <thead>
               <tr style={{ textAlign: "left", fontSize: 12, color: "#667781", background: "#f8fafb", borderBottom: "1px solid #eef1f2" }}>
+                <th style={{ padding: "12px 14px", width: 48, textAlign: "right" }}>#</th>
                 <th style={{ padding: "12px 14px" }}>Company</th>
                 <th style={{ padding: "12px 14px" }}>Owner</th>
                 <th style={{ padding: "12px 14px" }}>Plan</th>
@@ -286,10 +309,11 @@ export default function CompaniesPage() {
             </thead>
             <tbody>
               {filtered.length === 0 && (
-                <tr><td colSpan={6} style={{ padding: "24px 14px", textAlign: "center" }}><span className="muted">No companies on this plan.</span></td></tr>
+                <tr><td colSpan={7} style={{ padding: "24px 14px", textAlign: "center" }}><span className="muted">{q ? "No companies match your search." : "No companies on this plan."}</span></td></tr>
               )}
-              {filtered.map((c) => (
+              {filtered.map((c, i) => (
                 <tr key={c.id} style={{ borderBottom: "1px solid #f4f6f7" }}>
+                  <td style={{ padding: "12px 14px", textAlign: "right", color: "#8a97a3", fontSize: 13, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
                   <td style={{ padding: "12px 14px", fontWeight: 600 }}>
                     <button type="button" onClick={() => viewDashboard(c)} title="Open this client's dashboard"
                       style={{ background: "none", border: "none", padding: 0, font: "inherit", fontWeight: 600, color: "var(--accent-dark)", cursor: "pointer", textAlign: "left" }}>
@@ -317,13 +341,15 @@ export default function CompaniesPage() {
                       padding: "3px 10px", borderRadius: 999, fontSize: 12, fontWeight: 600, textTransform: "capitalize",
                     }}>{c.status}</span>
                   </td>
-                  <td style={{ padding: "12px 14px", textAlign: "right", whiteSpace: "nowrap" }}>
-                    <button className="btn-mini" style={{ background: "var(--accent)", color: "#fff", border: "none" }} title="Open this client's dashboard" onClick={() => viewDashboard(c)}>View</button>
-                    <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => openEdit(c)}>Edit</button>
-                    <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => openUsers(c)}>Users</button>
-                    <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => topUpCredits(c)}>+ Credits</button>
-                    <button className="btn-mini" style={{ marginLeft: 6 }} onClick={() => toggleCompany(c)}>{c.status === "suspended" ? "Reactivate" : "Suspend"}</button>
-                    <button className="btn-mini" style={{ color: "#c53030", marginLeft: 6 }} onClick={() => removeCompany(c)}>Delete</button>
+                  <td style={{ padding: "12px 14px" }}>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      <button className="btn-mini" style={{ background: "var(--accent)", color: "#fff", border: "none" }} title="Open this client's dashboard" onClick={() => viewDashboard(c)}>View</button>
+                      <button className="btn-mini" onClick={() => openEdit(c)}>Edit</button>
+                      <button className="btn-mini" onClick={() => openUsers(c)}>Users</button>
+                      <button className="btn-mini" onClick={() => topUpCredits(c)}>+ Credits</button>
+                      <button className="btn-mini" onClick={() => toggleCompany(c)}>{c.status === "suspended" ? "Reactivate" : "Suspend"}</button>
+                      <button className="btn-mini" style={{ color: "#c53030" }} onClick={() => removeCompany(c)}>Delete</button>
+                    </div>
                   </td>
                 </tr>
               ))}
