@@ -9,6 +9,7 @@ import { COMMON_NAV, ACCOUNT_NAV, SUPER_ADMIN_NAV, visibleItems, groupForPath, N
 import { UserContext } from "@/lib/user-context";
 import { Preloader } from "@/components/Preloader";
 import { SubscribeBanner, UpgradeModal } from "@/components/PlanGate";
+import { DialogHost } from "@/components/DialogHost";
 import { AssistantWidget } from "@/components/AssistantWidget";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -241,6 +242,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </main>
         <UpgradeModal />
+        <DialogHost />
       </div>
     </UserContext.Provider>
   );

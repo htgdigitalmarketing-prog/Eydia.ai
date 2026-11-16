@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUser } from "@/lib/user-context";
+import { toast, toastError, confirmDialog } from "@/lib/ui";
 import { PageHeader } from "@/components/PageHeader";
 import {
   api, ApiError, GbpConnection, GbpOverview, GbpReviewItem,
@@ -44,8 +45,8 @@ function GbpDashboard() {
     const token = getToken();
     if (!token) return;
     setBusy(true);
-    try { const r = await api.gbp.sync(token); alert(r.message); loadOverview(); }
-    catch (e) { alert((e as ApiError).message); } finally { setBusy(false); }
+    try { const r = await api.gbp.sync(token); toast(r.message, "success"); loadOverview(); }
+    catch (e) { toastError(e as ApiError); } finally { setBusy(false); }
   }
 
   const locations = overview?.locations ?? [];
@@ -176,27 +177,27 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
   async function setHidden(id: string, hidden: boolean) {
     const t = getToken(); if (!t) return;
     try { await api.gbp.setLocationHidden(t, id, hidden); onReload(); }
-    catch (e) { alert((e as ApiError).message); }
+    catch (e) { toastError(e as ApiError); }
   }
   async function keepOnly(id: string, name: string) {
     const t = getToken(); if (!t) return;
-    if (!confirm(`Show only "${name}" and permanently remove every other location? They won't come back on the next Sync.`)) return;
+    if (!(await confirmDialog({ title: "Keep only this location?", message: `Show only "${name}" and permanently remove every other location? They won't come back on the next Sync.`, confirmText: "Keep only this", danger: true }))) return;
     try { await api.gbp.keepOnlyLocation(t, id); onReload(); }
-    catch (e) { alert((e as ApiError).message); }
+    catch (e) { toastError(e as ApiError); }
   }
   async function removeLoc(id: string, name: string) {
     const t = getToken(); if (!t) return;
-    if (!confirm(`Permanently remove "${name}" and its reviews/posts? It won't come back on the next Sync.`)) return;
+    if (!(await confirmDialog({ message: `Permanently remove "${name}" and its reviews/posts? It won't come back on the next Sync.`, confirmText: "Remove", danger: true }))) return;
     try { await api.gbp.removeLocation(t, id); onReload(); }
-    catch (e) { alert((e as ApiError).message); }
+    catch (e) { toastError(e as ApiError); }
   }
   async function removeAllHidden(items: { id: string; name: string }[]) {
     const t = getToken(); if (!t) return;
-    if (!confirm(`Permanently remove all ${items.length} other locations? Only the business(es) shown above stay. They won't come back on the next Sync.`)) return;
+    if (!(await confirmDialog({ title: "Remove all other locations?", message: `Permanently remove all ${items.length} other locations? Only the business(es) shown above stay. They won't come back on the next Sync.`, confirmText: "Remove all", danger: true }))) return;
     try {
       for (const it of items) { await api.gbp.removeLocation(t, it.id); }
       onReload();
-    } catch (e) { alert((e as ApiError).message); }
+    } catch (e) { toastError(e as ApiError); }
   }
   if (!overview) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Loading your dashboard…</span></div>;
 
@@ -937,13 +938,13 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
   const loadPhotos = useCallback(() => { const t = getToken(); if (t) api.gbp.photos(t).then((r) => setPhotos(r.photos)).catch(() => {}); }, []);
   useEffect(() => { loadPosts(); loadPhotos(); }, [loadPosts, loadPhotos]);
 
-  async function publishPost(id: string) { const t = getToken(); if (!t) return; try { await api.gbp.publishPost(t, id); loadPosts(); } catch (e) { alert((e as ApiError).message); } }
-  async function removePost(id: string) { const t = getToken(); if (!t || !confirm("Delete this post?")) return; try { await api.gbp.deletePost(t, id); loadPosts(); } catch (e) { alert((e as ApiError).message); } }
-  async function publishPhoto(id: string) { const t = getToken(); if (!t) return; try { await api.gbp.publishPhoto(t, id); loadPhotos(); } catch (e) { alert((e as ApiError).message); } }
-  async function removePhoto(id: string) { const t = getToken(); if (!t || !confirm("Delete this photo?")) return; try { await api.gbp.deletePhoto(t, id); loadPhotos(); } catch (e) { alert((e as ApiError).message); } }
+  async function publishPost(id: string) { const t = getToken(); if (!t) return; try { await api.gbp.publishPost(t, id); loadPosts(); } catch (e) { toastError(e as ApiError); } }
+  async function removePost(id: string) { const t = getToken(); if (!t || !(await confirmDialog({ message: "Delete this post?", danger: true }))) return; try { await api.gbp.deletePost(t, id); loadPosts(); } catch (e) { toastError(e as ApiError); } }
+  async function publishPhoto(id: string) { const t = getToken(); if (!t) return; try { await api.gbp.publishPhoto(t, id); loadPhotos(); } catch (e) { toastError(e as ApiError); } }
+  async function removePhoto(id: string) { const t = getToken(); if (!t || !(await confirmDialog({ message: "Delete this photo?", danger: true }))) return; try { await api.gbp.deletePhoto(t, id); loadPhotos(); } catch (e) { toastError(e as ApiError); } }
   async function autoPlan() {
     const t = getToken(); if (!t) return;
-    if (!confirm("Let AI generate 4 posts WITH an AI image each, and schedule them (one every 3 days)?\n\nUses AI credits (images cost extra). To make text-only posts instead, use \"+ Add Post\".")) return;
+    if (!(await confirmDialog({ title: "Generate AI posts?", message: "Let AI generate 4 posts WITH an AI image each, and schedule them (one every 3 days)? Uses AI credits (images cost extra). To make text-only posts instead, use \"+ Add Post\".", confirmText: "Generate" }))) return;
     setPlanning(true);
     try {
       // Images on by default — that's what most users expect. Image generation
@@ -951,8 +952,8 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
       // says if any image could not be made and why.
       const r = await api.gbp.autoPlanPosts(t, { count: 4, cadence_days: 3, with_images: true });
       setSub("posts"); setFilter("SCHEDULED"); loadPosts();
-      alert(r.message || `${r.created} posts scheduled.`);
-    } catch (e) { alert((e as ApiError).message); }
+      toast(r.message || `${r.created} posts scheduled.`, "success");
+    } catch (e) { toastError(e as ApiError); }
     finally { setPlanning(false); }
   }
 
@@ -1416,7 +1417,7 @@ function GbpConnectBar() {
   }, []);
 
   async function connect() { const token = getToken(); if (!token) return; setBusy(true); try { const r = await api.gbp.connect(token); window.location.href = r.url; } catch (e) { setMsg((e as ApiError).message); setBusy(false); } }
-  async function disconnect() { const token = getToken(); if (!token || !confirm("Disconnect Google Business Profile?")) return; setBusy(true); try { await api.gbp.disconnect(token); load(); } catch (e) { setMsg((e as ApiError).message); } finally { setBusy(false); } }
+  async function disconnect() { const token = getToken(); if (!token || !(await confirmDialog({ message: "Disconnect Google Business Profile?", confirmText: "Disconnect", danger: true }))) return; setBusy(true); try { await api.gbp.disconnect(token); load(); } catch (e) { setMsg((e as ApiError).message); } finally { setBusy(false); } }
 
   if (!conn) return null;
   const connected = conn.connected;
