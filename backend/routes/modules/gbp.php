@@ -37,8 +37,11 @@ Route::prefix('gbp')->group(function () {
     // toggling it on / running it is paid (below).
     Route::get('/automation', [\App\Modules\Gbp\Controllers\GbpAutomationController::class, 'show']);
 
-    // ── PAID: every write / AI / publish action needs the GBP plan feature ───
-    Route::middleware('feature:dash_gbp')->group(function () {
+    // ── PAID: every write / AI / publish action needs an ACTIVE plan that
+    // includes GBP. 'plan' blocks no-plan tenants (feature:dash_gbp alone does
+    // NOT — feature() treats "no plan" as allowed); feature:dash_gbp then
+    // enforces that the plan actually includes the GBP dashboard.
+    Route::middleware(['plan', 'feature:dash_gbp'])->group(function () {
         // Reviews.
         Route::post('/reviews/{uuid}/reply', [GbpController::class, 'reply']);
         Route::post('/reviews/{uuid}/suggest', [GbpController::class, 'suggestReply']);
