@@ -35,8 +35,10 @@ export default function BillingPage() {
   // Billing-details step before payment
   const [billTarget, setBillTarget] = useState<PlanItem | null>(null);
   const [billForm, setBillForm] = useState<BillingDetails>({ name: "", email: "", phone: "", address: "", gstin: "" });
-  const [cycle, setCycle] = useState<"monthly" | "quarterly" | "yearly">("monthly");
+  const [cycle, setCycle] = useState<"monthly" | "half_yearly" | "yearly">("monthly");
   const [autopay, setAutopay] = useState(true);
+  const [coupon, setCoupon] = useState("");
+  const [bq, setBq] = useState<{ list_price: number; cycle_price: number; cycle_discount_percent: number; coupon: { code: string; discount: number } | null; coupon_error: string | null; payable: number; gst_rate: number } | null>(null);
   const [viewInvoice, setViewInvoice] = useState<InvoiceItem | null>(null);
 
   const load = useCallback(async () => {
@@ -107,8 +109,8 @@ export default function BillingPage() {
       const billing: BillingDetails = { ...billForm, gstin: billForm.gstin || undefined };
       // Autopay → recurring Razorpay subscription; otherwise a one-time order.
       const order = autopay
-        ? await api.billing.subscribeAuto(token, plan.id, billing, cycle)
-        : await api.billing.order(token, plan.id, billing, cycle);
+        ? await api.billing.subscribeAuto(token, plan.id, billing, cycle, coupon || undefined)
+        : await api.billing.order(token, plan.id, billing, cycle, coupon || undefined);
 
       // Free plan — assigned immediately, invoice generated, no checkout.
       if (order.free) {
@@ -140,7 +142,7 @@ export default function BillingPage() {
           try {
             if (useAutopay) {
               const v = await api.billing.verifySubscription(token, {
-                plan_id: plan.id, cycle, billing,
+                plan_id: plan.id, cycle, coupon: coupon || undefined, billing,
                 razorpay_subscription_id: resp.razorpay_subscription_id ?? order.subscription_id ?? "",
                 razorpay_payment_id: resp.razorpay_payment_id,
                 razorpay_signature: resp.razorpay_signature,
@@ -149,7 +151,7 @@ export default function BillingPage() {
               flash(`Autopay set up — you're on the ${plan.name} plan (${CYCLES[cycle].label}).`);
             } else {
               const v = await api.billing.verify(token, {
-                plan_id: plan.id, cycle, billing,
+                plan_id: plan.id, cycle, coupon: coupon || undefined, billing,
                 razorpay_order_id: resp.razorpay_order_id ?? "",
                 razorpay_payment_id: resp.razorpay_payment_id,
                 razorpay_signature: resp.razorpay_signature,
@@ -174,19 +176,33 @@ export default function BillingPage() {
   }
 
   // Cycle pricing — matches the backend (months × monthly price × (1 − discount)).
+  // Fallback labels only — the real discount/total comes from /billing/quote.
   const CYCLES = {
     monthly: { label: "Monthly", months: 1, discount: 0 },
-    quarterly: { label: "Quarterly", months: 3, discount: 0.1 },
+    half_yearly: { label: "6 Months", months: 6, discount: 0.15 },
     yearly: { label: "Yearly", months: 12, discount: 0.2 },
   } as const;
 
-  // GST preview for the billing modal (reflects the chosen cycle).
+  // Authoritative price from the backend (reflects admin-set cycle discounts +
+  // the coupon). Falls back to a client estimate until the quote returns.
+  useEffect(() => {
+    const token = getToken();
+    if (!token || !billTarget) { setBq(null); return; }
+    const t = setTimeout(() => {
+      api.billing.quote(token, { plan_id: billTarget.id, cycle, coupon: coupon || undefined })
+        .then(setBq).catch(() => setBq(null));
+    }, coupon ? 350 : 0);
+    return () => clearTimeout(t);
+  }, [billTarget, cycle, coupon]);
+
   const quote = (() => {
+    if (bq) {
+      return { base: bq.cycle_price, list: bq.list_price, couponOff: bq.coupon?.discount ?? 0, total: bq.payable, saved: Math.round(bq.list_price - bq.cycle_price) };
+    }
     const monthly = billTarget?.price ?? 0;
     const c = CYCLES[cycle];
     const price = Math.round(monthly * c.months * (1 - c.discount));
-    const gst = Math.round(price * gstRate) / 100;
-    return { base: price, gst, total: price + gst, saved: Math.round(monthly * c.months) - price };
+    return { base: price, list: Math.round(monthly * c.months), couponOff: 0, total: price, saved: Math.round(monthly * c.months) - price };
   })();
   const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -365,7 +381,7 @@ export default function BillingPage() {
               <div className="field">
                 <label>Billing cycle</label>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {(["monthly", "quarterly", "yearly"] as const).map((c) => {
+                  {(["monthly", "half_yearly", "yearly"] as const).map((c) => {
                     const off = CYCLES[c].discount * 100;
                     const on = cycle === c;
                     return (
@@ -381,6 +397,14 @@ export default function BillingPage() {
                 </div>
               </div>
 
+              {/* Coupon */}
+              <div className="field">
+                <label>Coupon code <span className="muted">(optional)</span></label>
+                <input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="LAUNCH50" style={{ textTransform: "uppercase" }} />
+                {coupon && bq?.coupon && <div style={{ color: "#0a7d47", fontSize: 12.5, marginTop: 4 }}>✓ {bq.coupon.code} applied — you save {inr(bq.coupon.discount)}</div>}
+                {coupon && bq?.coupon_error && <div style={{ color: "#c53030", fontSize: 12.5, marginTop: 4 }}>{bq.coupon_error}</div>}
+              </div>
+
               {/* Autopay */}
               <label style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "4px 0 10px", cursor: "pointer", fontSize: 13.5 }}>
                 <input type="checkbox" checked={autopay} onChange={(e) => setAutopay(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />
@@ -388,10 +412,10 @@ export default function BillingPage() {
               </label>
 
               <div style={{ background: "#f4f8f7", borderRadius: 10, padding: "12px 14px", margin: "6px 0 14px", fontSize: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span className="muted">{billTarget.name} · {CYCLES[cycle].label}</span><span>{inr(quote.base)}</span></div>
-                {quote.saved > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>You save</span><span>−{inr(quote.saved)}</span></div>}
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span className="muted">GST ({gstRate}%)</span><span>{inr(quote.gst)}</span></div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, borderTop: "1px solid var(--border)", paddingTop: 6 }}><span>{autopay ? "Charged now, then auto" : "Total payable"}</span><span>{inr(quote.total)}</span></div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span className="muted">{billTarget.name} · {CYCLES[cycle].label}</span><span>{bq && quote.list > quote.base ? <><span style={{ textDecoration: "line-through", color: "#aab2c3", marginRight: 6 }}>{inr(quote.list)}</span>{inr(quote.base)}</> : inr(quote.base)}</span></div>
+                {quote.saved > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>Cycle discount</span><span>−{inr(quote.saved)}</span></div>}
+                {quote.couponOff > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>Coupon {bq?.coupon?.code}</span><span>−{inr(quote.couponOff)}</span></div>}
+                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, borderTop: "1px solid var(--border)", paddingTop: 6 }}><span>{autopay ? "Charged now, then auto" : "Total payable"} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>(incl. GST)</span></span><span>{inr(quote.total)}</span></div>
               </div>
 
               <div style={{ display: "flex", gap: 8 }}>

@@ -410,15 +410,21 @@ export const api = {
       request<{ invoices: InvoiceItem[]; meta: PaginationMeta }>("/billing/invoices", { token }),
     subscribe: (token: string, planId: string) =>
       request<{ subscription: SubscriptionItem2 }>("/billing/subscribe", { method: "POST", body: { plan_id: planId }, token }),
-    order: (token: string, planId: string, billing: BillingDetails, cycle = "monthly") =>
-      request<RazorpayOrder>("/billing/order", { method: "POST", body: { plan_id: planId, billing, cycle }, token }),
-    verify: (token: string, body: { plan_id: string; cycle?: string; billing: BillingDetails; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
+    quote: (token: string, body: { plan_id: string; cycle?: string; coupon?: string }) =>
+      request<{
+        cycle: string; list_price: number; cycle_price: number; cycle_discount_percent: number;
+        coupon: { code: string; discount: number } | null; coupon_error: string | null;
+        payable: number; gst_rate: number;
+      }>("/billing/quote", { method: "POST", body, token }),
+    order: (token: string, planId: string, billing: BillingDetails, cycle = "monthly", coupon?: string) =>
+      request<RazorpayOrder>("/billing/order", { method: "POST", body: { plan_id: planId, billing, cycle, coupon }, token }),
+    verify: (token: string, body: { plan_id: string; cycle?: string; coupon?: string; billing: BillingDetails; razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
       request<{ message: string; subscription: SubscriptionItem2; invoice: InvoiceItem }>("/billing/verify", { method: "POST", body, token }),
     // Autopay (recurring Razorpay subscription / mandate).
-    subscribeAuto: (token: string, planId: string, billing: BillingDetails, cycle = "monthly") =>
+    subscribeAuto: (token: string, planId: string, billing: BillingDetails, cycle = "monthly", coupon?: string) =>
       request<RazorpayOrder & { autopay?: boolean; subscription_id?: string; short_url?: string | null }>(
-        "/billing/subscribe-auto", { method: "POST", body: { plan_id: planId, billing, cycle }, token }),
-    verifySubscription: (token: string, body: { plan_id: string; cycle?: string; billing: BillingDetails; razorpay_subscription_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
+        "/billing/subscribe-auto", { method: "POST", body: { plan_id: planId, billing, cycle, coupon }, token }),
+    verifySubscription: (token: string, body: { plan_id: string; cycle?: string; coupon?: string; billing: BillingDetails; razorpay_subscription_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
       request<{ subscription: SubscriptionItem2; invoice: InvoiceItem }>("/billing/verify-subscription", { method: "POST", body, token }),
   },
 
