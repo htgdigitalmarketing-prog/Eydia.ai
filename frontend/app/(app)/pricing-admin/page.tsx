@@ -75,7 +75,8 @@ export default function PricingAdminPage() {
       if (form.max_discount) body.max_discount = Number(form.max_discount);
       if (form.min_amount) body.min_amount = Number(form.min_amount);
       if (form.max_uses) body.max_uses = Number(form.max_uses);
-      if (form.expires_at) body.expires_at = form.expires_at;
+      // The input holds a local "YYYY-MM-DDTHH:mm" string; send it as ISO.
+      if (form.expires_at) body.expires_at = new Date(form.expires_at).toISOString();
       await api.admin.createCoupon(t, body);
       setForm({ ...EMPTY_COUPON });
       setNotice("Coupon created.");
@@ -92,7 +93,12 @@ export default function PricingAdminPage() {
     try { await api.admin.deleteCoupon(t, id); await load(); } catch (e) { setError((e as ApiError).message); }
   }
 
-  const toLocal = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 16) : "");
+  // ISO → "YYYY-MM-DDTHH:mm" in the admin's LOCAL time, for datetime-local inputs.
+  const toLocal = (iso: string | null) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
 
   return (
     <>
@@ -157,7 +163,7 @@ export default function PricingAdminPage() {
           <div className="field" style={{ margin: 0 }}><label>Max ₹ off</label><input type="number" min={0} value={form.max_discount} onChange={(e) => setForm((f) => ({ ...f, max_discount: e.target.value }))} placeholder="cap" style={{ width: 90 }} /></div>
           <div className="field" style={{ margin: 0 }}><label>Min ₹</label><input type="number" min={0} value={form.min_amount} onChange={(e) => setForm((f) => ({ ...f, min_amount: e.target.value }))} style={{ width: 90 }} /></div>
           <div className="field" style={{ margin: 0 }}><label>Max uses</label><input type="number" min={1} value={form.max_uses} onChange={(e) => setForm((f) => ({ ...f, max_uses: e.target.value }))} placeholder="∞" style={{ width: 80 }} /></div>
-          <div className="field" style={{ margin: 0 }}><label>Expires</label><input type="datetime-local" value={form.expires_at} onChange={(e) => setForm((f) => ({ ...f, expires_at: e.target.value ? new Date(e.target.value).toISOString() : "" }))} /></div>
+          <div className="field" style={{ margin: 0 }}><label>Expires <span className="muted">(optional)</span></label><input type="datetime-local" value={form.expires_at} onChange={(e) => setForm((f) => ({ ...f, expires_at: e.target.value }))} /></div>
           <button className="btn" style={{ width: "auto", padding: "10px 18px" }}>+ Add coupon</button>
         </form>
 

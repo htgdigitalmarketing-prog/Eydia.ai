@@ -405,7 +405,7 @@ export const api = {
         "/billing", { token }
       ),
     plans: (token: string) =>
-      request<{ plans: PlanItem[]; gst_rate: number; cycle_discounts?: Record<string, number> }>("/billing/plans", { token }),
+      request<{ plans: PlanItem[]; gst_rate: number; cycle_discounts?: Record<string, number>; offer?: PricingOffer }>("/billing/plans", { token }),
     wallet: (token: string) =>
       request<{ wallet: WalletInfo; transactions: WalletTxn[] }>("/billing/wallet", { token }),
     invoices: (token: string) =>

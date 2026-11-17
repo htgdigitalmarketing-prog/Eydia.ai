@@ -6,9 +6,27 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadingBlock } from "@/components/Preloader";
 import { getToken } from "@/lib/auth";
 import {
-  api, ApiError, PlanItem, SubscriptionItem2, InvoiceItem, BillingDetails, CreditsInfo,
+  api, ApiError, PlanItem, SubscriptionItem2, InvoiceItem, BillingDetails, CreditsInfo, PricingOffer,
 } from "@/lib/api";
 import { renderInvoiceHtml, printInvoice } from "@/components/invoice";
+
+function Countdown({ endsAt }: { endsAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const ms = new Date(endsAt).getTime() - now;
+  if (ms <= 0) return null;
+  const s = Math.floor(ms / 1000);
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    <span style={{ fontVariantNumeric: "tabular-nums", fontWeight: 800 }}>
+      {d > 0 ? `${d}d ` : ""}{pad(h)}:{pad(m)}:{pad(sec)}
+    </span>
+  );
+}
 
 const LIMIT_LABELS: Record<string, string> = {
   max_agents: "Agents", max_contacts: "Contacts", max_campaigns: "Campaigns",
@@ -31,11 +49,12 @@ export default function BillingPage() {
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
   const [gstRate, setGstRate] = useState(18);
+  const [offer, setOffer] = useState<PricingOffer | null>(null);
 
   // Billing-details step before payment
   const [billTarget, setBillTarget] = useState<PlanItem | null>(null);
   const [billForm, setBillForm] = useState<BillingDetails>({ name: "", email: "", phone: "", address: "", gstin: "" });
-  const [cycle, setCycle] = useState<"monthly" | "half_yearly" | "yearly">("monthly");
+  const [cycle, setCycle] = useState<"monthly" | "quarterly" | "half_yearly" | "yearly">("monthly");
   // Autopay is always on (recurring subscription) — the checkbox is intentionally
   // hidden from clients; every purchase sets up a Razorpay auto-renew mandate.
   const autopay = true;
@@ -53,12 +72,13 @@ export default function BillingPage() {
           subscription: null as SubscriptionItem2 | null,
           tenant: { status: null, trial_ends_at: null },
         })),
-        api.billing.plans(token).catch(() => ({ plans: [] as PlanItem[], gst_rate: 18, cycle_discounts: {} as Record<string, number> })),
+        api.billing.plans(token).catch(() => ({ plans: [] as PlanItem[], gst_rate: 18, offer: null as PricingOffer | null })),
         api.billing.invoices(token).catch(() => ({ invoices: [] as InvoiceItem[], meta: { current_page: 1, last_page: 1, total: 0 } })),
       ]);
       setSubscription(ov.subscription);
       setPlans(pl.plans);
       setGstRate(pl.gst_rate ?? 18);
+      setOffer(pl.offer ?? null);
       setInvoices(inv.invoices);
     } catch (err) {
       setError((err as ApiError).message);
@@ -181,6 +201,7 @@ export default function BillingPage() {
   // Fallback labels only — the real discount/total comes from /billing/quote.
   const CYCLES = {
     monthly: { label: "Monthly", months: 1, discount: 0 },
+    quarterly: { label: "Quarterly", months: 3, discount: 0.1 },
     half_yearly: { label: "6 Months", months: 6, discount: 0.15 },
     yearly: { label: "Yearly", months: 12, discount: 0.2 },
   } as const;
@@ -212,7 +233,7 @@ export default function BillingPage() {
   // Its discount_percent is the SAME value used to compute the price, so the
   // "Save X%" label can never disagree with the amount charged. Only the three
   // supported cycles are shown; a cycle the admin disabled simply won't appear.
-  const SUPPORTED_CYCLES = ["monthly", "half_yearly", "yearly"] as const;
+  const SUPPORTED_CYCLES = ["monthly", "quarterly", "half_yearly", "yearly"] as const;
   const cyclesInfo = (
     billTarget?.cycle_prices?.length
       ? billTarget.cycle_prices
@@ -244,6 +265,18 @@ export default function BillingPage() {
         <LoadingBlock label="Loading billing…" />
       ) : (
         <>
+          {/* Launch offer banner + countdown (backend-managed) */}
+          {offer?.active && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, flexWrap: "wrap", background: "linear-gradient(135deg, var(--accent, #5b6bf5), #8b5cf6)", color: "#fff", borderRadius: 14, padding: "12px 18px", marginBottom: 16, fontWeight: 700, fontSize: 14 }}>
+              <span>⚡ {offer.label || "LAUNCH PRICE — LIMITED TIME"}</span>
+              {offer.ends_at && (
+                <span style={{ background: "#fff", color: "var(--accent, #5b6bf5)", borderRadius: 999, padding: "3px 12px", fontSize: 13 }}>
+                  ENDS IN <Countdown endsAt={offer.ends_at} />
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Summary row */}
           <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 18 }}>
             <div className="stat">
@@ -392,11 +425,11 @@ export default function BillingPage() {
                 {/* Billing cycle — big, clear pills with price + save badge */}
                 <div className="field">
                   <label style={{ fontWeight: 700 }}>Billing cycle</label>
-                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${cyclesInfo.length}, 1fr)`, gap: 9, marginTop: 4 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))", gap: 9, marginTop: 4 }}>
                     {cyclesInfo.map((ci) => {
                       const on = cycle === ci.key;
                       return (
-                        <button type="button" key={ci.key} onClick={() => setCycle(ci.key as "monthly" | "half_yearly" | "yearly")}
+                        <button type="button" key={ci.key} onClick={() => setCycle(ci.key as "monthly" | "quarterly" | "half_yearly" | "yearly")}
                           style={{
                             position: "relative", cursor: "pointer", padding: "14px 8px 11px", borderRadius: 14, textAlign: "center",
                             border: `2px solid ${on ? "var(--accent)" : "var(--border)"}`,
