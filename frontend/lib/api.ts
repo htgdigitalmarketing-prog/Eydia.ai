@@ -405,7 +405,7 @@ export const api = {
         "/billing", { token }
       ),
     plans: (token: string) =>
-      request<{ plans: PlanItem[]; gst_rate: number }>("/billing/plans", { token }),
+      request<{ plans: PlanItem[]; gst_rate: number; cycle_discounts?: Record<string, number> }>("/billing/plans", { token }),
     wallet: (token: string) =>
       request<{ wallet: WalletInfo; transactions: WalletTxn[] }>("/billing/wallet", { token }),
     invoices: (token: string) =>
@@ -1386,6 +1386,7 @@ export type WaAccountHealth = {
     };
     daily_messaging_limit: number | null;
     daily_messaging_limit_label: string;
+    balance: { amount: string | null; currency: string | null } | null;
   } | null;
 };
 

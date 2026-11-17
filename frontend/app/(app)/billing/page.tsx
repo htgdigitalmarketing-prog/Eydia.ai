@@ -31,6 +31,9 @@ export default function BillingPage() {
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
   const [gstRate, setGstRate] = useState(18);
+  // Live per-cycle discounts from the backend (admin-set). Keeps the "Save X%"
+  // labels in sync with Pricing & Coupons instead of hardcoded guesses.
+  const [cycleDiscounts, setCycleDiscounts] = useState<Record<string, number>>({});
 
   // Billing-details step before payment
   const [billTarget, setBillTarget] = useState<PlanItem | null>(null);
@@ -53,12 +56,13 @@ export default function BillingPage() {
           subscription: null as SubscriptionItem2 | null,
           tenant: { status: null, trial_ends_at: null },
         })),
-        api.billing.plans(token).catch(() => ({ plans: [] as PlanItem[], gst_rate: 18 })),
+        api.billing.plans(token).catch(() => ({ plans: [] as PlanItem[], gst_rate: 18, cycle_discounts: {} as Record<string, number> })),
         api.billing.invoices(token).catch(() => ({ invoices: [] as InvoiceItem[], meta: { current_page: 1, last_page: 1, total: 0 } })),
       ]);
       setSubscription(ov.subscription);
       setPlans(pl.plans);
       setGstRate(pl.gst_rate ?? 18);
+      setCycleDiscounts(pl.cycle_discounts ?? {});
       setInvoices(inv.invoices);
     } catch (err) {
       setError((err as ApiError).message);
@@ -392,8 +396,12 @@ export default function BillingPage() {
               <div className="field">
                 <label>Billing cycle</label>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {(["monthly", "half_yearly", "yearly"] as const).map((c) => {
-                    const off = CYCLES[c].discount * 100;
+                  {(["monthly", "half_yearly", "yearly"] as const)
+                    .filter((c) => Object.keys(cycleDiscounts).length === 0 || c in cycleDiscounts)
+                    .map((c) => {
+                    // Live admin-set discount; falls back to the static estimate only
+                    // until the backend value arrives.
+                    const off = cycleDiscounts[c] ?? CYCLES[c].discount * 100;
                     const on = cycle === c;
                     return (
                       <button type="button" key={c} onClick={() => setCycle(c)} style={{

@@ -317,6 +317,17 @@ export default function WhatsAppPage() {
             <>
               <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
                 <div className="stat">
+                  <div className="label">Account balance</div>
+                  <div className="value" style={{ fontSize: 22 }}>
+                    {health.health.balance?.amount
+                      ? `${health.health.balance.amount}${health.health.balance.currency ? " " + health.health.balance.currency : ""}`
+                      : "Post-paid"}
+                  </div>
+                  <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>
+                    {health.health.balance?.amount ? "Credit line remaining (live from Meta)" : "No prepaid balance — billed per conversation"}
+                  </div>
+                </div>
+                <div className="stat">
                   <div className="label">Daily messaging limit</div>
                   <div className="value" style={{ fontSize: 22 }}>
                     {health.health.daily_messaging_limit === -1 ? "Unlimited" : health.health.daily_messaging_limit_label}

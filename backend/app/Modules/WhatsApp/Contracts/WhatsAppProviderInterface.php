@@ -26,7 +26,7 @@ interface WhatsAppProviderInterface
      * tier + quality rating, and the WABA's review status / currency. Used to
      * surface the "daily messaging limit" and account standing in the dashboard.
      */
-    public function accountHealth(string $wabaId, ?string $phoneNumberId = null): array;
+    public function accountHealth(string $wabaId, ?string $phoneNumberId = null, ?string $businessId = null): array;
 
     /** All phone numbers on a WABA (for pulling in newly-added numbers). */
     public function listPhoneNumbers(string $wabaId): array;

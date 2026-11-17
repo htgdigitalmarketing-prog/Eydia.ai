@@ -112,7 +112,7 @@ class WhatsAppAccountController extends Controller
 
         try {
             $provider = app(WhatsAppProviderFactory::class)->for($waba);
-            $raw = $provider->accountHealth($waba->waba_id, $number->phone_number_id);
+            $raw = $provider->accountHealth($waba->waba_id, $number->phone_number_id, $waba->business_portfolio_id);
 
             $tier = $raw['phone']['messaging_limit_tier'] ?? null;
 

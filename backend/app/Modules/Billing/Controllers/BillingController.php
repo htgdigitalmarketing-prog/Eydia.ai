@@ -48,12 +48,21 @@ class BillingController extends Controller
             ->orderBy('sort_order')
             ->get();
 
+        // Live per-cycle discounts (admin-set), keyed by cycle, only for the
+        // cycles the admin has enabled. Drives the "Save X%" labels + which
+        // cycles the client sees, so they always match the admin settings.
+        $cycleDiscounts = [];
+        foreach (\App\Models\BillingSetting::current()->cyclesToShow() as $cycle) {
+            $cycleDiscounts[$cycle] = (int) round(\App\Support\BillingCycle::discount($cycle) * 100);
+        }
+
         return $this->ok([
             'plans' => $plans->map(fn (Plan $p) => array_merge($this->planArray($p), [
                 'cycle_prices' => \App\Support\BillingCycle::displayFor((float) $p->price),
             ])),
             'offer' => \App\Support\BillingCycle::offerInfo(),
             'gst_rate' => (int) InvoiceSetting::current()->gst_rate,
+            'cycle_discounts' => $cycleDiscounts,
         ]);
     }
 

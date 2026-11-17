@@ -90,7 +90,7 @@ class MetaWhatsAppProvider implements WhatsAppProviderInterface
             fn (PendingRequest $g) => $g->get("/{$phoneNumberId}", ['fields' => $fields]));
     }
 
-    public function accountHealth(string $wabaId, ?string $phoneNumberId = null): array
+    public function accountHealth(string $wabaId, ?string $phoneNumberId = null, ?string $businessId = null): array
     {
         // WABA-level standing + billing currency.
         $wabaFields = 'id,name,currency,account_review_status,timezone_id';
@@ -120,7 +120,40 @@ class MetaWhatsAppProvider implements WhatsAppProviderInterface
                 'throughput' => $phone['throughput']['level'] ?? null,
                 'name_status' => $phone['name_status'] ?? null,
             ],
+            // Best-effort credit-line balance. Meta exposes a spendable amount only
+            // for businesses funded by a credit line AND only when the token holds
+            // business_management — most WABAs are post-paid, so this stays null.
+            'balance' => $this->fetchCreditBalance($businessId),
         ];
+    }
+
+    /** @return array{amount:?string,currency:?string}|null */
+    private function fetchCreditBalance(?string $businessId): ?array
+    {
+        if (! $businessId) {
+            return null;
+        }
+
+        try {
+            $fields = 'legal_entity_name,currency,balance,max_balance';
+            $res = $this->perform('GET', "/{$businessId}/extendedcredits", ['fields' => $fields],
+                fn (PendingRequest $g) => $g->get("/{$businessId}/extendedcredits", ['fields' => $fields]));
+
+            $row = $res['data'][0] ?? null;
+            if (! is_array($row)) {
+                return null;
+            }
+
+            $amount = is_scalar($row['balance'] ?? null) ? (string) $row['balance'] : null;
+            $currency = is_scalar($row['currency'] ?? null) ? (string) $row['currency'] : null;
+            if ($amount === null) {
+                return null;
+            }
+
+            return ['amount' => $amount, 'currency' => $currency];
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     public function listPhoneNumbers(string $wabaId): array
