@@ -13,6 +13,7 @@ use App\Modules\WhatsApp\Resources\WhatsappNumberResource;
 use App\Modules\WhatsApp\Services\WhatsAppAccountService;
 use App\Modules\WhatsApp\Services\WhatsAppEmbeddedSignupService;
 use App\Modules\WhatsApp\Services\WhatsAppMessageService;
+use App\Modules\WhatsApp\Services\WhatsAppProviderFactory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -86,6 +87,72 @@ class WhatsAppAccountController extends Controller
                 'outbound' => Message::where('direction', 'outbound')->where('created_at', '>=', $today)->count(),
             ],
         ]);
+    }
+
+    /**
+     * Live account health from Meta: the WhatsApp number's daily messaging limit,
+     * quality rating and account standing. Best-effort — never throws to the UI.
+     */
+    public function accountHealth(Request $request): JsonResponse
+    {
+        $this->authorize('whatsapp.view');
+        $tenantId = $this->tenantId($request);
+
+        $numbers = $this->accounts->numbersFor($tenantId);
+        $number = $numbers->firstWhere('is_default', true) ?? $numbers->first();
+
+        if (! $number) {
+            return $this->ok(['connected' => false, 'health' => null]);
+        }
+
+        $waba = $number->businessAccount()->first();
+        if (! $waba || ! $waba->waba_id) {
+            return $this->ok(['connected' => false, 'health' => null]);
+        }
+
+        try {
+            $provider = app(WhatsAppProviderFactory::class)->for($waba);
+            $raw = $provider->accountHealth($waba->waba_id, $number->phone_number_id);
+
+            $tier = $raw['phone']['messaging_limit_tier'] ?? null;
+
+            return $this->ok([
+                'connected' => true,
+                'health' => array_merge($raw, [
+                    'daily_messaging_limit' => $this->tierToNumber($tier),
+                    'daily_messaging_limit_label' => $this->tierToLabel($tier),
+                ]),
+            ]);
+        } catch (\Throwable $e) {
+            return $this->ok(['connected' => true, 'health' => null, 'error' => 'Could not reach Meta right now.']);
+        }
+    }
+
+    /** Maps Meta's messaging limit tier to a per-day unique-user number (null = unknown). */
+    private function tierToNumber(?string $tier): ?int
+    {
+        return match ($tier) {
+            'TIER_50' => 50,
+            'TIER_250' => 250,
+            'TIER_1K' => 1000,
+            'TIER_10K' => 10000,
+            'TIER_100K' => 100000,
+            'TIER_UNLIMITED' => -1, // -1 → "Unlimited" on the frontend
+            default => null,
+        };
+    }
+
+    private function tierToLabel(?string $tier): string
+    {
+        return match ($tier) {
+            'TIER_50' => '50 / day',
+            'TIER_250' => '250 / day',
+            'TIER_1K' => '1,000 / day',
+            'TIER_10K' => '10,000 / day',
+            'TIER_100K' => '100,000 / day',
+            'TIER_UNLIMITED' => 'Unlimited',
+            default => 'Pending Meta review',
+        };
     }
 
     public function connectManual(ConnectManualRequest $request): JsonResponse

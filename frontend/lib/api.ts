@@ -123,6 +123,8 @@ export const api = {
       request<{ message: string }>(`/whatsapp/numbers/${id}/token`, { method: "PUT", body: { access_token }, token }),
     disconnect: (token: string, id: string) =>
       request<{ message: string }>(`/whatsapp/numbers/${id}`, { method: "DELETE", token }),
+    accountHealth: (token: string) =>
+      request<WaAccountHealth>("/whatsapp/account-health", { token }),
   },
 
   contacts: {
@@ -1367,6 +1369,24 @@ export type WaConfig = {
   config_id: string | null;
   api_version: string;
   embedded_signup_configured: boolean;
+};
+
+export type WaAccountHealth = {
+  connected: boolean;
+  error?: string;
+  health: {
+    waba: { id: string; name: string | null; currency: string | null; account_review_status: string | null };
+    phone: {
+      display_phone_number: string | null;
+      verified_name: string | null;
+      quality_rating: string | null;
+      messaging_limit_tier: string | null;
+      throughput: string | null;
+      name_status: string | null;
+    };
+    daily_messaging_limit: number | null;
+    daily_messaging_limit_label: string;
+  } | null;
 };
 
 export type Tenant = {

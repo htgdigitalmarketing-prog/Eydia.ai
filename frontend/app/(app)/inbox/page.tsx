@@ -94,7 +94,7 @@ function MediaBubble({ msg }: { msg: InboxMessage }) {
   const att = msg.attachments?.[0];
   if (!att) return <div>[{msg.type}]</div>;
 
-  if (att.type === "image") {
+  if (att.type === "image" || att.type === "sticker") {
     return (
       <div className="bubble-media">
         {att.url
@@ -619,7 +619,6 @@ export default function InboxPage() {
   }
 
   const activeConv = conversations.find((c) => c.id === activeId);
-  const isMediaMessage = (type: string) => ["image", "video", "audio", "document"].includes(type);
 
   const agentNames = Array.from(new Set(conversations.map((c) => c.assigned_agent?.name).filter(Boolean))) as string[];
 
@@ -943,7 +942,7 @@ export default function InboxPage() {
                       >
                         ▾
                       </button>
-                      {msg.attachments && msg.attachments.length > 0 && isMediaMessage(msg.attachments[0].type) ? (
+                      {msg.attachments && msg.attachments.length > 0 ? (
                         <MediaBubble msg={msg} />
                       ) : (
                         <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.body || `[${msg.type}]`}</div>

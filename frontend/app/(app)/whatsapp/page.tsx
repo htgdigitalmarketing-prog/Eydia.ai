@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, WaConfig, WaNumber } from "@/lib/api";
+import { api, ApiError, WaAccountHealth, WaConfig, WaNumber } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/PageHeader";
@@ -29,6 +29,8 @@ const EMPTY_FORM = { waba_id: "", phone_number_id: "", display_phone_number: "",
 export default function WhatsAppPage() {
   const [numbers, setNumbers] = useState<WaNumber[]>([]);
   const [config, setConfig] = useState<WaConfig | null>(null);
+  const [health, setHealth] = useState<WaAccountHealth | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -67,6 +69,23 @@ export default function WhatsAppPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Live Meta account health (daily messaging limit + quality). Best-effort,
+  // non-blocking — fetched once a number is connected.
+  const loadHealth = useCallback(async () => {
+    const token = getToken();
+    if (!token) return;
+    setHealthLoading(true);
+    try {
+      setHealth(await api.whatsapp.accountHealth(token));
+    } catch {
+      setHealth(null);
+    } finally {
+      setHealthLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (numbers.length > 0) loadHealth(); }, [numbers.length, loadHealth]);
 
   useEffect(() => {
     if (regCooldown <= 0) return;
@@ -280,6 +299,50 @@ export default function WhatsAppPage() {
             <div className="field"><label>Label (optional)</label><input value={form.name} onChange={(e) => update("name", e.target.value)} placeholder="e.g. Sales line" /></div>
             <button className="btn" disabled={submitting}>{submitting ? "Connecting…" : "Connect number"}</button>
           </form>
+        </div>
+      )}
+
+      {/* Live Meta account health — daily messaging limit, quality & standing */}
+      {numbers.length > 0 && (
+        <div className="panel">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+            <h2 style={{ margin: 0 }}>📊 WhatsApp account (live from Meta)</h2>
+            <button className="btn-mini" onClick={loadHealth} disabled={healthLoading}>{healthLoading ? "Refreshing…" : "↻ Refresh"}</button>
+          </div>
+          {healthLoading && !health ? (
+            <p className="muted">Fetching live status from Meta…</p>
+          ) : !health?.health ? (
+            <p className="muted">{health?.error ?? "Live status isn’t available yet. Click Sync on your number, then refresh."}</p>
+          ) : (
+            <>
+              <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+                <div className="stat">
+                  <div className="label">Daily messaging limit</div>
+                  <div className="value" style={{ fontSize: 22 }}>
+                    {health.health.daily_messaging_limit === -1 ? "Unlimited" : health.health.daily_messaging_limit_label}
+                  </div>
+                  <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>Unique customers you can start a chat with per day</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Quality rating</div>
+                  <div className="value" style={{ fontSize: 22 }}>
+                    {(QUALITY[health.health.phone.quality_rating ?? ""]?.label) ?? health.health.phone.quality_rating ?? "—"}
+                  </div>
+                  <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>Meta rates this from your delivery & block rate</div>
+                </div>
+                <div className="stat">
+                  <div className="label">Account status</div>
+                  <div className="value" style={{ fontSize: 22, textTransform: "capitalize" }}>
+                    {(health.health.waba.account_review_status ?? "—").toLowerCase()}
+                  </div>
+                  <div className="muted" style={{ fontSize: 11.5, marginTop: 2 }}>{health.health.phone.display_phone_number ?? ""}{health.health.waba.currency ? ` · billed in ${health.health.waba.currency}` : ""}</div>
+                </div>
+              </div>
+              <p className="muted" style={{ fontSize: 11.5, marginTop: 10 }}>
+                💡 WhatsApp bills per 24-hour conversation (no prepaid balance); your charges are managed in Meta Business Manager → WhatsApp Manager → Billing &amp; payments. The daily messaging limit above is Meta’s current tier for this number — it increases automatically as you send more quality messages.
+              </p>
+            </>
+          )}
         </div>
       )}
 

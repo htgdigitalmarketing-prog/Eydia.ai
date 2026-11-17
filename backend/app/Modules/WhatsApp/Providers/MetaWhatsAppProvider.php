@@ -90,6 +90,39 @@ class MetaWhatsAppProvider implements WhatsAppProviderInterface
             fn (PendingRequest $g) => $g->get("/{$phoneNumberId}", ['fields' => $fields]));
     }
 
+    public function accountHealth(string $wabaId, ?string $phoneNumberId = null): array
+    {
+        // WABA-level standing + billing currency.
+        $wabaFields = 'id,name,currency,account_review_status,timezone_id';
+        $waba = $this->perform('GET', "/{$wabaId}", ['fields' => $wabaFields],
+            fn (PendingRequest $g) => $g->get("/{$wabaId}", ['fields' => $wabaFields]));
+
+        $phone = [];
+        if ($phoneNumberId) {
+            // Per-number daily messaging limit tier + quality rating.
+            $phoneFields = 'display_phone_number,verified_name,quality_rating,messaging_limit_tier,throughput,name_status,code_verification_status';
+            $phone = $this->perform('GET', "/{$phoneNumberId}", ['fields' => $phoneFields],
+                fn (PendingRequest $g) => $g->get("/{$phoneNumberId}", ['fields' => $phoneFields]));
+        }
+
+        return [
+            'waba' => [
+                'id' => $waba['id'] ?? $wabaId,
+                'name' => $waba['name'] ?? null,
+                'currency' => $waba['currency'] ?? null,
+                'account_review_status' => $waba['account_review_status'] ?? null,
+            ],
+            'phone' => [
+                'display_phone_number' => $phone['display_phone_number'] ?? null,
+                'verified_name' => $phone['verified_name'] ?? null,
+                'quality_rating' => $phone['quality_rating'] ?? null,
+                'messaging_limit_tier' => $phone['messaging_limit_tier'] ?? null,
+                'throughput' => $phone['throughput']['level'] ?? null,
+                'name_status' => $phone['name_status'] ?? null,
+            ],
+        ];
+    }
+
     public function listPhoneNumbers(string $wabaId): array
     {
         $fields = 'id,display_phone_number,verified_name,quality_rating,code_verification_status';

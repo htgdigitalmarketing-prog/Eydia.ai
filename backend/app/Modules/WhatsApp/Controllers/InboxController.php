@@ -168,16 +168,11 @@ class InboxController extends Controller
         'image' => ['image/jpeg', 'image/png', 'image/webp'],
         'video' => ['video/mp4', 'video/3gpp'],
         'audio' => ['audio/aac', 'audio/mp4', 'audio/mpeg', 'audio/amr', 'audio/ogg', 'audio/opus'],
-        'document' => [
-            'application/pdf', 'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'application/vnd.ms-powerpoint',
-            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            'text/plain', 'text/csv',
-            'application/zip', 'application/x-zip-compressed',
-        ],
+        // Documents: accept ANY file type (empty list = allow all). WhatsApp's
+        // document message supports arbitrary MIME types, and browsers often
+        // report uncommon files as application/octet-stream — restricting the
+        // list here is what made valid files fail as "unsupported".
+        'document' => [],
     ];
 
     public function sendMedia(Request $request, string $conversationUuid): JsonResponse

@@ -21,6 +21,13 @@ interface WhatsAppProviderInterface
 
     public function getPhoneNumber(string $phoneNumberId): array;
 
+    /**
+     * Live account health from Meta: the phone number's daily messaging limit
+     * tier + quality rating, and the WABA's review status / currency. Used to
+     * surface the "daily messaging limit" and account standing in the dashboard.
+     */
+    public function accountHealth(string $wabaId, ?string $phoneNumberId = null): array;
+
     /** All phone numbers on a WABA (for pulling in newly-added numbers). */
     public function listPhoneNumbers(string $wabaId): array;
 

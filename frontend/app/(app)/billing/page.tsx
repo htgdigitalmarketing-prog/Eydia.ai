@@ -36,7 +36,9 @@ export default function BillingPage() {
   const [billTarget, setBillTarget] = useState<PlanItem | null>(null);
   const [billForm, setBillForm] = useState<BillingDetails>({ name: "", email: "", phone: "", address: "", gstin: "" });
   const [cycle, setCycle] = useState<"monthly" | "half_yearly" | "yearly">("monthly");
-  const [autopay, setAutopay] = useState(true);
+  // Autopay is always on (recurring subscription) — the checkbox is intentionally
+  // hidden from clients; every purchase sets up a Razorpay auto-renew mandate.
+  const autopay = true;
   const [coupon, setCoupon] = useState("");
   const [bq, setBq] = useState<{ list_price: number; cycle_price: number; cycle_discount_percent: number; coupon: { code: string; discount: number } | null; coupon_error: string | null; payable: number; gst_rate: number } | null>(null);
   const [viewInvoice, setViewInvoice] = useState<InvoiceItem | null>(null);
@@ -206,7 +208,15 @@ export default function BillingPage() {
   })();
   const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const currentPlanId = subscription?.plan?.id;
+  // A plan counts as "current" ONLY while the subscription is actually live.
+  // A cancelled/expired subscription still references its old plan, so without
+  // this guard the billing page wrongly shows that plan as "Current".
+  const periodEndMs = subscription?.current_period_end ? new Date(subscription.current_period_end).getTime() : 0;
+  const subIsLive = !!subscription
+    && (subscription.status === "active" || subscription.status === "trialing")
+    && (!periodEndMs || periodEndMs >= Date.now());
+  const activePlan = subIsLive ? subscription?.plan : null;
+  const currentPlanId = activePlan?.id;
   const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-IN") : "—");
 
   return (
@@ -224,19 +234,17 @@ export default function BillingPage() {
           <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 18 }}>
             <div className="stat">
               <div className="label">Current plan</div>
-              <div className="value" style={{ fontSize: 20 }}>{subscription?.plan?.name ?? "No plan"}</div>
+              <div className="value" style={{ fontSize: 20 }}>{activePlan?.name ?? "No plan"}</div>
             </div>
             <div className="stat">
               <div className="label">Status</div>
-              <div className="value" style={{ fontSize: 20, textTransform: "capitalize" }}>{subscription?.status ?? user.tenant?.status ?? "—"}</div>
+              <div className="value" style={{ fontSize: 20, textTransform: "capitalize" }}>{subIsLive ? subscription?.status : (subscription ? "Inactive" : (user.tenant?.status ?? "—"))}</div>
             </div>
             <div className="stat">
               <div className="label">Renews / ends</div>
               <div className="value" style={{ fontSize: 20 }}>{fmtDate(subscription?.current_period_end ?? user.tenant?.trial_ends_at ?? null)}</div>
             </div>
           </div>
-
-          <CreditsPanel />
 
           {/* Available plans */}
           <div className="panel">
@@ -300,6 +308,9 @@ export default function BillingPage() {
               </div>
             )}
           </div>
+
+          {/* AI Credits (below Plans) */}
+          <CreditsPanel />
 
           {/* Invoices */}
           <div className="panel">
@@ -405,18 +416,23 @@ export default function BillingPage() {
                 {coupon && bq?.coupon_error && <div style={{ color: "#c53030", fontSize: 12.5, marginTop: 4 }}>{bq.coupon_error}</div>}
               </div>
 
-              {/* Autopay */}
-              <label style={{ display: "flex", alignItems: "flex-start", gap: 8, margin: "4px 0 10px", cursor: "pointer", fontSize: 13.5 }}>
-                <input type="checkbox" checked={autopay} onChange={(e) => setAutopay(e.target.checked)} style={{ width: "auto", marginTop: 3 }} />
-                <span><strong>Autopay</strong> — renew automatically every {CYCLES[cycle].label.toLowerCase().replace("ly", "")} via Razorpay (UPI / card mandate). Uncheck to pay once manually.</span>
-              </label>
-
-              <div style={{ background: "#f4f8f7", borderRadius: 10, padding: "12px 14px", margin: "6px 0 14px", fontSize: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span className="muted">{billTarget.name} · {CYCLES[cycle].label}</span><span>{bq && quote.list > quote.base ? <><span style={{ textDecoration: "line-through", color: "#aab2c3", marginRight: 6 }}>{inr(quote.list)}</span>{inr(quote.base)}</> : inr(quote.base)}</span></div>
-                {quote.saved > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>Cycle discount</span><span>−{inr(quote.saved)}</span></div>}
-                {quote.couponOff > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>Coupon {bq?.coupon?.code}</span><span>−{inr(quote.couponOff)}</span></div>}
-                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, borderTop: "1px solid var(--border)", paddingTop: 6 }}><span>{autopay ? "Charged now, then auto" : "Total payable"} <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>(incl. GST)</span></span><span>{inr(quote.total)}</span></div>
-              </div>
+              {(() => {
+                const gstR = bq?.gst_rate ?? gstRate;
+                const taxable = quote.total / (1 + gstR / 100);
+                const gstAmt = quote.total - taxable;
+                return (
+                  <div style={{ background: "#f4f8f7", borderRadius: 10, padding: "12px 14px", margin: "6px 0 14px", fontSize: 14 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span className="muted">{billTarget.name} · {CYCLES[cycle].label}</span><span>{bq && quote.list > quote.base ? <><span style={{ textDecoration: "line-through", color: "#aab2c3", marginRight: 6 }}>{inr(quote.list)}</span>{inr(quote.base)}</> : inr(quote.base)}</span></div>
+                    {quote.saved > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>Cycle discount</span><span>−{inr(quote.saved)}</span></div>}
+                    {quote.couponOff > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>Coupon {bq?.coupon?.code}</span><span>−{inr(quote.couponOff)}</span></div>}
+                    {/* GST is INCLUDED in the plan price — show it broken out of the total. */}
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2, color: "#54656f", fontSize: 13 }}><span>Taxable value</span><span>{inr(taxable)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#54656f", fontSize: 13 }}><span>GST @ {gstR}% <span className="muted">(included)</span></span><span>{inr(gstAmt)}</span></div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, borderTop: "1px solid var(--border)", paddingTop: 6 }}><span>Total payable <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>(incl. GST)</span></span><span>{inr(quote.total)}</span></div>
+                    <div className="muted" style={{ fontSize: 11.5, marginTop: 6 }}>🔁 Auto-renews every {CYCLES[cycle].label.toLowerCase()} via Razorpay (UPI / card mandate). Cancel anytime.</div>
+                  </div>
+                );
+              })()}
 
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn" disabled={switching === billTarget.id} style={{ width: "auto", padding: "11px 22px" }}>

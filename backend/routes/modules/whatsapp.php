@@ -15,6 +15,7 @@ Route::prefix('whatsapp')->group(function () {
     Route::get('/config', [WhatsAppAccountController::class, 'config']);
     // Mobile/web WhatsApp home summary (free — numbers + inbox counts).
     Route::get('/overview', [WhatsAppAccountController::class, 'overview']);
+    Route::get('/account-health', [WhatsAppAccountController::class, 'accountHealth']);
     Route::get('/numbers', [WhatsAppAccountController::class, 'numbers']);
     Route::get('/accounts', [WhatsAppAccountController::class, 'accounts']);
     // Re-pull all WABA numbers from Meta (brings in a real number added later).
