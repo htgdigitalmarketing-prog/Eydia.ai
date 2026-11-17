@@ -31,9 +31,6 @@ export default function BillingPage() {
   const [invoices, setInvoices] = useState<InvoiceItem[]>([]);
   const [switching, setSwitching] = useState<string | null>(null);
   const [gstRate, setGstRate] = useState(18);
-  // Live per-cycle discounts from the backend (admin-set). Keeps the "Save X%"
-  // labels in sync with Pricing & Coupons instead of hardcoded guesses.
-  const [cycleDiscounts, setCycleDiscounts] = useState<Record<string, number>>({});
 
   // Billing-details step before payment
   const [billTarget, setBillTarget] = useState<PlanItem | null>(null);
@@ -62,7 +59,6 @@ export default function BillingPage() {
       setSubscription(ov.subscription);
       setPlans(pl.plans);
       setGstRate(pl.gst_rate ?? 18);
-      setCycleDiscounts(pl.cycle_discounts ?? {});
       setInvoices(inv.invoices);
     } catch (err) {
       setError((err as ApiError).message);
@@ -212,6 +208,20 @@ export default function BillingPage() {
   })();
   const inr = (n: number) => "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  // Per-cycle info for the chosen plan, straight from the backend (`cycle_prices`).
+  // Its discount_percent is the SAME value used to compute the price, so the
+  // "Save X%" label can never disagree with the amount charged. Only the three
+  // supported cycles are shown; a cycle the admin disabled simply won't appear.
+  const SUPPORTED_CYCLES = ["monthly", "half_yearly", "yearly"] as const;
+  const cyclesInfo = (
+    billTarget?.cycle_prices?.length
+      ? billTarget.cycle_prices
+      : SUPPORTED_CYCLES.map((k) => ({
+          key: k, label: CYCLES[k].label, months: CYCLES[k].months,
+          list: 0, price: 0, per_month: 0, discount_percent: Math.round(CYCLES[k].discount * 100),
+        }))
+  ).filter((ci) => (SUPPORTED_CYCLES as readonly string[]).includes(ci.key));
+
   // A plan counts as "current" ONLY while the subscription is actually live.
   // A cancelled/expired subscription still references its old plan, so without
   // this guard the billing page wrongly shows that plan as "Current".
@@ -358,95 +368,112 @@ export default function BillingPage() {
         </>
       )}
 
-      {/* Billing details step */}
+      {/* Billing details step — redesigned checkout modal */}
       {billTarget && (
-        <div className="msg-info-overlay" onClick={() => setBillTarget(null)}>
-          <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 560 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0 }}>Billing details</h2>
-              <button className="btn-mini" onClick={() => setBillTarget(null)}>Close</button>
+        <div onClick={() => setBillTarget(null)}
+          style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(12,16,38,.5)", backdropFilter: "blur(3px)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16, animation: "eydiaFade .15s ease" }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ background: "var(--card, #fff)", borderRadius: 20, maxWidth: 580, width: "100%", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 30px 90px rgba(10,15,40,.4)", animation: "eydiaPop .2s cubic-bezier(.2,.9,.3,1.2)" }}>
+            {/* Gradient header */}
+            <div style={{ background: "linear-gradient(135deg, var(--accent, #5b6bf5), #8b5cf6)", color: "#fff", padding: "20px 24px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 11.5, opacity: .85, fontWeight: 700, letterSpacing: ".6px" }}>COMPLETE YOUR PURCHASE</div>
+                <div style={{ fontSize: 23, fontWeight: 800, marginTop: 3 }}>{billTarget.name} plan</div>
+                <div style={{ fontSize: 13.5, opacity: .92, marginTop: 3 }}>{CYCLES[cycle].label} · <strong>{inr(quote.total)}</strong> incl. GST</div>
+              </div>
+              <button type="button" onClick={() => setBillTarget(null)} aria-label="Close"
+                style={{ background: "rgba(255,255,255,.2)", border: "none", color: "#fff", width: 34, height: 34, borderRadius: 11, cursor: "pointer", fontSize: 16, flexShrink: 0, lineHeight: 1 }}>✕</button>
             </div>
-            <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>For your invoice ({billTarget.name} plan). GST is applied as per Indian tax rules.</p>
-            {error && <div className="error">{error}</div>}
-            <form onSubmit={confirmPurchase}>
-              <div className="field">
-                <label>Full name / Company name</label>
-                <input value={billForm.name} onChange={(e) => setBillForm((f) => ({ ...f, name: e.target.value }))} required placeholder="Acme Pvt Ltd" />
-              </div>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                <div className="field" style={{ flex: 1, minWidth: 200 }}>
-                  <label>Email</label>
-                  <input type="email" value={billForm.email} onChange={(e) => setBillForm((f) => ({ ...f, email: e.target.value }))} required placeholder="billing@acme.com" />
-                </div>
-                <div className="field" style={{ flex: 1, minWidth: 160 }}>
-                  <label>Phone</label>
-                  <input value={billForm.phone} onChange={(e) => setBillForm((f) => ({ ...f, phone: e.target.value }))} required placeholder="+91…" />
-                </div>
-              </div>
-              <div className="field">
-                <label>Billing address</label>
-                <textarea value={billForm.address} onChange={(e) => setBillForm((f) => ({ ...f, address: e.target.value }))} required rows={2} placeholder="Street, City, State, PIN" style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", resize: "vertical" }} />
-              </div>
-              <div className="field">
-                <label>GSTIN <span className="muted">(optional)</span></label>
-                <input value={billForm.gstin ?? ""} onChange={(e) => setBillForm((f) => ({ ...f, gstin: e.target.value }))} placeholder="22AAAAA0000A1Z5" />
-              </div>
 
-              {/* Billing cycle */}
-              <div className="field">
-                <label>Billing cycle</label>
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {(["monthly", "half_yearly", "yearly"] as const)
-                    .filter((c) => Object.keys(cycleDiscounts).length === 0 || c in cycleDiscounts)
-                    .map((c) => {
-                    // Live admin-set discount; falls back to the static estimate only
-                    // until the backend value arrives.
-                    const off = cycleDiscounts[c] ?? CYCLES[c].discount * 100;
-                    const on = cycle === c;
-                    return (
-                      <button type="button" key={c} onClick={() => setCycle(c)} style={{
-                        flex: 1, minWidth: 92, cursor: "pointer", padding: "9px 10px", borderRadius: 10, fontSize: 13, fontWeight: 700,
-                        border: `2px solid ${on ? "var(--accent)" : "var(--border)"}`, background: on ? "color-mix(in srgb, var(--accent) 8%, #fff)" : "#fff",
-                      }}>
-                        {CYCLES[c].label}
-                        {off > 0 && <div style={{ fontSize: 10.5, fontWeight: 700, color: "#0a7d47" }}>Save {off}%</div>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            <form onSubmit={confirmPurchase} style={{ display: "flex", flexDirection: "column", minHeight: 0, flex: 1 }}>
+              <div style={{ padding: "18px 24px", overflowY: "auto", flex: 1 }}>
+                {error && <div className="error">{error}</div>}
 
-              {/* Coupon */}
-              <div className="field">
-                <label>Coupon code <span className="muted">(optional)</span></label>
-                <input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="LAUNCH50" style={{ textTransform: "uppercase" }} />
-                {coupon && bq?.coupon && <div style={{ color: "#0a7d47", fontSize: 12.5, marginTop: 4 }}>✓ {bq.coupon.code} applied — you save {inr(bq.coupon.discount)}</div>}
-                {coupon && bq?.coupon_error && <div style={{ color: "#c53030", fontSize: 12.5, marginTop: 4 }}>{bq.coupon_error}</div>}
-              </div>
-
-              {(() => {
-                const gstR = bq?.gst_rate ?? gstRate;
-                const taxable = quote.total / (1 + gstR / 100);
-                const gstAmt = quote.total - taxable;
-                return (
-                  <div style={{ background: "#f4f8f7", borderRadius: 10, padding: "12px 14px", margin: "6px 0 14px", fontSize: 14 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span className="muted">{billTarget.name} · {CYCLES[cycle].label}</span><span>{bq && quote.list > quote.base ? <><span style={{ textDecoration: "line-through", color: "#aab2c3", marginRight: 6 }}>{inr(quote.list)}</span>{inr(quote.base)}</> : inr(quote.base)}</span></div>
-                    {quote.saved > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>Cycle discount</span><span>−{inr(quote.saved)}</span></div>}
-                    {quote.couponOff > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#0a7d47" }}><span>Coupon {bq?.coupon?.code}</span><span>−{inr(quote.couponOff)}</span></div>}
-                    {/* GST is INCLUDED in the plan price — show it broken out of the total. */}
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2, color: "#54656f", fontSize: 13 }}><span>Taxable value</span><span>{inr(taxable)}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, color: "#54656f", fontSize: 13 }}><span>GST @ {gstR}% <span className="muted">(included)</span></span><span>{inr(gstAmt)}</span></div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, borderTop: "1px solid var(--border)", paddingTop: 6 }}><span>Total payable <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>(incl. GST)</span></span><span>{inr(quote.total)}</span></div>
-                    <div className="muted" style={{ fontSize: 11.5, marginTop: 6 }}>🔁 Auto-renews every {CYCLES[cycle].label.toLowerCase()} via Razorpay (UPI / card mandate). Cancel anytime.</div>
+                {/* Billing cycle — big, clear pills with price + save badge */}
+                <div className="field">
+                  <label style={{ fontWeight: 700 }}>Billing cycle</label>
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${cyclesInfo.length}, 1fr)`, gap: 9, marginTop: 4 }}>
+                    {cyclesInfo.map((ci) => {
+                      const on = cycle === ci.key;
+                      return (
+                        <button type="button" key={ci.key} onClick={() => setCycle(ci.key as "monthly" | "half_yearly" | "yearly")}
+                          style={{
+                            position: "relative", cursor: "pointer", padding: "14px 8px 11px", borderRadius: 14, textAlign: "center",
+                            border: `2px solid ${on ? "var(--accent)" : "var(--border)"}`,
+                            background: on ? "color-mix(in srgb, var(--accent) 9%, var(--card, #fff))" : "var(--card, #fff)",
+                            boxShadow: on ? "0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent)" : "none", transition: "all .12s",
+                          }}>
+                          {ci.discount_percent > 0 && (
+                            <span style={{ position: "absolute", top: -9, left: "50%", transform: "translateX(-50%)", background: "#0a7d47", color: "#fff", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
+                              SAVE {ci.discount_percent}%
+                            </span>
+                          )}
+                          <div style={{ fontSize: 14, fontWeight: 800, color: on ? "var(--accent-dark, var(--accent))" : "var(--text)" }}>{ci.label}</div>
+                          {ci.price > 0 && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>{inr(ci.price)}</div>}
+                        </button>
+                      );
+                    })}
                   </div>
-                );
-              })()}
+                </div>
 
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn" disabled={switching === billTarget.id} style={{ width: "auto", padding: "11px 22px" }}>
-                  {switching === billTarget.id ? "Processing…" : quote.total > 0 ? `Proceed to pay ${inr(quote.total)}` : "Activate plan"}
+                {/* Coupon */}
+                <div className="field">
+                  <label>Coupon code <span className="muted">(optional)</span></label>
+                  <input value={coupon} onChange={(e) => setCoupon(e.target.value.toUpperCase())} placeholder="LAUNCH50" style={{ textTransform: "uppercase" }} />
+                  {coupon && bq?.coupon && <div style={{ color: "#0a7d47", fontSize: 12.5, marginTop: 4 }}>✓ {bq.coupon.code} applied — you save {inr(bq.coupon.discount)}</div>}
+                  {coupon && bq?.coupon_error && <div style={{ color: "#c53030", fontSize: 12.5, marginTop: 4 }}>{bq.coupon_error}</div>}
+                </div>
+
+                {/* Price summary */}
+                {(() => {
+                  const gstR = bq?.gst_rate ?? gstRate;
+                  const taxable = quote.total / (1 + gstR / 100);
+                  const gstAmt = quote.total - taxable;
+                  return (
+                    <div style={{ background: "color-mix(in srgb, var(--accent) 5%, var(--bg, #f4f8f7))", border: "1px solid var(--border)", borderRadius: 14, padding: "14px 16px", margin: "4px 0 18px", fontSize: 14 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}><span className="muted">{billTarget.name} · {CYCLES[cycle].label}</span><span>{bq && quote.list > quote.base ? <><span style={{ textDecoration: "line-through", color: "#aab2c3", marginRight: 6 }}>{inr(quote.list)}</span>{inr(quote.base)}</> : inr(quote.base)}</span></div>
+                      {quote.saved > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, color: "#0a7d47", fontWeight: 600 }}><span>Cycle discount</span><span>−{inr(quote.saved)}</span></div>}
+                      {quote.couponOff > 0 && <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, color: "#0a7d47", fontWeight: 600 }}><span>Coupon {bq?.coupon?.code}</span><span>−{inr(quote.couponOff)}</span></div>}
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2, color: "#54656f", fontSize: 13 }}><span>Taxable value</span><span>{inr(taxable)}</span></div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, color: "#54656f", fontSize: 13 }}><span>GST @ {gstR}% <span className="muted">(included)</span></span><span>{inr(gstAmt)}</span></div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 800, fontSize: 16, borderTop: "1px solid var(--border)", paddingTop: 8 }}><span>Total payable <span className="muted" style={{ fontWeight: 400, fontSize: 12 }}>(incl. GST)</span></span><span>{inr(quote.total)}</span></div>
+                      <div className="muted" style={{ fontSize: 11.5, marginTop: 7 }}>🔁 Auto-renews every {CYCLES[cycle].label.toLowerCase()} via Razorpay (UPI / card mandate). Cancel anytime.</div>
+                    </div>
+                  );
+                })()}
+
+                {/* Invoice details */}
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: ".5px", margin: "2px 0 8px" }}>Invoice details</div>
+                <div className="field">
+                  <label>Full name / Company name</label>
+                  <input value={billForm.name} onChange={(e) => setBillForm((f) => ({ ...f, name: e.target.value }))} required placeholder="Acme Pvt Ltd" />
+                </div>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  <div className="field" style={{ flex: 1, minWidth: 200 }}>
+                    <label>Email</label>
+                    <input type="email" value={billForm.email} onChange={(e) => setBillForm((f) => ({ ...f, email: e.target.value }))} required placeholder="billing@acme.com" />
+                  </div>
+                  <div className="field" style={{ flex: 1, minWidth: 160 }}>
+                    <label>Phone</label>
+                    <input value={billForm.phone} onChange={(e) => setBillForm((f) => ({ ...f, phone: e.target.value }))} required placeholder="+91…" />
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Billing address</label>
+                  <textarea value={billForm.address} onChange={(e) => setBillForm((f) => ({ ...f, address: e.target.value }))} required rows={2} placeholder="Street, City, State, PIN" style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", resize: "vertical" }} />
+                </div>
+                <div className="field" style={{ marginBottom: 0 }}>
+                  <label>GSTIN <span className="muted">(optional)</span></label>
+                  <input value={billForm.gstin ?? ""} onChange={(e) => setBillForm((f) => ({ ...f, gstin: e.target.value }))} placeholder="22AAAAA0000A1Z5" />
+                </div>
+              </div>
+
+              {/* Sticky footer */}
+              <div style={{ padding: "14px 24px", borderTop: "1px solid var(--border)", background: "var(--card, #fff)" }}>
+                <button className="btn" disabled={switching === billTarget.id} style={{ width: "100%", padding: "13px", fontSize: 15, fontWeight: 700 }}>
+                  {switching === billTarget.id ? "Processing…" : quote.total > 0 ? `🔒 Proceed to pay ${inr(quote.total)}` : "Activate plan"}
                 </button>
-                <button type="button" className="btn-mini" onClick={() => setBillTarget(null)}>Cancel</button>
+                <div className="muted" style={{ textAlign: "center", fontSize: 11, marginTop: 8 }}>Secured by Razorpay · UPI / Card / Netbanking · GST invoice emailed</div>
               </div>
             </form>
           </div>

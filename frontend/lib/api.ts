@@ -1855,6 +1855,7 @@ export type PlanItem = {
   trial_days: number;
   features: Record<string, boolean>;
   limits: Record<string, number>;
+  cycle_prices?: CyclePrice[];
 };
 
 export type RazorpayOrder = {
