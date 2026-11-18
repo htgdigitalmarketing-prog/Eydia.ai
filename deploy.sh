@@ -182,7 +182,16 @@ if ! grep -qE '^JWT_SECRET=.+' .env; then
 fi
 php artisan migrate --force
 php artisan db:seed --class='Database\Seeders\RolePermissionSeeder' --force
-php artisan db:seed --class='Database\Seeders\PlanSeeder' --force
+# Seed the default plans ONLY when the plans table is empty (fresh install).
+# Once any plan exists, never run PlanSeeder again — so admin-created/edited plans
+# are never reset on deploy. (PlanSeeder itself is also non-destructive now.)
+PLAN_COUNT="$(php artisan tinker --execute='echo "PC:".\App\Models\Plan::count().":CP";' 2>/dev/null | sed -n 's/.*PC:\([0-9][0-9]*\):CP.*/\1/p' | tail -n1)"
+if [ -n "$PLAN_COUNT" ] && [ "$PLAN_COUNT" -gt 0 ] 2>/dev/null; then
+    say "Plans already exist ($PLAN_COUNT) — skipping PlanSeeder to keep your plans."
+else
+    say "No plans yet — seeding default plans (one time only)."
+    php artisan db:seed --class='Database\Seeders\PlanSeeder' --force
+fi
 php artisan db:seed --class='Database\Seeders\SuperAdminSeeder' --force
 php artisan storage:link || true
 # The web root is public_html (not $APP/public), so `storage:link` alone leaves

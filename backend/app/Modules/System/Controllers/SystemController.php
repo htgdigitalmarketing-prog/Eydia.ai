@@ -44,15 +44,22 @@ class SystemController extends Controller
         }
 
         // Run the essential bootstrap seeders (idempotent — safe to re-run):
-        // plans, roles/permissions and the platform super admin. This makes a
-        // fresh no-SSH deploy fully self-serve. Demo data is intentionally NOT
-        // seeded here.
-        foreach ([
+        // roles/permissions and the platform super admin. This makes a fresh
+        // no-SSH deploy fully self-serve. Demo data is intentionally NOT seeded.
+        $seeders = [
             \Database\Seeders\RolePermissionSeeder::class,
-            \Database\Seeders\PlanSeeder::class,
             \Database\Seeders\CreditPackSeeder::class,
             \Database\Seeders\SuperAdminSeeder::class,
-        ] as $seeder) {
+        ];
+        // Seed the default plans ONLY on a fresh install (empty plans table). Once
+        // any plan exists we never run PlanSeeder again, so plans created or edited
+        // in the admin panel are never reset on deploy.
+        if (\App\Models\Plan::withTrashed()->count() === 0) {
+            array_unshift($seeders, \Database\Seeders\PlanSeeder::class);
+        } else {
+            $output['seed:PlanSeeder'] = 'skipped (plans already exist — kept as-is)';
+        }
+        foreach ($seeders as $seeder) {
             try {
                 Artisan::call('db:seed', ['--class' => $seeder, '--force' => true]);
                 $output['seed:' . class_basename($seeder)] = trim(Artisan::output()) ?: 'done';
