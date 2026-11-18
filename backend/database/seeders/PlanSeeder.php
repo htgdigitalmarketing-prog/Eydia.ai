@@ -29,7 +29,11 @@ class PlanSeeder extends Seeder
         ];
 
         foreach ($plans as $plan) {
-            Plan::updateOrCreate(['slug' => $plan['slug']], array_merge($plan, [
+            // firstOrCreate (NOT updateOrCreate): only seed a default plan when it
+            // doesn't exist yet. Any plan the super admin has created or edited is
+            // left untouched, so running this seeder on every deploy never resets
+            // prices, limits, features or GST that were changed in the admin panel.
+            Plan::firstOrCreate(['slug' => $plan['slug']], array_merge($plan, [
                 'billing_period' => 'monthly',
                 'currency' => 'INR',
                 'is_active' => true,
