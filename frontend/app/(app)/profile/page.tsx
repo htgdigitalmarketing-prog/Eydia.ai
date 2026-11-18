@@ -74,7 +74,6 @@ export default function ProfilePage() {
     }
   }
 
-  const [curPwd, setCurPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [pwdSaving, setPwdSaving] = useState(false);
@@ -120,12 +119,10 @@ export default function ProfilePage() {
     setPwdError(null);
     try {
       const res = await api.changePassword(token, {
-        ...(user.is_super_admin ? {} : { current_password: curPwd }),
         password: newPwd,
         password_confirmation: confirmPwd,
       });
       flash(res.message, setPwdNotice);
-      setCurPwd("");
       setNewPwd("");
       setConfirmPwd("");
     } catch (err) {
@@ -209,12 +206,6 @@ export default function ProfilePage() {
           {pwdError && <div className="error">{pwdError}</div>}
           {pwdNotice && <div className="panel" style={{ background: "#e7f7ef", color: "#0a7d47", marginBottom: 12, padding: "8px 14px" }}>{pwdNotice}</div>}
           <form onSubmit={handlePassword}>
-            {!user.is_super_admin && (
-              <div className="field">
-                <label>Current Password</label>
-                <input type="password" value={curPwd} onChange={(e) => setCurPwd(e.target.value)} required autoComplete="current-password" />
-              </div>
-            )}
             <div className="field">
               <label>New Password</label>
               <input type="password" value={newPwd} onChange={(e) => setNewPwd(e.target.value)} required minLength={8} autoComplete="new-password" />

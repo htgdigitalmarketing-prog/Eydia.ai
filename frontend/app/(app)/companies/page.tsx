@@ -36,7 +36,10 @@ export default function CompaniesPage() {
   const sp = useSearchParams();
   const [filterPlan, setFilterPlan] = useState("");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   useEffect(() => { setFilterPlan(sp.get("plan") ?? ""); }, [sp]);
+  // Jump back to page 1 whenever the search / plan filter changes.
+  useEffect(() => { setPage(1); }, [search, filterPlan]);
 
   const isSuper = !!me.is_super_admin;
 
@@ -237,6 +240,12 @@ export default function CompaniesPage() {
           .some((v) => String(v).toLowerCase().includes(q))
       );
 
+  // Client-side pagination — 15 companies per page.
+  const PER_PAGE = 15;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const pageSafe = Math.min(page, totalPages);
+  const paged = filtered.slice((pageSafe - 1) * PER_PAGE, pageSafe * PER_PAGE);
+
   return (
     <div>
       <PageHeader
@@ -311,9 +320,9 @@ export default function CompaniesPage() {
               {filtered.length === 0 && (
                 <tr><td colSpan={7} style={{ padding: "24px 14px", textAlign: "center" }}><span className="muted">{q ? "No companies match your search." : "No companies on this plan."}</span></td></tr>
               )}
-              {filtered.map((c, i) => (
+              {paged.map((c, i) => (
                 <tr key={c.id} style={{ borderBottom: "1px solid #f4f6f7" }}>
-                  <td style={{ padding: "12px 14px", textAlign: "right", color: "#8a97a3", fontSize: 13, fontVariantNumeric: "tabular-nums" }}>{i + 1}</td>
+                  <td style={{ padding: "12px 14px", textAlign: "right", color: "#8a97a3", fontSize: 13, fontVariantNumeric: "tabular-nums" }}>{(pageSafe - 1) * PER_PAGE + i + 1}</td>
                   <td style={{ padding: "12px 14px", fontWeight: 600 }}>
                     <button type="button" onClick={() => viewDashboard(c)} title="Open this client's dashboard"
                       style={{ background: "none", border: "none", padding: 0, font: "inherit", fontWeight: 600, color: "var(--accent-dark)", cursor: "pointer", textAlign: "left" }}>
@@ -355,6 +364,26 @@ export default function CompaniesPage() {
               ))}
             </tbody>
           </table>
+          {totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, padding: "12px 14px", borderTop: "1px solid #eef1f2" }}>
+              <span className="muted" style={{ fontSize: 13 }}>
+                Page {pageSafe} of {totalPages} · showing {paged.length} of {filtered.length}
+              </span>
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <button className="btn-mini" disabled={pageSafe <= 1} onClick={() => setPage(1)}>« First</button>
+                <button className="btn-mini" disabled={pageSafe <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Prev</button>
+                {Array.from({ length: totalPages }, (_, idx) => idx + 1)
+                  .filter((n) => n === 1 || n === totalPages || Math.abs(n - pageSafe) <= 1)
+                  .reduce<number[]>((acc, n) => { if (acc.length && n - acc[acc.length - 1] > 1) acc.push(-1); acc.push(n); return acc; }, [])
+                  .map((n, idx) => n === -1
+                    ? <span key={`gap${idx}`} className="muted" style={{ padding: "0 2px" }}>…</span>
+                    : <button key={n} className="btn-mini" onClick={() => setPage(n)}
+                        style={n === pageSafe ? { background: "var(--accent)", color: "#fff", border: "none" } : undefined}>{n}</button>)}
+                <button className="btn-mini" disabled={pageSafe >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next ›</button>
+                <button className="btn-mini" disabled={pageSafe >= totalPages} onClick={() => setPage(totalPages)}>Last »</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

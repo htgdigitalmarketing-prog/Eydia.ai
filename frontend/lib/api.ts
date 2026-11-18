@@ -1326,6 +1326,7 @@ export type AdminPlan = {
   base?: number;
   gst?: number;
   gst_rate?: number;
+  gst_rate_own?: number | null;
   credits?: number;
   modules?: number;
   currency: string;

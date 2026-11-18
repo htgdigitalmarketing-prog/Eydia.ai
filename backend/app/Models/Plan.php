@@ -16,7 +16,7 @@ class Plan extends Model
     use HasFactory, HasUuid, SoftDeletes;
 
     protected $fillable = [
-        'name', 'slug', 'description', 'billing_period', 'price', 'currency',
+        'name', 'slug', 'description', 'billing_period', 'price', 'currency', 'gst_rate',
         'limits', 'features', 'trial_days', 'is_active', 'is_public',
         'sort_order', 'stripe_price_id', 'razorpay_plan_id', 'meta',
     ];

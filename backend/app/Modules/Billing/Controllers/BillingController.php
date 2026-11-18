@@ -86,7 +86,7 @@ class BillingController extends Controller
         $cyclePrice = \App\Support\BillingCycle::price((float) $plan->price, $cycle);
         $eval = app(\App\Modules\Billing\Services\CouponService::class)
             ->evaluate($data['coupon'] ?? null, $cyclePrice, $cycle);
-        $g = \App\Support\Gst::inclusivePaise($eval['final'], (int) InvoiceSetting::current()->gst_rate);
+        $g = \App\Support\Gst::inclusivePaise($eval['final'], $this->planGstRate($plan));
 
         return $this->ok([
             'cycle' => $cycle,
@@ -388,9 +388,15 @@ class BillingController extends Controller
             $price = $eval['final']; // invalid coupon → price unchanged (safe)
         }
 
-        $g = \App\Support\Gst::inclusivePaise($price, (int) InvoiceSetting::current()->gst_rate);
+        $g = \App\Support\Gst::inclusivePaise($price, $this->planGstRate($plan));
 
         return [$g['base'], $g['rate'], $g['tax'], $g['total']];
+    }
+
+    /** Per-plan GST rate when set, otherwise the platform default. */
+    private function planGstRate(Plan $plan): int
+    {
+        return $plan->gst_rate !== null ? (int) $plan->gst_rate : (int) InvoiceSetting::current()->gst_rate;
     }
 
     /** Mark a coupon used once a payment actually succeeded (best-effort). */

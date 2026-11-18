@@ -25,7 +25,7 @@ const DASHBOARD_ICONS: Record<string, string> = { dash_whatsapp: "💬", dash_gb
 const label = (map: Record<string, string>, k: string) => map[k] ?? k.replace(/_/g, " ");
 
 type FormState = {
-  name: string; price: string; billing_period: string; description: string;
+  name: string; price: string; billing_period: string; description: string; gst_rate: string;
   limits: Record<string, string>; features: Record<string, boolean>;
   is_active: boolean; is_public: boolean;
 };
@@ -47,7 +47,7 @@ export default function PlansPage() {
 
   function blank(lk: string[], fk: string[]): FormState {
     return {
-      name: "", price: "0", billing_period: "monthly", description: "",
+      name: "", price: "0", billing_period: "monthly", description: "", gst_rate: "",
       limits: Object.fromEntries(lk.map((k) => [k, ""])),
       features: Object.fromEntries(fk.map((k) => [k, false])),
       is_active: true, is_public: true,
@@ -88,6 +88,7 @@ export default function PlansPage() {
     featureKeys.forEach((k) => { features[k] = !!p.features[k]; });
     setForm({
       name: p.name, price: String(p.price), billing_period: p.billing_period, description: p.description ?? "",
+      gst_rate: p.gst_rate_own != null ? String(p.gst_rate_own) : "",
       limits, features, is_active: p.is_active, is_public: p.is_public,
     });
     setShowForm(true);
@@ -104,6 +105,7 @@ export default function PlansPage() {
       price: Number(form.price) || 0,
       billing_period: form.billing_period,
       description: form.description || null,
+      gst_rate: form.gst_rate === "" ? null : Number(form.gst_rate), // "" → platform default
       limits: form.limits, // "" → unlimited (backend stores -1)
       features: form.features,
       is_active: form.is_active,
@@ -207,16 +209,21 @@ export default function PlansPage() {
           <div className="msg-info-panel" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 520 }}>
             <h2 style={{ marginTop: 0 }}>{editingId ? "Edit plan" : "New plan"}</h2>
             <form onSubmit={submit}>
-              <div style={{ display: "flex", gap: 10 }}>
-                <div className="field" style={{ flex: 2 }}>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <div className="field" style={{ flex: 2, minWidth: 180 }}>
                   <label>Plan name</label>
                   <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required placeholder="Professional" />
                 </div>
-                <div className="field" style={{ flex: 1 }}>
+                <div className="field" style={{ flex: 1, minWidth: 110 }}>
                   <label>Price (₹)</label>
                   <input type="number" min={0} value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} />
                 </div>
-                <div className="field" style={{ flex: 1 }}>
+                <div className="field" style={{ flex: 1, minWidth: 120 }}>
+                  <label>GST %</label>
+                  <input type="number" min={0} max={100} value={form.gst_rate} placeholder="18"
+                    onChange={(e) => setForm((f) => ({ ...f, gst_rate: e.target.value }))} />
+                </div>
+                <div className="field" style={{ flex: 1, minWidth: 110 }}>
                   <label>Billing</label>
                   <select value={form.billing_period} onChange={(e) => setForm((f) => ({ ...f, billing_period: e.target.value }))}>
                     <option value="monthly">Monthly</option>
@@ -224,6 +231,9 @@ export default function PlansPage() {
                   </select>
                 </div>
               </div>
+              <p className="muted" style={{ fontSize: 12, margin: "-4px 0 10px" }}>
+                Price is GST-inclusive. GST % is how the tax is split out of it on invoices — leave blank to use the platform default.
+              </p>
 
               <div className="field">
                 <label>Limits <span className="muted">(leave blank = unlimited)</span></label>

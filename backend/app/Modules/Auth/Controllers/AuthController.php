@@ -139,20 +139,12 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if ($user->is_super_admin) {
-            $request->validate([
-                'password' => ['required', 'confirmed', Password::min(8)],
-            ]);
-        } else {
-            $request->validate([
-                'current_password' => ['required', 'string'],
-                'password' => ['required', 'confirmed', Password::min(8)],
-            ]);
-
-            if (! Hash::check($request->input('current_password'), $user->password)) {
-                return $this->fail('Current password is incorrect.', [], 422);
-            }
-        }
+        // The request is already authenticated by a valid token, so we no longer
+        // ask for the current password. This also lets OTP-registered users (who
+        // have no password of their own) set one from their profile.
+        $request->validate([
+            'password' => ['required', 'confirmed', Password::min(8)],
+        ]);
 
         $user->update(['password' => $request->input('password')]);
 

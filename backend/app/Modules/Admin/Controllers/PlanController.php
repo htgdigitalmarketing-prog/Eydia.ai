@@ -48,6 +48,7 @@ class PlanController extends Controller
             'billing_period' => $data['billing_period'] ?? 'monthly',
             'price' => $data['price'] ?? 0,
             'currency' => $data['currency'] ?? 'INR',
+            'gst_rate' => $data['gst_rate'] ?? null,
             'limits' => $this->cleanLimits($data['limits'] ?? []),
             'features' => $this->cleanFeatures($data['features'] ?? []),
             'is_active' => $data['is_active'] ?? true,
@@ -70,6 +71,7 @@ class PlanController extends Controller
             'billing_period' => $data['billing_period'] ?? $plan->billing_period,
             'price' => $data['price'] ?? 0,
             'currency' => $data['currency'] ?? 'INR',
+            'gst_rate' => $data['gst_rate'] ?? null,
             'limits' => $this->cleanLimits($data['limits'] ?? []),
             'features' => $this->cleanFeatures($data['features'] ?? []),
             'is_active' => $data['is_active'] ?? $plan->is_active,
@@ -112,6 +114,7 @@ class PlanController extends Controller
             'billing_period' => ['nullable', 'string', 'in:monthly,yearly'],
             'price' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['nullable', 'string', 'max:3'],
+            'gst_rate' => ['nullable', 'integer', 'min:0', 'max:100'],
             'limits' => ['nullable', 'array'],
             'features' => ['nullable', 'array'],
             'is_active' => ['sometimes', 'boolean'],
@@ -156,7 +159,8 @@ class PlanController extends Controller
 
     private function planArray(Plan $p): array
     {
-        $rate = (int) \App\Models\InvoiceSetting::current()->gst_rate;
+        // Per-plan GST rate when set, otherwise the platform default.
+        $rate = $p->gst_rate !== null ? (int) $p->gst_rate : (int) \App\Models\InvoiceSetting::current()->gst_rate;
         $g = \App\Support\Gst::inclusive((float) $p->price, $rate);
         $features = $p->features ?? [];
         $modules = count(array_filter($features, fn ($v) => $v === true || $v === 1 || $v === '1'));
@@ -170,7 +174,8 @@ class PlanController extends Controller
             'price' => (float) $p->price,
             'base' => $g['base'],
             'gst' => $g['tax'],
-            'gst_rate' => $rate,
+            'gst_rate' => $rate,                                       // effective rate (for display)
+            'gst_rate_own' => $p->gst_rate !== null ? (int) $p->gst_rate : null, // per-plan override (null = default)
             'currency' => $p->currency,
             'credits' => (int) ($p->limit('ai_credits') ?? 0),
             'modules' => $modules,
