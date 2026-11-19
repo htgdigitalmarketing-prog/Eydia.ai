@@ -369,6 +369,7 @@ class AiReplyService
             $data = $part['inline_data']['data'] ?? $part['inlineData']['data'] ?? null;
             if ($data) {
                 $mime = $part['inline_data']['mime_type'] ?? $part['inlineData']['mimeType'] ?? 'image/png';
+                $this->recordImageUsage('gemini', $model);
 
                 return "data:{$mime};base64,{$data}";
             }
@@ -381,6 +382,35 @@ class AiReplyService
     }
 
     /** @param array<int, array{role:string, content:string}> $messages */
+    /**
+     * Record token usage + cost for a successful provider response. Best-effort —
+     * never throws, never slows the AI call (accounting only).
+     */
+    private function recordUsage(string $provider, string $operation, \Illuminate\Http\Client\Response $res, ?string $model = null): void
+    {
+        try {
+            $model = $model ?: $this->modelFor($provider);
+            [$in, $out] = match ($provider) {
+                'gemini' => [(int) $res->json('usageMetadata.promptTokenCount', 0), (int) $res->json('usageMetadata.candidatesTokenCount', 0)],
+                'openai' => [(int) $res->json('usage.prompt_tokens', 0), (int) $res->json('usage.completion_tokens', 0)],
+                'anthropic' => [(int) $res->json('usage.input_tokens', 0), (int) $res->json('usage.output_tokens', 0)],
+                default => [0, 0],
+            };
+            app(\App\Support\AiUsageRecorder::class)->recordText($provider, $model, $in, $out, $operation);
+        } catch (\Throwable $e) {
+            // accounting must never affect the AI feature
+        }
+    }
+
+    private function recordImageUsage(string $provider, string $model): void
+    {
+        try {
+            app(\App\Support\AiUsageRecorder::class)->recordImage($provider, $model, 1);
+        } catch (\Throwable $e) {
+            // ignore
+        }
+    }
+
     private function callGemini(string $system, array $messages, int $maxTokens = 1024): ?string
     {
         $model = $this->modelFor('gemini');
@@ -416,6 +446,8 @@ class AiReplyService
             }
         }
 
+        $this->recordUsage('gemini', 'text', $res, $model);
+
         return $text ? trim($text) : null;
     }
 
@@ -442,6 +474,7 @@ class AiReplyService
             return null;
         }
 
+        $this->recordUsage('gemini', 'vision', $res, $model);
         $text = $res->json('candidates.0.content.parts.0.text');
 
         return $text ? trim($text) : null;
@@ -472,6 +505,7 @@ class AiReplyService
             return null;
         }
 
+        $this->recordUsage('anthropic', 'vision', $res);
         foreach ($res->json('content', []) as $block) {
             if (($block['type'] ?? '') === 'text' && ! empty(trim($block['text'] ?? ''))) {
                 return trim($block['text']);
@@ -504,6 +538,7 @@ class AiReplyService
             return null;
         }
 
+        $this->recordUsage('anthropic', 'text', $res);
         // Return the first text block (thinking blocks, if any, are skipped).
         foreach ($res->json('content', []) as $block) {
             if (($block['type'] ?? '') === 'text' && ! empty(trim($block['text'] ?? ''))) {
@@ -545,6 +580,7 @@ class AiReplyService
             return null;
         }
 
+        $this->recordUsage('openai', 'text', $res);
         $text = $res->json('choices.0.message.content');
 
         return $text ? trim($text) : null;
@@ -575,6 +611,7 @@ class AiReplyService
             return null;
         }
 
+        $this->recordUsage('openai', 'vision', $res);
         $text = $res->json('choices.0.message.content');
 
         return $text ? trim($text) : null;
@@ -607,11 +644,18 @@ class AiReplyService
 
         $b64 = $res->json('data.0.b64_json');
         if ($b64) {
+            $this->recordImageUsage('openai', config('services.openai.image_model', 'gpt-image-1'));
+
             return 'data:image/png;base64,' . $b64;
         }
 
         // Some models (dall-e-3) return a hosted URL instead of base64.
-        return $res->json('data.0.url') ?: null;
+        $url = $res->json('data.0.url') ?: null;
+        if ($url) {
+            $this->recordImageUsage('openai', config('services.openai.image_model', 'gpt-image-1'));
+        }
+
+        return $url;
     }
 
     private function systemPrompt(Chatbot $chatbot): string

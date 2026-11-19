@@ -506,6 +506,8 @@ export const api = {
       request<{ settings: InvoiceSettings; message: string }>("/admin/settings", { method: "PUT", body, token }),
 
     // AI provider configuration (select provider + key + model, activate, test)
+    aiInsights: (token: string, range: string = "30d") =>
+      request<AiInsights>(`/admin/ai-insights?range=${encodeURIComponent(range)}`, { token }),
     aiSettings: (token: string) =>
       request<{ ai: AiSettings }>("/admin/ai-settings", { token }),
     updateAiSettings: (token: string, body: AiSettingsUpdate) =>
@@ -1899,6 +1901,30 @@ export type AiSettingsUpdate = {
   gemini_model?: string; anthropic_model?: string; openai_model?: string;
   gemini_image_model?: string;
   gemini_api_key?: string; anthropic_api_key?: string; openai_api_key?: string;
+};
+
+export type AiMoney = { usd: number; inr: number };
+export type AiUsageRow = {
+  provider: string;
+  model: string | null;
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  images: number;
+  cost_usd: number;
+  cost_inr: number;
+};
+export type AiInsights = {
+  range: string;
+  usd_to_inr: number;
+  totals: { range: AiMoney; today: AiMoney; month_to_date: AiMoney; all_time: AiMoney };
+  by_provider: AiUsageRow[];
+  by_model: AiUsageRow[];
+  daily: { date: string; cost_usd: number }[];
+  active_provider: string | null;
+  providers: Record<string, { has_key: boolean; model: string; active: boolean }>;
+  source: string;
+  note: string;
 };
 
 export type InvoiceSettings = {
