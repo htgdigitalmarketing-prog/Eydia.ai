@@ -31,6 +31,22 @@ class SystemController extends Controller
 
         $output = [];
 
+        // Self-heal the two keys whose absence 500s the whole app: without APP_KEY
+        // encryption/sessions fail, and without JWT_SECRET every LOGIN returns 500.
+        // Generated only when blank, so existing keys are never changed.
+        try {
+            if (! config('app.key') && ! preg_match('/^\s*APP_KEY\s*=\s*base64:/m', (string) @file_get_contents(base_path('.env')))) {
+                Artisan::call('key:generate', ['--force' => true]);
+                $output['key:generate'] = 'APP_KEY generated';
+            }
+            if (empty(config('jwt.secret')) && ! preg_match('/^\s*JWT_SECRET\s*=\s*.+$/m', (string) @file_get_contents(base_path('.env')))) {
+                Artisan::call('jwt:secret', ['--force' => true]);
+                $output['jwt:secret'] = 'JWT_SECRET generated';
+            }
+        } catch (\Throwable $e) {
+            $output['keys'] = 'ERROR: ' . $e->getMessage();
+        }
+
         // Clear stale caches FIRST so the new routes/config are picked up, then
         // apply any pending migrations.
         foreach (['optimize:clear', 'migrate'] as $command) {
