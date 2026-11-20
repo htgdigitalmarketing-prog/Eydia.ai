@@ -75,12 +75,25 @@ class AiInsightsController extends Controller
         $todayCost = $sumMicros(AiUsageLog::where('created_at', '>=', now()->startOfDay()));
 
         $settings = AiSetting::current();
+
+        // All-time spend per provider, to compute remaining balance.
+        $allTimeByProvider = AiUsageLog::selectRaw('provider, COALESCE(SUM(cost_micros),0) as cost')
+            ->groupBy('provider')->pluck('cost', 'provider');
+        $balances = (array) ($settings->meta['balances'] ?? []);
+
         $providers = [];
         foreach (AiSetting::PROVIDERS as $p) {
+            $spentUsd = ((int) ($allTimeByProvider[$p] ?? 0)) / 1_000_000;
+            $balance = isset($balances[$p]) && $balances[$p] !== null ? (float) $balances[$p] : null;
             $providers[$p] = [
                 'has_key' => (bool) $settings->keyFor($p),
                 'model' => $settings->modelFor($p),
                 'active' => $settings->activeProvider() === $p,
+                'balance_usd' => $balance,
+                'balance_inr' => $balance !== null ? round($balance * $rate, 2) : null,
+                'spent_all_time_usd' => round($spentUsd, 4),
+                'remaining_usd' => $balance !== null ? round($balance - $spentUsd, 4) : null,
+                'remaining_inr' => $balance !== null ? round(($balance - $spentUsd) * $rate, 2) : null,
             ];
         }
 

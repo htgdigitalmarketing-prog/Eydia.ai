@@ -294,47 +294,40 @@ export default function BillingPage() {
             {plans.length === 0 ? (
               <p className="muted">No plans available. Ask an administrator to configure plans.</p>
             ) : (
-              <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
-                {plans.map((p) => {
+              <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 18, marginBottom: 4 }}>
+                {plans.map((p, idx) => {
                   const isCurrent = p.id === currentPlanId;
+                  // Highlight the middle tier as "popular" (only when nothing is current).
+                  const isPopular = !currentPlanId && plans.length >= 3 && idx === Math.floor(plans.length / 2);
+                  const feats = Object.keys(FEATURE_LABELS).filter((k) => p.features?.[k]);
                   return (
-                    <div key={p.id} className="panel" style={{
-                      border: isCurrent ? "2px solid var(--green)" : "1px solid var(--border)",
-                      position: "relative",
-                    }}>
-                      {isCurrent && (
-                        <span style={{ position: "absolute", top: 12, right: 12, background: "#e7f7ef", color: "#0a7d47", fontSize: 11, fontWeight: 700, padding: "2px 9px", borderRadius: 999 }}>
-                          CURRENT
-                        </span>
-                      )}
-                      <h3 style={{ margin: "0 0 4px" }}>{p.name}</h3>
-                      <div style={{ fontSize: 24, fontWeight: 700 }}>
-                        {p.price_display}
-                        <span className="muted" style={{ fontSize: 13, fontWeight: 400 }}> / {p.billing_period === "yearly" ? "yr" : "mo"}</span>
+                    <div key={p.id} className={`plan-card ${isCurrent ? "plan-card-current" : isPopular ? "plan-card-popular" : ""}`}>
+                      <div className="plan-card-top" />
+                      {isCurrent && <div className="plan-ribbon" style={{ background: "var(--green, #0a7d47)" }}>CURRENT</div>}
+                      {isPopular && <div className="plan-ribbon">POPULAR</div>}
+
+                      <h3 style={{ margin: "4px 0 2px", fontSize: 17 }}>{p.name}</h3>
+                      <div style={{ display: "flex", alignItems: "baseline", gap: 4, margin: "6px 0 2px" }}>
+                        <span style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-.5px" }}>{p.price_display}</span>
+                        <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>/ {p.billing_period === "yearly" ? "yr" : "mo"}</span>
                       </div>
-                      {p.description && <p className="muted" style={{ fontSize: 13, margin: "8px 0" }}>{p.description}</p>}
+                      <div className="muted" style={{ fontSize: 11.5 }}>incl. GST</div>
+                      {p.description && <p className="muted" style={{ fontSize: 13, margin: "10px 0 0" }}>{p.description}</p>}
 
-                      {/* Numeric limits intentionally hidden on the plan cards. */}
-
-                      {/* Enabled features */}
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12, marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
-                        {Object.keys(FEATURE_LABELS).filter((k) => p.features?.[k]).map((k) => (
-                          <span key={k} style={{ background: "#eafaf7", color: "#0a7d47", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600 }}>
-                            ✓ {FEATURE_LABELS[k]}
-                          </span>
-                        ))}
-                        {Object.keys(FEATURE_LABELS).filter((k) => p.features?.[k]).length === 0 && (
-                          <span className="muted" style={{ fontSize: 12 }}>Core features included</span>
-                        )}
+                      {/* Features (numeric limits hidden) */}
+                      <div style={{ display: "grid", gap: 2, margin: "16px 0 18px", paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+                        {feats.length > 0 ? feats.map((k) => (
+                          <div key={k} className="plan-feat"><span className="tick">✓</span>{FEATURE_LABELS[k]}</div>
+                        )) : <span className="muted" style={{ fontSize: 12.5 }}>Core features included</span>}
                       </div>
 
                       <button
                         className="btn"
-                        style={{ width: "100%", marginTop: 10, opacity: isCurrent ? 0.6 : 1 }}
+                        style={{ width: "100%", marginTop: "auto", padding: "12px", fontSize: 14.5, fontWeight: 700, opacity: isCurrent ? 0.65 : 1, cursor: isCurrent ? "default" : "pointer" }}
                         disabled={isCurrent || switching === p.id}
                         onClick={() => openBilling(p)}
                       >
-                        {isCurrent ? "Current plan" : switching === p.id ? "Processing…" : p.price > 0 ? `Buy — ${p.price_display}` : "Choose plan"}
+                        {isCurrent ? "✓ Current plan" : switching === p.id ? "Processing…" : p.price > 0 ? `Buy — ${p.price_display}` : "Choose plan"}
                       </button>
                     </div>
                   );

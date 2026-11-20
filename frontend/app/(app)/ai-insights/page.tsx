@@ -114,7 +114,33 @@ export default function AiInsightsPage() {
                     {cfg?.active && <span style={{ fontSize: 10, fontWeight: 800, color: "#0a7d47", background: "#e7f7ef", padding: "2px 8px", borderRadius: 999 }}>ACTIVE</span>}
                   </div>
                   <div style={{ fontSize: 26, fontWeight: 800, margin: "10px 0 2px" }}>{row ? money({ usd: row.cost_usd, inr: row.cost_inr }) : "₹0"}</div>
-                  <div className="muted" style={{ fontSize: 12 }}>{row ? usd(row.cost_usd) : "$0.00"} · {row?.calls ?? 0} calls</div>
+                  <div className="muted" style={{ fontSize: 12 }}>spent ({RANGES.find((r) => r.k === range)?.label}) · {row?.calls ?? 0} calls</div>
+
+                  {/* Current balance (admin-set) → remaining after all-time spend */}
+                  {cfg?.balance_usd != null ? (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
+                        <span className="muted">Balance loaded</span>
+                        <strong>₹{(cfg.balance_inr ?? 0).toLocaleString("en-IN")} <span className="muted" style={{ fontWeight: 400 }}>({usd(cfg.balance_usd)})</span></strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginTop: 3 }}>
+                        <span className="muted">Spent (all-time)</span>
+                        <strong>{usd(cfg.spent_all_time_usd)}</strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, marginTop: 4, fontWeight: 800, color: (cfg.remaining_usd ?? 0) <= 0 ? "#c53030" : "#0a7d47" }}>
+                        <span>Remaining</span>
+                        <span>₹{(cfg.remaining_inr ?? 0).toLocaleString("en-IN")} <span style={{ fontWeight: 400, fontSize: 11.5 }}>({usd(cfg.remaining_usd ?? 0)})</span></span>
+                      </div>
+                      <div style={{ height: 7, background: "var(--bg)", borderRadius: 999, marginTop: 7, overflow: "hidden" }}>
+                        <div style={{ height: "100%", borderRadius: 999, background: meta.color, width: `${Math.max(0, Math.min(100, ((cfg.remaining_usd ?? 0) / (cfg.balance_usd || 1)) * 100))}%` }} />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="muted" style={{ fontSize: 11.5, marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                      💡 Set this provider&apos;s balance in Settings → AI Provider to track remaining credit here.
+                    </div>
+                  )}
+
                   <div style={{ display: "grid", gap: 3, fontSize: 12.5, color: "#54656f", marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}><span>Input tokens</span><strong>{num(row?.input_tokens ?? 0)}</strong></div>
                     <div style={{ display: "flex", justifyContent: "space-between" }}><span>Output tokens</span><strong>{num(row?.output_tokens ?? 0)}</strong></div>

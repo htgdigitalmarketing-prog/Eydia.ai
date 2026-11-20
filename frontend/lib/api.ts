@@ -1887,7 +1887,7 @@ export type BillingDetails = {
   gstin?: string;
 };
 
-export type AiProviderInfo = { has_key: boolean; key_source: "saved" | "env" | "none"; key_last4: string | null; model: string; model_default: string };
+export type AiProviderInfo = { has_key: boolean; key_source: "saved" | "env" | "none"; key_last4: string | null; model: string; model_default: string; balance?: number | null };
 export type AiSettings = {
   is_active: boolean;
   active_provider: string | null;
@@ -1902,6 +1902,7 @@ export type AiSettingsUpdate = {
   gemini_model?: string; anthropic_model?: string; openai_model?: string;
   gemini_image_model?: string;
   gemini_api_key?: string; anthropic_api_key?: string; openai_api_key?: string;
+  gemini_balance?: number | null; anthropic_balance?: number | null; openai_balance?: number | null;
 };
 
 export type AiMoney = { usd: number; inr: number };
@@ -1923,7 +1924,11 @@ export type AiInsights = {
   by_model: AiUsageRow[];
   daily: { date: string; cost_usd: number }[];
   active_provider: string | null;
-  providers: Record<string, { has_key: boolean; model: string; active: boolean }>;
+  providers: Record<string, {
+    has_key: boolean; model: string; active: boolean;
+    balance_usd: number | null; balance_inr: number | null;
+    spent_all_time_usd: number; remaining_usd: number | null; remaining_inr: number | null;
+  }>;
   source: string;
   note: string;
 };

@@ -135,6 +135,7 @@ function AiProviderCard() {
   const [isActive, setIsActive] = useState(false);
   const [keys, setKeys] = useState<Record<ProviderKey, string>>({ gemini: "", anthropic: "", openai: "" });
   const [models, setModels] = useState<Record<ProviderKey, string>>({ gemini: "", anthropic: "", openai: "" });
+  const [balances, setBalances] = useState<Record<ProviderKey, string>>({ gemini: "", anthropic: "", openai: "" });
   const [imageModel, setImageModel] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -152,6 +153,11 @@ function AiProviderCard() {
       setModels({
         gemini: ai.providers.gemini.model, anthropic: ai.providers.anthropic.model, openai: ai.providers.openai.model,
       });
+      setBalances({
+        gemini: ai.providers.gemini.balance != null ? String(ai.providers.gemini.balance) : "",
+        anthropic: ai.providers.anthropic.balance != null ? String(ai.providers.anthropic.balance) : "",
+        openai: ai.providers.openai.balance != null ? String(ai.providers.openai.balance) : "",
+      });
       setImageModel(ai.gemini_image_model ?? "");
     } catch { /* non-super admins never render this */ }
     finally { setLoading(false); }
@@ -166,6 +172,7 @@ function AiProviderCard() {
       (["gemini", "anthropic", "openai"] as ProviderKey[]).forEach((p) => {
         body[`${p}_model`] = models[p];
         if (keys[p].trim()) body[`${p}_api_key`] = keys[p].trim();
+        body[`${p}_balance`] = balances[p].trim() === "" ? null : Number(balances[p]);
       });
       if (imageModel.trim()) body.gemini_image_model = imageModel.trim();
       const { ai } = await api.admin.updateAiSettings(token, body);
@@ -237,6 +244,14 @@ function AiProviderCard() {
         <input value={models[active]} onChange={(e) => setModels((m) => ({ ...m, [active]: e.target.value }))}
           placeholder={info.model_default} />
         <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>Default: {info.model_default}</div>
+      </div>
+      <div className="field">
+        <label>Current balance <span className="muted" style={{ fontWeight: 400 }}>(USD — what you&apos;ve loaded on this provider)</span></label>
+        <input type="number" min={0} step="0.01" value={balances[active]} onChange={(e) => setBalances((b) => ({ ...b, [active]: e.target.value }))}
+          placeholder="e.g. 50" />
+        <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>
+          Providers don&apos;t expose a live balance API, so enter it here. AI Insights then shows <strong>balance − tracked spend = remaining</strong>.
+        </div>
       </div>
       {active === "gemini" && (
         <div className="field">

@@ -807,6 +807,51 @@ a:hover { text-decoration: underline; }
 .menu-toggle { display: none; }
 .sidebar-overlay { display: none; }
 
+/* ---- Pricing / plan cards ---- */
+.plan-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+  padding: 26px 22px 22px;
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.plan-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 18px 44px rgba(20, 25, 60, .13);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.plan-card-top {
+  position: absolute; top: 0; left: 0; right: 0; height: 5px;
+  background: var(--brand-grad);
+}
+.plan-card-current {
+  border: 2px solid var(--accent);
+  box-shadow: 0 12px 34px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.plan-card-popular {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--card), var(--card)) padding-box,
+    var(--brand-grad) border-box;
+}
+.plan-ribbon {
+  position: absolute; top: 14px; right: -34px;
+  transform: rotate(45deg);
+  background: var(--brand-grad); color: #fff;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .4px;
+  padding: 4px 40px; box-shadow: 0 4px 12px rgba(80, 60, 220, .3);
+}
+.plan-feat { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); padding: 3px 0; }
+.plan-feat .tick {
+  width: 18px; height: 18px; flex-shrink: 0; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent); display: grid; place-items: center; font-size: 11px; font-weight: 800;
+}
+
 /* ---- Mobile responsive ---- */
 @media (max-width: 768px) {
   /* Hamburger button */

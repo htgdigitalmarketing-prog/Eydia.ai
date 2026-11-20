@@ -35,9 +35,26 @@ class AiSettingsController extends Controller
             'gemini_api_key' => ['sometimes', 'nullable', 'string', 'max:500'],
             'anthropic_api_key' => ['sometimes', 'nullable', 'string', 'max:500'],
             'openai_api_key' => ['sometimes', 'nullable', 'string', 'max:500'],
+            // Current balance (USD) the admin has loaded on each provider. Providers
+            // expose no reliable public balance API, so this is admin-maintained and
+            // the dashboard shows "balance − tracked spend = remaining".
+            'gemini_balance' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'anthropic_balance' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'openai_balance' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ]);
 
         $settings = AiSetting::current();
+
+        // Per-provider loaded balance → meta['balances'].
+        $balances = ($settings->meta['balances'] ?? []);
+        foreach (['gemini', 'anthropic', 'openai'] as $p) {
+            if (array_key_exists($p . '_balance', $data)) {
+                $balances[$p] = $data[$p . '_balance'] === null ? null : (float) $data[$p . '_balance'];
+            }
+        }
+        $meta0 = $settings->meta ?? [];
+        $meta0['balances'] = $balances;
+        $settings->meta = $meta0;
 
         foreach (['is_active', 'active_provider', 'gemini_model', 'anthropic_model', 'openai_model'] as $field) {
             if (array_key_exists($field, $data)) {
@@ -97,6 +114,7 @@ class AiSettingsController extends Controller
                 'key_last4' => $effective ? substr($effective, -4) : null,
                 'model' => $s->modelFor($p),
                 'model_default' => AiSetting::DEFAULT_MODELS[$p] ?? '',
+                'balance' => $s->meta['balances'][$p] ?? null,
             ];
         }
 
