@@ -1094,7 +1094,8 @@ export type AiMediaItem = {
 };
 
 export type GbpOverview = {
-  locations: (GbpLocationItem & { total_reviews?: number; avg_rating?: number })[];
+  max_locations?: number | null;
+  locations: (GbpLocationItem & { total_reviews?: number; avg_rating?: number; locked?: boolean })[];
   hidden_locations?: { id: string; name: string; review_count: number }[];
   stats: {
     locations: number;

@@ -34,7 +34,24 @@ class GbpController extends Controller
         private readonly AiReplyService $ai,
         private readonly CreditService $credits,
         private readonly SentimentService $sentiment,
+        private readonly \App\Modules\Billing\Services\PlanLimitService $planLimits,
     ) {}
+
+    /**
+     * How many Google locations/profiles this tenant may manage. A tenant with NO
+     * plan gets ONE free; a plan uses its max_locations limit (null = unlimited).
+     */
+    private function allowedLocations(?int $tenantId): ?int
+    {
+        if (! $tenantId) {
+            return 1;
+        }
+        if ($this->planLimits->planFor($tenantId) === null) {
+            return 1; // free / no plan → one profile; buy a plan for more
+        }
+
+        return $this->planLimits->limit($tenantId, 'max_locations'); // null = unlimited
+    }
 
     /** 402 when the tenant cannot afford an AI action; null when it can. */
     private function guardCredits(Request $request, string $action): ?JsonResponse
@@ -126,10 +143,18 @@ class GbpController extends Controller
             ->with('location:id,uuid,name')
             ->orderByDesc('reviewed_at')->limit(5)->get();
 
+        // Free/limited plans may only manage N locations; the rest are shown but
+        // locked behind a plan purchase ("ek se adhik profile → buy ke liye bole").
+        $maxLocations = $this->allowedLocations($tenantId);
+        $locationsUnlimited = $maxLocations === null;
+
         return $this->ok([
-            'locations' => $locations->map(fn (GbpLocation $l) => $this->locationArray($l) + [
+            'max_locations' => $maxLocations,            // null = unlimited
+            'locations' => $locations->values()->map(fn (GbpLocation $l, int $i) => $this->locationArray($l) + [
                 'total_reviews' => (int) ($l->reviews_count ?? 0),
                 'avg_rating' => round((float) ($l->reviews_avg_rating ?? 0), 1),
+                // Beyond the allowed count → locked until a plan is bought.
+                'locked' => ! $locationsUnlimited && $i >= $maxLocations,
             ])->all(),
             'hidden_locations' => $hidden->map(fn (GbpLocation $l) => [
                 'id' => $l->uuid, 'name' => $l->name, 'review_count' => (int) $l->review_count,

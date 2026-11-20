@@ -28,15 +28,10 @@ function Countdown({ endsAt }: { endsAt: string }) {
   );
 }
 
-const LIMIT_LABELS: Record<string, string> = {
-  max_agents: "Agents", max_contacts: "Contacts", max_campaigns: "Campaigns",
-  max_chatbots: "Chatbots", max_templates: "Templates",
-};
 const FEATURE_LABELS: Record<string, string> = {
   reports: "Reports", advanced_reports: "Advanced reports", export: "Export",
   social: "Social publishing", chatbot: "Chatbot", automations: "Automations", api_access: "API access",
 };
-const showLimit = (v: number | undefined) => (v === undefined || v < 0 ? "Unlimited" : v.toLocaleString("en-IN"));
 
 export default function BillingPage() {
   const user = useUser();
@@ -319,18 +314,10 @@ export default function BillingPage() {
                       </div>
                       {p.description && <p className="muted" style={{ fontSize: 13, margin: "8px 0" }}>{p.description}</p>}
 
-                      {/* Numeric limits */}
-                      <div style={{ display: "grid", gap: 4, fontSize: 13, color: "#54656f", margin: "12px 0 10px", paddingTop: 10, borderTop: "1px solid var(--border)" }}>
-                        {Object.keys(LIMIT_LABELS).map((k) => (
-                          <div key={k} style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span>{LIMIT_LABELS[k]}</span>
-                            <strong>{showLimit(p.limits?.[k])}</strong>
-                          </div>
-                        ))}
-                      </div>
+                      {/* Numeric limits intentionally hidden on the plan cards. */}
 
                       {/* Enabled features */}
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12, marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
                         {Object.keys(FEATURE_LABELS).filter((k) => p.features?.[k]).map((k) => (
                           <span key={k} style={{ background: "#eafaf7", color: "#0a7d47", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600 }}>
                             ✓ {FEATURE_LABELS[k]}

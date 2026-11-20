@@ -18,7 +18,8 @@ const GOOGLE_ERRORS: Record<string, string> = {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"password" | "otp">("password");
+  // Mobile OTP is the primary sign-in method; Email & Password is secondary.
+  const [mode, setMode] = useState<"password" | "otp">("otp");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -113,16 +114,8 @@ export default function LoginPage() {
 
         <div className="auth-divider"><span>or</span></div>
 
-        {/* Password / Mobile OTP — two buttons in one row, styled like "Continue with Google" */}
+        {/* Mobile OTP (primary) / Email & Password (secondary) — styled like "Continue with Google" */}
         <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-          <button
-            type="button"
-            className="google-btn"
-            onClick={() => { setMode("password"); setError(null); setNotice(null); }}
-            style={{ flex: 1, minWidth: 0, padding: "10px 8px", fontSize: 13, gap: 6, ...(mode === "password" ? { borderColor: "var(--accent)", boxShadow: "0 0 0 1px var(--accent) inset", color: "var(--accent)" } : {}) }}
-          >
-            <span style={{ fontSize: 15 }}>📧</span> Email &amp; Password
-          </button>
           <button
             type="button"
             className="google-btn"
@@ -130,6 +123,14 @@ export default function LoginPage() {
             style={{ flex: 1, minWidth: 0, padding: "10px 8px", fontSize: 13, gap: 6, ...(mode === "otp" ? { borderColor: "var(--accent)", boxShadow: "0 0 0 1px var(--accent) inset", color: "var(--accent)" } : {}) }}
           >
             <span style={{ fontSize: 15 }}>📱</span> Mobile OTP
+          </button>
+          <button
+            type="button"
+            className="google-btn"
+            onClick={() => { setMode("password"); setError(null); setNotice(null); }}
+            style={{ flex: 1, minWidth: 0, padding: "10px 8px", fontSize: 13, gap: 6, ...(mode === "password" ? { borderColor: "var(--accent)", boxShadow: "0 0 0 1px var(--accent) inset", color: "var(--accent)" } : {}) }}
+          >
+            <span style={{ fontSize: 15 }}>📧</span> Email &amp; Password
           </button>
         </div>
 

@@ -449,21 +449,31 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 12 }}>
             {locs.map((l) => (
-              <div key={l.id} className="gbp-acct">
+              <div key={l.id} className="gbp-acct" style={{ position: "relative", opacity: l.locked ? 0.96 : 1 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ width: 38, height: 38, borderRadius: 11, background: "#eef1ff", color: "var(--accent)", display: "grid", placeItems: "center", fontWeight: 700 }}>{(l.name ?? "?").slice(0, 1).toUpperCase()}</div>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: l.is_verified ? "#e7f7ef" : "var(--bg)", color: l.is_verified ? "#0a7d47" : "var(--muted)" }}>{l.is_verified ? "Live" : "Synced"}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: l.locked ? "#fff4e5" : l.is_verified ? "#e7f7ef" : "var(--bg)", color: l.locked ? "#b7791f" : l.is_verified ? "#0a7d47" : "var(--muted)" }}>{l.locked ? "🔒 Locked" : l.is_verified ? "Live" : "Synced"}</span>
                 </div>
                 <div style={{ fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</div>
                 <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.address ?? "—"}</div>
-                <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", alignItems: "center" }}>
-                  <div><b style={{ fontSize: 16 }}>{(l.avg_rating ?? l.rating ?? 0).toFixed(1)}</b><div className="muted" style={{ fontSize: 11 }}>★ Rating</div></div>
-                  <div><b style={{ fontSize: 16 }}>{l.total_reviews ?? l.review_count ?? 0}</b><div className="muted" style={{ fontSize: 11 }}>Reviews</div></div>
-                  <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                    <button className="btn-mini" title="Show only this location, hide all others" onClick={() => keepOnly(l.id, l.name ?? "this")}>Only this</button>
-                    <button className="btn-mini" title="Hide this location from your dashboard" onClick={() => setHidden(l.id, true)}>Hide</button>
+                {l.locked ? (
+                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                    <p className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>Your plan includes one Google profile. Buy a plan to manage this additional location.</p>
+                    <button className="btn" style={{ width: "100%", padding: "8px 10px", fontSize: 13 }}
+                      onClick={() => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: "plan_required", message: "Buy a plan to manage more than one Google profile." } })); }}>
+                      🔒 Buy a plan to unlock
+                    </button>
                   </div>
-                </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", alignItems: "center" }}>
+                    <div><b style={{ fontSize: 16 }}>{(l.avg_rating ?? l.rating ?? 0).toFixed(1)}</b><div className="muted" style={{ fontSize: 11 }}>★ Rating</div></div>
+                    <div><b style={{ fontSize: 16 }}>{l.total_reviews ?? l.review_count ?? 0}</b><div className="muted" style={{ fontSize: 11 }}>Reviews</div></div>
+                    <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                      <button className="btn-mini" title="Show only this location, hide all others" onClick={() => keepOnly(l.id, l.name ?? "this")}>Only this</button>
+                      <button className="btn-mini" title="Hide this location from your dashboard" onClick={() => setHidden(l.id, true)}>Hide</button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -15,6 +15,9 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     // Key-guarded post-deploy hook (no SSH needed): clears caches + migrates.
     Route::match(['get', 'post'], '/system/deploy', [\App\Modules\System\Controllers\SystemController::class, 'deploy']);
 
+    // Key-guarded self-diagnostics: shows why login / the app returns a 500.
+    Route::get('/system/diagnostics', [\App\Modules\System\Controllers\SystemController::class, 'diagnostics']);
+
     // Public media endpoint (UUID is unguessable, safe without auth)
     Route::get('/whatsapp/media/{uuid}', [\App\Modules\WhatsApp\Controllers\InboxController::class, 'media'])
         ->middleware('throttle:60,1');

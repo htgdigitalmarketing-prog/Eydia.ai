@@ -94,6 +94,86 @@ class SystemController extends Controller
     }
 
     /**
+     * Key-guarded self-diagnostics: the usual reasons login / the app return a
+     * 500 "Server error." on shared hosting. Visit
+     * /api/v1/system/diagnostics?key=DEPLOY_KEY to see what's wrong without SSH.
+     */
+    public function diagnostics(Request $request): JsonResponse
+    {
+        $expected = $this->deployKey();
+        if (! $expected) {
+            return $this->fail('Diagnostics disabled. Set DEPLOY_KEY in .env to enable it.', [], 403);
+        }
+        $key = $request->header('X-Deploy-Key') ?: (string) $request->query('key');
+        if (! hash_equals($expected, $key)) {
+            return $this->fail('Invalid deploy key.', [], 403);
+        }
+
+        $checks = [];
+
+        // APP_KEY — without it sessions/encryption fail.
+        $checks['app_key_set'] = (bool) config('app.key');
+
+        // JWT secret — a blank one makes every login 500 (token can't be signed).
+        $jwtSecret = config('jwt.secret');
+        $checks['jwt_secret_set'] = ! empty($jwtSecret);
+
+        // Database connectivity.
+        try {
+            \Illuminate\Support\Facades\DB::connection()->getPdo();
+            $checks['database'] = 'connected';
+        } catch (\Throwable $e) {
+            $checks['database'] = 'ERROR: ' . $e->getMessage();
+        }
+
+        // Pending migrations (new tables/columns not yet applied → 500s elsewhere).
+        try {
+            $migrator = app('migrator');
+            $ran = $migrator->getRepository()->repositoryExists() ? $migrator->getRepository()->getRan() : [];
+            $files = array_keys($migrator->getMigrationFiles(database_path('migrations')));
+            $pending = array_values(array_diff($files, $ran));
+            $checks['pending_migrations'] = count($pending);
+            $checks['pending_migration_names'] = array_slice($pending, 0, 10);
+        } catch (\Throwable $e) {
+            $checks['pending_migrations'] = 'ERROR: ' . $e->getMessage();
+        }
+
+        // Can a token actually be signed? (the exact login failure point)
+        try {
+            \Illuminate\Support\Facades\Auth::guard('api');
+            $probe = new \App\Models\User(['email' => 'diagnostic@local']);
+            $probe->id = 0;
+            \PHPOpenSourceSaver\JWTAuth\Facades\JWTAuth::fromUser($probe);
+            $checks['jwt_can_sign'] = true;
+        } catch (\Throwable $e) {
+            $checks['jwt_can_sign'] = 'ERROR: ' . $e->getMessage();
+        }
+
+        // Storage writable (logs/sessions/cache).
+        try {
+            $probe = storage_path('framework/__diag_' . uniqid());
+            @file_put_contents($probe, 'ok');
+            $checks['storage_writable'] = is_file($probe);
+            @unlink($probe);
+        } catch (\Throwable $e) {
+            $checks['storage_writable'] = 'ERROR: ' . $e->getMessage();
+        }
+
+        $checks['queue_connection'] = (string) config('queue.default');
+        $checks['config_cached'] = app()->configurationIsCached();
+        $checks['app_debug'] = (bool) config('app.debug');
+
+        $ok = ($checks['app_key_set'] === true)
+            && ($checks['jwt_secret_set'] === true)
+            && ($checks['database'] === 'connected')
+            && ($checks['jwt_can_sign'] === true)
+            && ($checks['storage_writable'] === true)
+            && ($checks['pending_migrations'] === 0);
+
+        return $this->ok(['healthy' => $ok, 'checks' => $checks]);
+    }
+
+    /**
      * Read DEPLOY_KEY. Falls back to parsing raw .env when config is cached
      * (env() returns null then) — which is exactly the situation this hook fixes.
      */
