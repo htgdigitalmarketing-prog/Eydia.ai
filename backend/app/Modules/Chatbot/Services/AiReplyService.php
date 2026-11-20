@@ -267,6 +267,7 @@ class AiReplyService
             return ['ok' => false, 'message' => "No API key set for {$provider}."];
         }
 
+        $this->lastError = null;
         try {
             $text = $this->dispatchText(
                 $provider,
@@ -277,9 +278,11 @@ class AiReplyService
             return ['ok' => false, 'message' => $e->getMessage()];
         }
 
+        // Surface the provider's actual error (bad key, no credits, wrong model…)
+        // instead of a generic "no response", so the admin knows what to fix.
         return $text
             ? ['ok' => true, 'sample' => $text, 'model' => $this->modelFor($provider)]
-            : ['ok' => false, 'message' => 'No response — check the API key and model name.'];
+            : ['ok' => false, 'message' => $this->getLastError() ?: 'No response — check the API key and model name.'];
     }
 
     /** Is image generation available (Gemini or OpenAI key present)? */
