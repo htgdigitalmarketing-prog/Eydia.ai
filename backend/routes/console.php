@@ -30,3 +30,13 @@ Schedule::command('chatbot:lead-flow-run')->everyFiveMinutes()->withoutOverlappi
 
 // Run enabled GBP automations: AI review replies + keep the post queue topped up.
 Schedule::command('gbp:run-automations')->hourly()->withoutOverlapping(30);
+
+// Drain the (database) queue from the existing per-minute cron — no separate
+// hosting cron or long-running worker needed. Jobs like the WhatsApp webhook
+// processor run HERE instead of inside the web request, so a burst of inbound
+// messages no longer piles up PHP processes and trips the host's process cap
+// (the cause of the intermittent 503s). --stop-when-empty exits as soon as the
+// queue is clear; --max-time keeps it under a minute so runs never overlap.
+Schedule::command('queue:work --stop-when-empty --max-time=50 --max-jobs=200 --tries=3 --sleep=1')
+    ->everyMinute()
+    ->withoutOverlapping();
