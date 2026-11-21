@@ -162,14 +162,16 @@ function Dashboard() {
         <h3 style={{ marginTop: 0 }}>Content strategy</h3>
         <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
           <div className="field" style={{ flex: 1, minWidth: 180 }}>
-            <label>Post every (days)</label>
-            <input type="number" min={1} max={30} defaultValue={a.post_frequency_days}
-              onBlur={(e) => { const v = Number(e.target.value) || a.post_frequency_days; if (v !== a.post_frequency_days) patch({ post_frequency_days: v }, "freq"); }} />
+            <label>Posts per week <span className="muted" style={{ fontWeight: 400 }}>(AI content plan)</span></label>
+            <input type="number" min={1} max={14} defaultValue={a.posts_per_week ?? 2}
+              onBlur={(e) => { const cur = a.posts_per_week ?? 2; const v = Number(e.target.value) || cur; if (v !== cur) patch({ posts_per_week: v }, "ppw"); }} />
+            <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>Default 2 — the plan won&apos;t schedule more than this many posts in a week.</div>
           </div>
           <div className="field" style={{ flex: 1, minWidth: 180 }}>
             <label>Keep scheduled posts</label>
             <input type="number" min={1} max={12} defaultValue={a.post_queue_target}
               onBlur={(e) => { const v = Number(e.target.value) || a.post_queue_target; if (v !== a.post_queue_target) patch({ post_queue_target: v }, "target"); }} />
+            <div className="muted" style={{ fontSize: 11.5, marginTop: 4 }}>How many upcoming posts to keep queued.</div>
           </div>
         </div>
         <div className="field">

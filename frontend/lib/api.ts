@@ -1767,6 +1767,7 @@ export type GbpAutomationSettings = {
   reply_tone: string;
   post_frequency_days: number;
   post_queue_target: number;
+  posts_per_week: number;
   last_run_at: string | null;
 };
 export type GbpBrand = {

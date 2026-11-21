@@ -943,6 +943,7 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
   const [showPhoto, setShowPhoto] = useState(false);
   const [seed, setSeed] = useState<{ type?: string; summary?: string; image_url?: string } | null>(null);
   const [planning, setPlanning] = useState(false);
+  const [planCount, setPlanCount] = useState(2); // how many posts the AI content plan generates (custom)
 
   const loadPosts = useCallback(() => { const t = getToken(); if (t) api.gbp.posts(t).then((r) => { setPosts(r.posts); setCounts(r.counts); }).catch(() => {}); }, []);
   const loadPhotos = useCallback(() => { const t = getToken(); if (t) api.gbp.photos(t).then((r) => setPhotos(r.photos)).catch(() => {}); }, []);
@@ -954,13 +955,15 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
   async function removePhoto(id: string) { const t = getToken(); if (!t || !(await confirmDialog({ message: "Delete this photo?", danger: true }))) return; try { await api.gbp.deletePhoto(t, id); loadPhotos(); } catch (e) { toastError(e as ApiError); } }
   async function autoPlan() {
     const t = getToken(); if (!t) return;
-    if (!(await confirmDialog({ title: "Generate AI posts?", message: "Let AI generate 4 posts WITH an AI image each, and schedule them (one every 3 days)? Uses AI credits (images cost extra). To make text-only posts instead, use \"+ Add Post\".", confirmText: "Generate" }))) return;
+    const n = Math.max(1, Math.min(14, planCount || 2));
+    if (!(await confirmDialog({ title: "Generate AI posts?", message: `Let AI generate ${n} post${n > 1 ? "s" : ""} WITH an AI image each, and schedule them (spread across the week)? Uses AI credits (images cost extra). To make text-only posts instead, use "+ Add Post".`, confirmText: "Generate" }))) return;
     setPlanning(true);
     try {
       // Images on by default — that's what most users expect. Image generation
       // needs a Gemini/OpenAI image model (Settings → AI Provider); the response
-      // says if any image could not be made and why.
-      const r = await api.gbp.autoPlanPosts(t, { count: 4, cadence_days: 3, with_images: true });
+      // says if any image could not be made and why. Cadence spreads n posts
+      // across the week so it never exceeds the chosen count per week.
+      const r = await api.gbp.autoPlanPosts(t, { count: n, cadence_days: Math.max(1, Math.ceil(7 / n)), with_images: true });
       setSub("posts"); setFilter("SCHEDULED"); loadPosts();
       toast(r.message || `${r.created} posts scheduled.`, "success");
     } catch (e) { toastError(e as ApiError); }
@@ -988,8 +991,14 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
           <h2 style={{ fontSize: 18, margin: 0 }}>Posts &amp; Photos</h2>
           <p className="muted" style={{ fontSize: 13, margin: "2px 0 0" }}>Manage your Google Business Profile posts, photos and media.</p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button className="btn-mini" onClick={autoPlan} disabled={planning} title="AI generates several posts from your profile and schedules them">{planning ? "✨ Planning…" : "✨ AI content plan"}</button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 4, border: "1px solid var(--border)", borderRadius: 10, padding: "3px 6px 3px 10px", fontSize: 12.5 }}>
+            <span className="muted">Posts</span>
+            <input type="number" min={1} max={14} value={planCount}
+              onChange={(e) => setPlanCount(Math.max(1, Math.min(14, Number(e.target.value) || 1)))}
+              style={{ width: 44, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 13 }} title="How many posts to generate" />
+          </div>
+          <button className="btn-mini" onClick={autoPlan} disabled={planning} title="AI generates this many posts from your profile and schedules them across the week">{planning ? "✨ Planning…" : "✨ AI content plan"}</button>
           <button className="btn-mini" onClick={() => setShowPhoto(true)}>📷 Upload Photo</button>
           <button className="btn" style={{ width: "auto", padding: "10px 18px" }} onClick={() => { setSeed(null); setShowPost(true); }}>+ Add Post</button>
         </div>

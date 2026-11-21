@@ -34,6 +34,9 @@ class GbpAutomationController extends Controller
             'reply_tone' => ['sometimes', 'string', 'max:120'],
             'post_frequency_days' => ['sometimes', 'integer', 'min:1', 'max:30'],
             'post_queue_target' => ['sometimes', 'integer', 'min:1', 'max:12'],
+            // How many AI posts the content plan generates & schedules per week
+            // (default 2). Drives the posting cadence so the weekly rate is capped.
+            'posts_per_week' => ['sometimes', 'integer', 'min:1', 'max:14'],
             // Brand kit for branded post images.
             'brand' => ['sometimes', 'array'],
             'brand.logo_url' => ['sometimes', 'nullable', 'string', 'max:500'],
@@ -52,6 +55,16 @@ class GbpAutomationController extends Controller
             $meta['brand'] = array_filter(array_merge((array) ($meta['brand'] ?? []), $data['brand']), fn ($v) => $v !== null);
             $automation->meta = $meta;
             unset($data['brand']);
+        }
+        // Posts-per-week → store it + derive the cadence so the runner never
+        // schedules more than this many posts in a week.
+        if (array_key_exists('posts_per_week', $data)) {
+            $ppw = max(1, min(14, (int) $data['posts_per_week']));
+            $meta = $automation->meta ?? [];
+            $meta['posts_per_week'] = $ppw;
+            $automation->meta = $meta;
+            $automation->post_frequency_days = max(1, min(30, (int) ceil(7 / $ppw)));
+            unset($data['posts_per_week']);
         }
         $automation->fill($data)->save();
         $location = $this->primaryLocation($automation);
@@ -131,6 +144,9 @@ class GbpAutomationController extends Controller
                 'reply_tone' => $automation->reply_tone,
                 'post_frequency_days' => $automation->post_frequency_days,
                 'post_queue_target' => $automation->post_queue_target,
+                // Posts per week (default 2) — derived from cadence when not set.
+                'posts_per_week' => (int) ($automation->meta['posts_per_week']
+                    ?? max(1, (int) round(7 / max(1, $automation->post_frequency_days)))),
                 'last_run_at' => $automation->last_run_at?->toIso8601String(),
             ],
             'business' => $location?->name,
