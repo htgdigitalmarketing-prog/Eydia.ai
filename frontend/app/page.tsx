@@ -3,6 +3,23 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getToken } from "@/lib/auth";
+import { api, PublicPlan } from "@/lib/api";
+
+// Feature keys → friendly labels for the pricing cards.
+const LP_FEATURE_LABELS: Record<string, string> = {
+  dash_whatsapp: "WhatsApp inbox, broadcasts & templates",
+  dash_gbp: "Google Reviews / GBP management",
+  dash_leads: "Leads CRM & automations",
+  chatbot: "AI chatbot auto-replies",
+  automations: "Workflow automations",
+  social: "Social posting",
+  seo: "SEO tools",
+  ads: "Ads reporting",
+  invoicing: "Invoicing",
+  advanced_reports: "Advanced reports",
+  export: "Export",
+  api_access: "API access",
+};
 
 // Eydia.ai marketing homepage — ReviewFlow-style layout, Eydia branding/logo and
 // content across the three pillars: Google Reviews / GBP, WhatsApp and Leads.
@@ -127,9 +144,26 @@ const PLANS = [
 
 export default function Landing() {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [livePlans, setLivePlans] = useState<PublicPlan[] | null>(null);
   useEffect(() => { setLoggedIn(!!getToken()); }, []);
+  useEffect(() => { api.publicPlans().then((r) => setLivePlans(r.plans)).catch(() => setLivePlans(null)); }, []);
   const year = new Date().getFullYear();
   const cta = loggedIn ? "/dashboard" : "/register";
+
+  const inr0 = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
+  // Real plans (from the backend) → pricing cards. Falls back to the static set
+  // only until the fetch returns, so the prices always match the admin's plans.
+  const pricingCards = (livePlans && livePlans.length > 0)
+    ? livePlans.map((p, i) => ({
+        name: p.name,
+        price: p.price > 0 ? inr0(p.price) : "Free",
+        per: p.price > 0 ? "/mo" : "forever",
+        credits: `${Number(p.limits?.ai_credits ?? 0).toLocaleString("en-IN")} AI credits / month`,
+        popular: livePlans.length >= 3 ? i === Math.floor(livePlans.length / 2) : i === 0,
+        cta: p.price > 0 ? "Start Free Trial" : "Get Started",
+        feats: Object.keys(LP_FEATURE_LABELS).filter((k) => p.features?.[k]).slice(0, 5).map((k) => LP_FEATURE_LABELS[k]),
+      }))
+    : PLANS;
 
   return (
     <div className="lph">
@@ -286,7 +320,7 @@ export default function Landing() {
           <h2 className="lph-h2">Simple, transparent plans</h2>
           <p className="lph-sub">Start free, upgrade when you grow. Every plan includes monthly AI credits.</p>
           <div className="lph-plans">
-            {PLANS.map((p) => (
+            {pricingCards.map((p) => (
               <div key={p.name} className={`lph-plan ${p.popular ? "pop" : ""}`}>
                 {p.popular && <span className="lph-plan-tag">Most Popular</span>}
                 <div className="lph-plan-name">{p.name}</div>

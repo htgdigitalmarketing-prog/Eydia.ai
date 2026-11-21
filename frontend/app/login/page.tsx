@@ -176,6 +176,9 @@ export default function LoginPage() {
           </form>
         ) : (
           <form onSubmit={verifyOtp}>
+            <div style={{ textAlign: "center", fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>
+              Code sent on WhatsApp to <strong style={{ color: "var(--text)" }}>+91 {phone}</strong>
+            </div>
             <div className="field">
               <label>Enter the 6-digit code</label>
               <input inputMode="numeric" maxLength={6} value={otp}

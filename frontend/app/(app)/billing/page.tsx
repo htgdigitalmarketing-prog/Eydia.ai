@@ -241,6 +241,8 @@ export default function BillingPage() {
           list: 0, price: 0, per_month: 0, discount_percent: Math.round(CYCLES[k].discount * 100),
         }))
   ).filter((ci) => (SUPPORTED_CYCLES as readonly string[]).includes(ci.key));
+  // The best-value cycle (highest discount) gets the "Recommended" badge.
+  const bestCycleKey = cyclesInfo.length ? cyclesInfo.reduce((a, b) => (b.discount_percent > a.discount_percent ? b : a)).key : "";
 
   // A plan counts as "current" ONLY while the subscription is actually live.
   // A cancelled/expired subscription still references its old plan, so without
@@ -308,27 +310,42 @@ export default function BillingPage() {
                 <form onSubmit={confirmPurchase}>
                   {error && <div className="error">{error}</div>}
 
-                  {/* Billing cycle */}
+                  {/* Billing cycle — radio list with per-month + % OFF + Recommended */}
                   <div className="field">
-                    <label style={{ fontWeight: 700 }}>Billing cycle</label>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(108px, 1fr))", gap: 9, marginTop: 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+                      <label style={{ fontWeight: 800, fontSize: 15, margin: 0 }}>🔓 Choose your plan</label>
+                      {coupon && bq?.coupon && (
+                        <span style={{ background: "#fff4e5", color: "#b7791f", border: "1px solid #f3d9a8", fontSize: 10.5, fontWeight: 800, padding: "3px 9px", borderRadius: 999 }}>✓ BEST COUPON APPLIED</span>
+                      )}
+                    </div>
+                    <div style={{ display: "grid", gap: 10 }}>
                       {cyclesInfo.map((ci) => {
                         const on = cycle === ci.key;
+                        const recommended = ci.key === bestCycleKey && ci.discount_percent > 0;
                         return (
                           <button type="button" key={ci.key} onClick={() => setCycle(ci.key as "monthly" | "quarterly" | "half_yearly" | "yearly")}
                             style={{
-                              position: "relative", cursor: "pointer", padding: "14px 8px 11px", borderRadius: 14, textAlign: "center",
+                              position: "relative", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: 12,
+                              padding: "14px 16px", borderRadius: 14, width: "100%",
                               border: `2px solid ${on ? "var(--accent)" : "var(--border)"}`,
-                              background: on ? "color-mix(in srgb, var(--accent) 9%, var(--card, #fff))" : "var(--card, #fff)",
-                              boxShadow: on ? "0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent)" : "none", transition: "all .12s",
+                              background: on ? "color-mix(in srgb, var(--accent) 7%, var(--card, #fff))" : "var(--card, #fff)",
+                              boxShadow: on ? "0 6px 18px color-mix(in srgb, var(--accent) 16%, transparent)" : "none", transition: "all .12s",
                             }}>
-                            {ci.discount_percent > 0 && (
-                              <span style={{ position: "absolute", top: -9, left: "50%", transform: "translateX(-50%)", background: "#0a7d47", color: "#fff", fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 999, whiteSpace: "nowrap" }}>
-                                SAVE {ci.discount_percent}%
-                              </span>
-                            )}
-                            <div style={{ fontSize: 14, fontWeight: 800, color: on ? "var(--accent-dark, var(--accent))" : "var(--text)" }}>{ci.label}</div>
-                            {ci.price > 0 && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3 }}>{inr(ci.price)}</div>}
+                            <span style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${on ? "var(--accent)" : "var(--border)"}`, display: "grid", placeItems: "center", flexShrink: 0 }}>
+                              {on && <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--accent)" }} />}
+                            </span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, fontSize: 14 }}>{billTarget.name} · {ci.label}</div>
+                              {ci.per_month > 0 && <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>{inr(ci.per_month)} / month</div>}
+                            </div>
+                            <div style={{ textAlign: "right", flexShrink: 0 }}>
+                              <div>
+                                {ci.list > ci.price && <span style={{ textDecoration: "line-through", color: "#aab2c3", fontSize: 12.5, marginRight: 6 }}>{inr(ci.list)}</span>}
+                                <span style={{ fontWeight: 800, fontSize: 16 }}>{inr(ci.price || billTarget.price * ci.months)}</span>
+                              </div>
+                              {ci.discount_percent > 0 && <span style={{ display: "inline-block", marginTop: 5, background: "#f97316", color: "#fff", fontSize: 10.5, fontWeight: 800, padding: "2px 8px", borderRadius: 6 }}>{ci.discount_percent}% OFF</span>}
+                            </div>
+                            {recommended && <span style={{ position: "absolute", top: -10, right: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", fontSize: 10, fontWeight: 800, padding: "3px 11px", borderRadius: 999 }}>Recommended</span>}
                           </button>
                         );
                       })}

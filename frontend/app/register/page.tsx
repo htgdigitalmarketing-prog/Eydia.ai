@@ -82,6 +82,9 @@ export default function RegisterPage() {
           </form>
         ) : (
           <form onSubmit={verify}>
+            <div style={{ textAlign: "center", fontSize: 13, color: "var(--muted)", marginBottom: 12 }}>
+              Code sent on WhatsApp to <strong style={{ color: "var(--text)" }}>{phone}</strong>
+            </div>
             <div className="field">
               <label>Enter the 6-digit code</label>
               <input
