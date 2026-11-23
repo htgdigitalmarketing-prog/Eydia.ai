@@ -17,9 +17,6 @@ Route::prefix('auth')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
         Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
         Route::post('/reset-password', [AuthController::class, 'resetPassword']);
-        // Mobile-OTP login (alternative to email + password).
-        Route::post('/otp/request', [AuthController::class, 'requestOtp']);
-        Route::post('/otp/verify', [AuthController::class, 'verifyOtp']);
         // Native Google sign-in (Android SDK sends an ID token). Public like login.
         Route::post('/google', [GoogleAuthController::class, 'native']);
         // Refresh is public so an EXPIRED token (still inside the refresh window)
@@ -27,6 +24,13 @@ Route::prefix('auth')->group(function () {
         Route::post('/refresh', [AuthController::class, 'refresh']);
         // One-time web login hand-off public landing (for in-app payments).
         Route::get('/mobile-login/{code}', [\App\Modules\Auth\Controllers\MobileAuthController::class, 'mobileLogin']);
+    });
+
+    // Mobile-OTP login — throttled PER PHONE NUMBER (not just per IP) so a shared
+    // Wi-Fi doesn't block multiple people; the OtpService adds a resend cooldown.
+    Route::middleware('throttle:otp')->group(function () {
+        Route::post('/otp/request', [AuthController::class, 'requestOtp']);
+        Route::post('/otp/verify', [AuthController::class, 'verifyOtp']);
     });
 
     // Google OAuth (browser redirect flow — public, no auth:api).

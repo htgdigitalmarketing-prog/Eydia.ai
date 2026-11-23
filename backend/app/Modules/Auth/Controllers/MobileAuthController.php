@@ -5,6 +5,7 @@ namespace App\Modules\Auth\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\Tenant;
 use App\Models\User;
+use App\Modules\Auth\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -70,9 +71,23 @@ class MobileAuthController extends Controller
     {
         $user = $request->user();
 
+        // OTP confirmation — the only way a phone/OTP user (random password, no
+        // google_id) can delete their account. The app first calls
+        // POST /auth/otp/request with the user's own phone, then sends the {code}
+        // here. Required for the Google Play "delete account" rule.
+        if ($request->filled('code')) {
+            $request->validate(['code' => ['required', 'string', 'max:12']]);
+            if (empty($user->phone)) {
+                return $this->fail('No phone number on this account to verify by OTP.', [], 422, 'no_phone');
+            }
+            $result = app(OtpService::class)->verify((string) $user->phone, (string) $request->input('code'));
+            if (! ($result instanceof User) || $result->id !== $user->id) {
+                return $this->fail('The verification code is incorrect or has expired. Request a new code and try again.', [], 422, 'otp_invalid');
+            }
+        }
         // Google-only users confirm with a fresh ID token; everyone else with
         // their current password.
-        if ($user->google_id && ! $request->filled('password')) {
+        elseif ($user->google_id && ! $request->filled('password')) {
             $data = $request->validate(['id_token' => ['required', 'string']]);
             $res = Http::acceptJson()->get('https://oauth2.googleapis.com/tokeninfo', ['id_token' => $data['id_token']]);
             $email = $res->successful() ? ($res->json('email') ?? null) : null;

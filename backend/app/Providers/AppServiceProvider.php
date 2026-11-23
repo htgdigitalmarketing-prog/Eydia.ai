@@ -44,5 +44,18 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(120)
             ->by($request->user()?->id ?: $request->ip()));
+
+        // OTP send/verify: limit mainly PER PHONE NUMBER (so many people on one
+        // shared Wi-Fi/IP don't block each other), with a generous per-IP ceiling
+        // as a safety net. The OtpService also enforces a per-phone resend cooldown.
+        RateLimiter::for('otp', function (Request $request) {
+            $digits = preg_replace('/\D+/', '', (string) $request->input('phone')) ?? '';
+            $phoneKey = $digits !== '' ? substr($digits, -10) : $request->ip();
+
+            return [
+                Limit::perMinute(6)->by('otp-phone:' . $phoneKey),
+                Limit::perMinute(40)->by('otp-ip:' . $request->ip()),
+            ];
+        });
     }
 }

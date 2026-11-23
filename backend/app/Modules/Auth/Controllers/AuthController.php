@@ -126,13 +126,26 @@ class AuthController extends Controller
             'email' => ['sometimes', 'email', 'max:255', 'unique:users,email,' . $request->user()->id],
             'phone' => ['sometimes', 'nullable', 'string', 'max:32'],
             'address' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            // Rename the workspace/company (used by OTP-registered "My Workspace").
+            'company_name' => ['sometimes', 'string', 'max:255'],
             // A data URL (data:image/...;base64,...) for the profile photo; capped ~2MB.
             'avatar_url' => ['sometimes', 'nullable', 'string', 'max:3000000'],
         ]);
 
-        $request->user()->update($data);
+        $user = $request->user();
 
-        return $this->ok(['user' => new UserResource($request->user()->fresh()->load('tenant'))]);
+        // company_name lives on the tenant, not the user.
+        if (array_key_exists('company_name', $data)) {
+            $tenant = $user->tenant;
+            if ($tenant) {
+                $tenant->update(['company_name' => $data['company_name']]);
+            }
+            unset($data['company_name']);
+        }
+
+        $user->update($data);
+
+        return $this->ok(['user' => new UserResource($user->fresh()->load('tenant'))]);
     }
 
     public function changePassword(Request $request): JsonResponse
