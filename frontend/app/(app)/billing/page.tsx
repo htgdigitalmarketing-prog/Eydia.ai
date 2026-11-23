@@ -108,14 +108,10 @@ export default function BillingPage() {
     setBillForm({
       name: user.tenant?.company_name ?? user.tenant?.name ?? user.name,
       email: user.email,
-      phone: "",
+      phone: user.phone ?? "",   // autofill the user's mobile number
       address: "",
       gstin: "",
     });
-    // The checkout renders inline where the plans were — bring it into view.
-    if (typeof window !== "undefined") {
-      setTimeout(() => { try { document.querySelector(".main-content")?.scrollTo({ top: 0, behavior: "smooth" }); window.scrollTo({ top: 0, behavior: "smooth" }); } catch {} }, 0);
-    }
   }
 
   // Step 2: billing details submitted → create order → pay → verify → invoice.
@@ -278,28 +274,18 @@ export default function BillingPage() {
             </div>
           )}
 
-          {/* Summary row */}
-          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, marginBottom: 18 }}>
-            <div className="stat">
-              <div className="label">Current plan</div>
-              <div className="value" style={{ fontSize: 20 }}>{activePlan?.name ?? "No plan"}</div>
-            </div>
-            <div className="stat">
-              <div className="label">Status</div>
-              <div className="value" style={{ fontSize: 20, textTransform: "capitalize" }}>{subIsLive ? subscription?.status : (subscription ? "Inactive" : (user.tenant?.status ?? "—"))}</div>
-            </div>
-            <div className="stat">
-              <div className="label">Renews / ends</div>
-              <div className="value" style={{ fontSize: 20 }}>{fmtDate(subscription?.current_period_end ?? user.tenant?.trial_ends_at ?? null)}</div>
-            </div>
-          </div>
-
-          {/* Available plans (or the inline checkout once a plan is chosen) */}
-          <div className="panel">
-            {billTarget ? (
-              <div style={{ animation: "eydiaFade .15s ease" }}>
-                <button type="button" onClick={() => setBillTarget(null)}
-                  style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 12 }}>← Back to plans</button>
+          {/* Checkout popup (opens when a plan is chosen) */}
+          {billTarget && (
+            <div onClick={() => setBillTarget(null)}
+              style={{ position: "fixed", inset: 0, zIndex: 3000, background: "rgba(12,16,38,.5)", backdropFilter: "blur(3px)", display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "16px", overflowY: "auto", animation: "eydiaFade .15s ease" }}>
+              <div onClick={(e) => e.stopPropagation()}
+                style={{ background: "var(--card, #fff)", borderRadius: 20, maxWidth: 560, width: "100%", margin: "auto", display: "flex", flexDirection: "column", maxHeight: "92vh", boxShadow: "0 30px 90px rgba(10,15,40,.4)", animation: "eydiaPop .2s cubic-bezier(.2,.9,.3,1.2)", overflow: "hidden" }}>
+              <div style={{ padding: "18px 20px 0", overflowY: "auto", flex: 1, minHeight: 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <button type="button" onClick={() => setBillTarget(null)}
+                    style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 12 }}>← Back to plans</button>
+                  <button type="button" onClick={() => setBillTarget(null)} aria-label="Close" style={{ background: "var(--bg)", border: "none", width: 30, height: 30, borderRadius: 9, cursor: "pointer", fontSize: 15, color: "var(--muted)", marginBottom: 12 }}>✕</button>
+                </div>
 
                 {/* Launch banner */}
                 {offer?.active && (
@@ -324,7 +310,7 @@ export default function BillingPage() {
                   )}
                 </div>
 
-                <form onSubmit={confirmPurchase}>
+                <form id="checkout-form" onSubmit={confirmPurchase}>
                   {error && <div className="error">{error}</div>}
 
                   {/* Billing cycle — radio list with per-month + % OFF + Recommended */}
@@ -409,18 +395,26 @@ export default function BillingPage() {
                     <label>Billing address</label>
                     <textarea value={billForm.address} onChange={(e) => setBillForm((f) => ({ ...f, address: e.target.value }))} required rows={2} placeholder="Street, City, State, PIN" style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", resize: "vertical" }} />
                   </div>
-                  <div className="field">
+                  <div className="field" style={{ marginBottom: 4 }}>
                     <label>GSTIN <span className="muted">(optional)</span></label>
                     <input value={billForm.gstin ?? ""} onChange={(e) => setBillForm((f) => ({ ...f, gstin: e.target.value }))} placeholder="22AAAAA0000A1Z5" />
                   </div>
-
-                  <button className="btn" disabled={switching === billTarget.id} style={{ width: "100%", padding: "14px", fontSize: 15, fontWeight: 700, marginTop: 6 }}>
-                    {switching === billTarget.id ? "Processing…" : quote.total > 0 ? `🔒 Proceed to pay ${inr(quote.total)}` : "Activate plan"}
-                  </button>
-                  <div className="muted" style={{ textAlign: "center", fontSize: 11, marginTop: 8 }}>Secured by Razorpay · UPI / Card / Netbanking · GST invoice emailed</div>
                 </form>
               </div>
-            ) : (
+              {/* Sticky, always-visible, highlighted pay footer */}
+              <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", background: "var(--card, #fff)", boxShadow: "0 -6px 18px rgba(10,15,40,.06)" }}>
+                <button type="submit" form="checkout-form" className="btn" disabled={switching === billTarget.id}
+                  style={{ width: "100%", padding: "14px", fontSize: 15.5, fontWeight: 800, boxShadow: "0 8px 22px color-mix(in srgb, var(--accent) 36%, transparent)" }}>
+                  {switching === billTarget.id ? "Processing…" : quote.total > 0 ? `🔒 Proceed to pay ${inr(quote.total)}` : "Activate plan"}
+                </button>
+                <div className="muted" style={{ textAlign: "center", fontSize: 11, marginTop: 7 }}>Secured by Razorpay · UPI / Card / Netbanking · GST invoice emailed</div>
+              </div>
+              </div>
+            </div>
+          )}
+
+          {/* Available plans */}
+          <div className="panel">
             <>
             <h2 style={{ marginTop: 0 }}>Plans</h2>
             {plans.length === 0 ? (
@@ -467,7 +461,25 @@ export default function BillingPage() {
               </div>
             )}
             </>
-            )}
+          </div>
+
+          {/* Your plan summary — shown under the plans */}
+          <div className="panel">
+            <h2 style={{ marginTop: 0 }}>Your subscription</h2>
+            <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+              <div className="stat">
+                <div className="label">Current plan</div>
+                <div className="value" style={{ fontSize: 20 }}>{activePlan?.name ?? "No plan"}</div>
+              </div>
+              <div className="stat">
+                <div className="label">Status</div>
+                <div className="value" style={{ fontSize: 20, textTransform: "capitalize" }}>{subIsLive ? subscription?.status : (subscription ? "Inactive" : (user.tenant?.status ?? "—"))}</div>
+              </div>
+              <div className="stat">
+                <div className="label">Renews / ends</div>
+                <div className="value" style={{ fontSize: 20 }}>{fmtDate(subscription?.current_period_end ?? user.tenant?.trial_ends_at ?? null)}</div>
+              </div>
+            </div>
           </div>
 
           {/* AI Credits (below Plans) */}

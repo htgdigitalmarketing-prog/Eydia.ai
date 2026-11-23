@@ -90,7 +90,9 @@ class GoogleGbpProvider
     {
         $message = $res->json('error.message');
         if (! $message) {
-            return $res->status() . ' ' . $res->body();
+            // Non-JSON response (e.g. an HTML 404 page) — NEVER surface raw HTML to
+            // the user; show a short, clean status instead.
+            return 'Saved in Eydia. Google didn’t accept the live update (HTTP ' . $res->status() . ') — the listing may not be linked for editing yet, or the Business Profile API isn’t enabled for this project.';
         }
 
         // A disabled/not-enabled API comes back as PERMISSION_DENIED with a
@@ -285,7 +287,12 @@ class GoogleGbpProvider
     public function updateLocation(Integration $integration, string $locationName, array $body, string $updateMask): bool
     {
         $this->lastError = null;
-        $name = str_starts_with($locationName, 'locations/') ? $locationName : "locations/{$locationName}";
+        // google_location_id may be stored as "locations/123", a bare "123", or
+        // "accounts/{acc}/locations/123". The Business Information API wants exactly
+        // "locations/{id}" — pulling the id out of any of those avoids a 404.
+        $name = preg_match('#locations/([^/]+)#', $locationName, $m)
+            ? "locations/{$m[1]}"
+            : "locations/{$locationName}";
         $url = "https://mybusinessbusinessinformation.googleapis.com/v1/{$name}?" . http_build_query(['updateMask' => $updateMask]);
 
         try {
