@@ -58,6 +58,12 @@ Route::prefix('admin')->middleware('super_admin')->group(function () {
     Route::post('/clients', [\App\Modules\Admin\Controllers\ClientController::class, 'store']);
     Route::put('/clients/{uuid}', [\App\Modules\Admin\Controllers\ClientController::class, 'update']);
     Route::delete('/clients/{uuid}', [\App\Modules\Admin\Controllers\ClientController::class, 'destroy']);
+
+    // "Our Work" — public landing-page portfolio, grouped by category.
+    Route::get('/work', [\App\Modules\Admin\Controllers\WorkItemController::class, 'index']);
+    Route::post('/work', [\App\Modules\Admin\Controllers\WorkItemController::class, 'store']);
+    Route::put('/work/{uuid}', [\App\Modules\Admin\Controllers\WorkItemController::class, 'update']);
+    Route::delete('/work/{uuid}', [\App\Modules\Admin\Controllers\WorkItemController::class, 'destroy']);
     Route::get('/ai-settings', [AiSettingsController::class, 'show']);
     Route::put('/ai-settings', [AiSettingsController::class, 'update']);
     Route::post('/ai-settings/test', [AiSettingsController::class, 'test']);

@@ -87,6 +87,7 @@ export const api = {
   // Public pricing for the marketing landing page (no auth).
   publicPlans: () => request<{ plans: PublicPlan[]; offer: PricingOffer; gst_rate: number }>("/public/plans"),
   publicClients: () => request<{ clients: PublicClient[] }>("/public/clients"),
+  publicWork: () => request<{ items: PublicWorkItem[] }>("/public/work"),
 
   health: () => request<{ status: string }>("/health"),
 
@@ -516,6 +517,13 @@ export const api = {
       request<{ client: AdminClient }>(`/admin/clients/${id}`, { method: "PUT", body, token }),
     deleteClient: (token: string, id: string) =>
       request<{ message: string }>(`/admin/clients/${id}`, { method: "DELETE", token }),
+    work: (token: string) => request<{ items: AdminWorkItem[]; categories: string[] }>("/admin/work", { token }),
+    createWork: (token: string, body: Partial<AdminWorkItem>) =>
+      request<{ item: AdminWorkItem }>("/admin/work", { method: "POST", body, token }),
+    updateWork: (token: string, id: string, body: Partial<AdminWorkItem>) =>
+      request<{ item: AdminWorkItem }>(`/admin/work/${id}`, { method: "PUT", body, token }),
+    deleteWork: (token: string, id: string) =>
+      request<{ message: string }>(`/admin/work/${id}`, { method: "DELETE", token }),
     aiSettings: (token: string) =>
       request<{ ai: AiSettings }>("/admin/ai-settings", { token }),
     updateAiSettings: (token: string, body: AiSettingsUpdate) =>
@@ -1923,6 +1931,18 @@ export type AdminClient = {
   is_active: boolean;
 };
 export type PublicClient = { name: string; logo_url: string | null; website: string | null };
+
+export type AdminWorkItem = {
+  id: string;
+  title: string;
+  category: string;
+  image_url: string | null;
+  link: string | null;
+  description: string | null;
+  sort_order: number;
+  is_active: boolean;
+};
+export type PublicWorkItem = { title: string; category: string; image_url: string | null; link: string | null; description: string | null };
 
 export type AiMoney = { usd: number; inr: number };
 export type AiUsageRow = {

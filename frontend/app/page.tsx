@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getToken } from "@/lib/auth";
-import { api, PublicPlan, PublicClient } from "@/lib/api";
+import { api, PublicPlan, PublicClient, PublicWorkItem } from "@/lib/api";
 
 // Feature keys → friendly labels for the pricing cards.
 const LP_FEATURE_LABELS: Record<string, string> = {
@@ -146,9 +146,12 @@ export default function Landing() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [livePlans, setLivePlans] = useState<PublicPlan[] | null>(null);
   const [clients, setClients] = useState<PublicClient[]>([]);
+  const [work, setWork] = useState<PublicWorkItem[]>([]);
+  const [workCat, setWorkCat] = useState<string>("All");
   useEffect(() => { setLoggedIn(!!getToken()); }, []);
   useEffect(() => { api.publicPlans().then((r) => setLivePlans(r.plans)).catch(() => setLivePlans(null)); }, []);
   useEffect(() => { api.publicClients().then((r) => setClients(r.clients)).catch(() => setClients([])); }, []);
+  useEffect(() => { api.publicWork().then((r) => setWork(r.items)).catch(() => setWork([])); }, []);
   const year = new Date().getFullYear();
   const cta = loggedIn ? "/dashboard" : "/register";
 
@@ -176,6 +179,7 @@ export default function Landing() {
           <nav className="lph-nav">
             <a href="#how">How it works</a>
             <a href="#features">Features</a>
+            <a href="#work">Our Work</a>
             <a href="#clients">Our Clients</a>
             <a href="#pricing">Pricing</a>
             <Link href={loggedIn ? "/dashboard" : "/login"}>{loggedIn ? "Dashboard" : "Dashboard"}</Link>
@@ -315,6 +319,52 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* ===== Our Work ===== */}
+      {work.length > 0 && (() => {
+        const cats = ["All", ...Array.from(new Set(work.map((w) => w.category)))];
+        const shown = workCat === "All" ? work : work.filter((w) => w.category === workCat);
+        return (
+          <section id="work" className="lph-sec" style={{ background: "#f7f9ff" }}>
+            <div className="lph-wrap">
+              <div className="lph-eyebrow">OUR WORK</div>
+              <h2 className="lph-h2">What we&apos;ve built</h2>
+              <p className="lph-sub">Websites, apps, Google &amp; Meta ads, and Google Business Profiles — delivered for real businesses.</p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", margin: "22px 0 28px" }}>
+                {cats.map((c) => (
+                  <button key={c} onClick={() => setWorkCat(c)}
+                    style={{ cursor: "pointer", padding: "8px 16px", borderRadius: 999, fontSize: 13.5, fontWeight: 700,
+                      border: `1.5px solid ${workCat === c ? "transparent" : "#dde3f0"}`,
+                      background: workCat === c ? "var(--brand-grad, #5b6bf5)" : "#fff",
+                      color: workCat === c ? "#fff" : "#334" }}>{c}</button>
+                ))}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20 }}>
+                {shown.map((w, i) => {
+                  const card = (
+                    <div style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 16, overflow: "hidden", boxShadow: "0 6px 20px rgba(20,25,60,.06)", height: "100%", display: "flex", flexDirection: "column" }}>
+                      <div style={{ aspectRatio: "16 / 10", background: "#eef1ff", display: "grid", placeItems: "center", overflow: "hidden" }}>
+                        {w.image_url
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={w.image_url} alt={w.title} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          : <span style={{ fontWeight: 800, color: "#5b6bf5" }}>{w.category}</span>}
+                      </div>
+                      <div style={{ padding: "14px 16px", flex: 1, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <span style={{ alignSelf: "flex-start", fontSize: 11, fontWeight: 800, color: "#5b6bf5", background: "#eef0ff", padding: "2px 9px", borderRadius: 999 }}>{w.category}</span>
+                        <div style={{ fontWeight: 800, fontSize: 16, color: "#1f2430" }}>{w.title}</div>
+                        {w.description && <p style={{ margin: 0, fontSize: 13.5, color: "#667", lineHeight: 1.5 }}>{w.description}</p>}
+                      </div>
+                    </div>
+                  );
+                  return w.link
+                    ? <a key={i} href={w.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>{card}</a>
+                    : <div key={i}>{card}</div>;
+                })}
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* ===== Our Clients ===== */}
       {clients.length > 0 && (

@@ -501,51 +501,49 @@ export default function SocialPage() {
             </div>
           )}
 
-          {/* History */}
+          {/* History — compact cards */}
           <div className="panel">
-            <h2 style={{ marginTop: 0 }}>Posts</h2>
+            <h2 style={{ marginTop: 0 }}>Your posts</h2>
             {posts.length === 0 ? (
               <p className="muted">No posts yet.</p>
             ) : (
-              <div style={{ display: "grid", gap: 12 }}>
+              <div className="grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 12 }}>
                 {posts.map((p) => {
                   const sc = statusColor(p.status);
                   return (
-                    <div key={p.id} style={{ display: "flex", gap: 12, border: "1px solid var(--border)", borderRadius: 12, padding: 12 }}>
-                      <div style={{ width: 64, height: 64, borderRadius: 10, background: "#0b141a", flex: "none", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 22 }}>
-                        {p.media_type === "video" ? (
-                          "🎬"
-                        ) : p.image_url ? (
+                    <div key={p.id} style={{ border: "1px solid var(--border)", borderRadius: 14, overflow: "hidden", display: "flex", flexDirection: "column", background: "var(--card)", boxShadow: "0 4px 14px rgba(20,25,60,.05)" }}>
+                      <div style={{ position: "relative", aspectRatio: "1 / 1", background: "#0b141a", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 30 }}>
+                        {p.media_type === "video" ? "🎬" : p.image_url ? (
                           /* eslint-disable-next-line @next/next/no-img-element */
                           <img src={p.image_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        ) : null}
+                        ) : "📝"}
+                        <span style={{ position: "absolute", top: 8, left: 8, background: sc.bg, color: sc.fg, padding: "2px 9px", borderRadius: 999, fontSize: 10.5, fontWeight: 800, textTransform: "capitalize", boxShadow: "0 2px 6px rgba(0,0,0,.2)" }}>{p.status}</span>
+                        <span style={{ position: "absolute", top: 8, right: 8, display: "flex", gap: 4 }}>
+                          {p.targets.map((t) => <span key={t} style={{ background: "rgba(255,255,255,.9)", borderRadius: 6, padding: "1px 6px", fontSize: 10, fontWeight: 700, color: "#1f2430" }}>{t === "facebook" ? "FB" : "IG"}</span>)}
+                        </span>
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
-                          <span style={{ background: sc.bg, color: sc.fg, padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: "capitalize" }}>{p.status}</span>
-                          {p.targets.map((t) => <span key={t} style={{ fontSize: 11, color: "#54656f" }}>{t === "facebook" ? "f FB" : "◙ IG"}</span>)}
-                          {p.scheduled_at && p.status === "scheduled" && <span className="muted" style={{ fontSize: 12 }}>for {new Date(p.scheduled_at).toLocaleString("en-IN")}</span>}
-                        </div>
-                        <div style={{ fontSize: 13, color: "#3b4a54", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.caption || <span className="muted">No caption</span>}</div>
+                      <div style={{ padding: 10, flex: 1, display: "flex", flexDirection: "column", gap: 5, minHeight: 0 }}>
+                        <div style={{ fontSize: 12.5, color: "#3b4a54", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.4 }}>{p.caption || <span className="muted">No caption</span>}</div>
+                        {p.scheduled_at && p.status === "scheduled" && <div className="muted" style={{ fontSize: 11 }}>🕐 {new Date(p.scheduled_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</div>}
                         {p.results && (
-                          <div style={{ fontSize: 12, marginTop: 4 }}>
+                          <div style={{ fontSize: 11 }}>
                             {Object.entries(p.results).map(([plat, r]) => (
-                              <span key={plat} style={{ marginRight: 12, color: r.status === "published" ? "#0a7d47" : "#c53030" }}>
-                                {plat === "facebook" ? "Facebook" : "Instagram"}: {r.status === "published" ? "✓ posted" : `✗ ${r.error ?? "failed"}`}
+                              <span key={plat} style={{ marginRight: 8, color: r.status === "published" ? "#0a7d47" : "#c53030" }}>
+                                {plat === "facebook" ? "FB" : "IG"} {r.status === "published" ? "✓" : "✗"}
                               </span>
                             ))}
                           </div>
                         )}
+                        {canPost && (
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: "auto", paddingTop: 6 }}>
+                            {(p.status === "scheduled" || p.status === "failed" || p.status === "partial") && (
+                              <button className="btn-mini" onClick={() => publishNow(p)}>Publish</button>
+                            )}
+                            <button className="btn-mini" onClick={() => editPost(p)}>Edit</button>
+                            <button className="btn-mini" style={{ color: "#c53030" }} onClick={() => deletePost(p)}>✕</button>
+                          </div>
+                        )}
                       </div>
-                      {canPost && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignSelf: "center" }}>
-                          {(p.status === "scheduled" || p.status === "failed" || p.status === "partial") && (
-                            <button className="btn-mini" onClick={() => publishNow(p)}>Publish now</button>
-                          )}
-                          <button className="btn-mini" onClick={() => editPost(p)}>Edit</button>
-                          <button className="btn-mini" style={{ color: "#c53030" }} onClick={() => deletePost(p)}>Delete</button>
-                        </div>
-                      )}
                     </div>
                   );
                 })}

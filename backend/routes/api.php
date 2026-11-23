@@ -36,6 +36,19 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         return response()->json(['success' => true, 'data' => ['clients' => $clients]]);
     })->middleware('throttle:60,1');
 
+    // Public "Our Work" portfolio for the landing page (no auth).
+    Route::get('/public/work', function () {
+        $items = \App\Models\WorkItem::where('is_active', true)
+            ->orderBy('category')->orderBy('sort_order')->orderBy('id')
+            ->get()
+            ->map(fn ($w) => [
+                'title' => $w->title, 'category' => $w->category, 'image_url' => $w->image_url,
+                'link' => $w->link, 'description' => $w->description,
+            ]);
+
+        return response()->json(['success' => true, 'data' => ['items' => $items]]);
+    })->middleware('throttle:60,1');
+
     // Public mobile app config (forced-update + maintenance switch).
     Route::get('/app/config', [\App\Modules\Mobile\Controllers\AppConfigController::class, 'index'])
         ->middleware('throttle:60,1');
