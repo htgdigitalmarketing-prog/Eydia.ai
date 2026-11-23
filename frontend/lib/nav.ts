@@ -83,6 +83,7 @@ export const SUPER_ADMIN_NAV: NavItem[] = [
   { label: "Pricing & Coupons", href: "/pricing-admin", icon: "🏷️" },
   { label: "Credit Packs", href: "/credit-packs", icon: "⚡" },
   { label: "AI Insights", href: "/ai-insights", icon: "🧠" },
+  { label: "Our Clients", href: "/clients", icon: "🏆" },
   { label: "Payments", href: "/payments", icon: "₹" },
   { label: "Settings", href: "/settings", icon: "⚙" },
   { label: "Support", href: "/support", icon: "🎫" },

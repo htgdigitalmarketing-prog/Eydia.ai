@@ -26,6 +26,16 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
     Route::get('/public/plans', [\App\Modules\Billing\Controllers\PublicPlansController::class, 'index'])
         ->middleware('throttle:60,1');
 
+    // Public "Our Clients" list for the landing page (no auth).
+    Route::get('/public/clients', function () {
+        $clients = \App\Models\Client::where('is_active', true)
+            ->orderBy('sort_order')->orderBy('id')
+            ->get()
+            ->map(fn ($c) => ['name' => $c->name, 'logo_url' => $c->logo_url, 'website' => $c->website]);
+
+        return response()->json(['success' => true, 'data' => ['clients' => $clients]]);
+    })->middleware('throttle:60,1');
+
     // Public mobile app config (forced-update + maintenance switch).
     Route::get('/app/config', [\App\Modules\Mobile\Controllers\AppConfigController::class, 'index'])
         ->middleware('throttle:60,1');

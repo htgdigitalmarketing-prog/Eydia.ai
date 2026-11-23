@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getToken } from "@/lib/auth";
-import { api, PublicPlan } from "@/lib/api";
+import { api, PublicPlan, PublicClient } from "@/lib/api";
 
 // Feature keys → friendly labels for the pricing cards.
 const LP_FEATURE_LABELS: Record<string, string> = {
@@ -145,8 +145,10 @@ const PLANS = [
 export default function Landing() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [livePlans, setLivePlans] = useState<PublicPlan[] | null>(null);
+  const [clients, setClients] = useState<PublicClient[]>([]);
   useEffect(() => { setLoggedIn(!!getToken()); }, []);
   useEffect(() => { api.publicPlans().then((r) => setLivePlans(r.plans)).catch(() => setLivePlans(null)); }, []);
+  useEffect(() => { api.publicClients().then((r) => setClients(r.clients)).catch(() => setClients([])); }, []);
   const year = new Date().getFullYear();
   const cta = loggedIn ? "/dashboard" : "/register";
 
@@ -174,6 +176,7 @@ export default function Landing() {
           <nav className="lph-nav">
             <a href="#how">How it works</a>
             <a href="#features">Features</a>
+            <a href="#clients">Our Clients</a>
             <a href="#pricing">Pricing</a>
             <Link href={loggedIn ? "/dashboard" : "/login"}>{loggedIn ? "Dashboard" : "Dashboard"}</Link>
             <Link href={loggedIn ? "/dashboard" : "/login"} className="lph-btn lph-btn-grad lph-btn-sm">{loggedIn ? "Open app" : "Login"}</Link>
@@ -312,6 +315,30 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* ===== Our Clients ===== */}
+      {clients.length > 0 && (
+        <section id="clients" className="lph-sec">
+          <div className="lph-wrap">
+            <div className="lph-eyebrow">OUR CLIENTS</div>
+            <h2 className="lph-h2">Trusted by growing businesses</h2>
+            <p className="lph-sub">Brands and local businesses that grow with Eydia.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 18, marginTop: 32, alignItems: "center" }}>
+              {clients.map((c, i) => {
+                const inner = c.logo_url
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={c.logo_url} alt={c.name} title={c.name} style={{ maxHeight: 46, maxWidth: "80%", objectFit: "contain", filter: "grayscale(1)", opacity: .85, transition: "all .2s" }} onMouseOver={(e) => { e.currentTarget.style.filter = "none"; e.currentTarget.style.opacity = "1"; }} onMouseOut={(e) => { e.currentTarget.style.filter = "grayscale(1)"; e.currentTarget.style.opacity = ".85"; }} />
+                  : <span style={{ fontWeight: 800, fontSize: 16, color: "#334" }}>{c.name}</span>;
+                return (
+                  <div key={i} style={{ height: 90, display: "grid", placeItems: "center", background: "#fff", border: "1px solid #eef1f6", borderRadius: 14, padding: 14, boxShadow: "0 4px 14px rgba(20,25,60,.04)" }}>
+                    {c.website ? <a href={c.website} target="_blank" rel="noopener noreferrer" style={{ display: "grid", placeItems: "center", width: "100%", height: "100%" }}>{inner}</a> : inner}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ===== Pricing ===== */}
       <section id="pricing" className="lph-sec">

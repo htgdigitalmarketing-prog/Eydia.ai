@@ -298,13 +298,30 @@ export default function BillingPage() {
           <div className="panel">
             {billTarget ? (
               <div style={{ animation: "eydiaFade .15s ease" }}>
-                {/* Gradient header with back + live total */}
-                <div style={{ background: "linear-gradient(135deg, var(--accent, #5b6bf5), #8b5cf6)", color: "#fff", borderRadius: 16, padding: "16px 20px", marginBottom: 18 }}>
-                  <button type="button" onClick={() => setBillTarget(null)}
-                    style={{ background: "rgba(255,255,255,.2)", border: "none", color: "#fff", borderRadius: 9, padding: "5px 12px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, marginBottom: 8 }}>← Back to plans</button>
-                  <div style={{ fontSize: 11.5, opacity: .85, fontWeight: 700, letterSpacing: ".6px" }}>COMPLETE YOUR PURCHASE</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, marginTop: 2 }}>{billTarget.name} plan</div>
-                  <div style={{ fontSize: 13.5, opacity: .92, marginTop: 2 }}>{CYCLES[cycle].label} · <strong>{inr(quote.total)}</strong> incl. GST</div>
+                <button type="button" onClick={() => setBillTarget(null)}
+                  style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 13, fontWeight: 600, padding: 0, marginBottom: 12 }}>← Back to plans</button>
+
+                {/* Launch banner */}
+                {offer?.active && (
+                  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--brand-grad, var(--accent))", color: "#fff", fontSize: 12, fontWeight: 800, letterSpacing: ".4px", padding: "7px 14px", borderRadius: 10, marginBottom: 12 }}>
+                    ⚡ {offer.label || "LAUNCH PRICE · LIMITED TIME"}
+                  </div>
+                )}
+
+                {/* Coupon-applied + ENDS IN countdown */}
+                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+                  <div>
+                    {coupon && bq?.coupon && (
+                      <div><span style={{ display: "inline-block", background: "#fff4e5", color: "#d97706", border: "1px solid #f3d9a8", fontSize: 11, fontWeight: 800, padding: "4px 11px", borderRadius: 999, marginBottom: 7 }}>⚡ BEST COUPON APPLIED</span></div>
+                    )}
+                    <div style={{ fontSize: 20, fontWeight: 800 }}>{billTarget.name}</div>
+                  </div>
+                  {offer?.active && offer.ends_at && (
+                    <div style={{ border: "1.5px solid #f59e0b", color: "#b45309", borderRadius: 12, padding: "6px 14px", textAlign: "center", lineHeight: 1.15 }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: ".5px" }}>ENDS IN</div>
+                      <div style={{ fontSize: 16, fontWeight: 800 }}><Countdown endsAt={offer.ends_at} /></div>
+                    </div>
+                  )}
                 </div>
 
                 <form onSubmit={confirmPurchase}>
@@ -312,12 +329,6 @@ export default function BillingPage() {
 
                   {/* Billing cycle — radio list with per-month + % OFF + Recommended */}
                   <div className="field">
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
-                      <label style={{ fontWeight: 800, fontSize: 15, margin: 0 }}>🔓 Choose your plan</label>
-                      {coupon && bq?.coupon && (
-                        <span style={{ background: "#fff4e5", color: "#b7791f", border: "1px solid #f3d9a8", fontSize: 10.5, fontWeight: 800, padding: "3px 9px", borderRadius: 999 }}>✓ BEST COUPON APPLIED</span>
-                      )}
-                    </div>
                     <div style={{ display: "grid", gap: 10 }}>
                       {cyclesInfo.map((ci) => {
                         const on = cycle === ci.key;
@@ -429,7 +440,7 @@ export default function BillingPage() {
 
                       <h3 style={{ margin: "4px 0 2px", fontSize: 17 }}>{p.name}</h3>
                       <div style={{ display: "flex", alignItems: "baseline", gap: 4, margin: "6px 0 2px" }}>
-                        <span style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-.5px" }}>{p.price_display}</span>
+                        <span className="plan-card-price" style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-.5px" }}>{p.price_display}</span>
                         <span className="muted" style={{ fontSize: 13, fontWeight: 500 }}>/ {p.billing_period === "yearly" ? "yr" : "mo"}</span>
                       </div>
                       <div className="muted" style={{ fontSize: 11.5 }}>incl. GST</div>

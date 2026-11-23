@@ -86,6 +86,7 @@ export const api = {
 
   // Public pricing for the marketing landing page (no auth).
   publicPlans: () => request<{ plans: PublicPlan[]; offer: PricingOffer; gst_rate: number }>("/public/plans"),
+  publicClients: () => request<{ clients: PublicClient[] }>("/public/clients"),
 
   health: () => request<{ status: string }>("/health"),
 
@@ -508,6 +509,13 @@ export const api = {
     // AI provider configuration (select provider + key + model, activate, test)
     aiInsights: (token: string, range: string = "30d") =>
       request<AiInsights>(`/admin/ai-insights?range=${encodeURIComponent(range)}`, { token }),
+    clients: (token: string) => request<{ clients: AdminClient[] }>("/admin/clients", { token }),
+    createClient: (token: string, body: Partial<AdminClient>) =>
+      request<{ client: AdminClient }>("/admin/clients", { method: "POST", body, token }),
+    updateClient: (token: string, id: string, body: Partial<AdminClient>) =>
+      request<{ client: AdminClient }>(`/admin/clients/${id}`, { method: "PUT", body, token }),
+    deleteClient: (token: string, id: string) =>
+      request<{ message: string }>(`/admin/clients/${id}`, { method: "DELETE", token }),
     aiSettings: (token: string) =>
       request<{ ai: AiSettings }>("/admin/ai-settings", { token }),
     updateAiSettings: (token: string, body: AiSettingsUpdate) =>
@@ -1905,6 +1913,16 @@ export type AiSettingsUpdate = {
   gemini_api_key?: string; anthropic_api_key?: string; openai_api_key?: string;
   gemini_balance?: number | null; anthropic_balance?: number | null; openai_balance?: number | null;
 };
+
+export type AdminClient = {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  website: string | null;
+  sort_order: number;
+  is_active: boolean;
+};
+export type PublicClient = { name: string; logo_url: string | null; website: string | null };
 
 export type AiMoney = { usd: number; inr: number };
 export type AiUsageRow = {

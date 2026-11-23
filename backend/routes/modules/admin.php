@@ -52,6 +52,12 @@ Route::prefix('admin')->middleware('super_admin')->group(function () {
 
     // AI provider configuration (select provider + key + model, activate, test).
     Route::get('/ai-insights', [\App\Modules\Admin\Controllers\AiInsightsController::class, 'index']);
+
+    // "Our Clients" — public landing-page client logos.
+    Route::get('/clients', [\App\Modules\Admin\Controllers\ClientController::class, 'index']);
+    Route::post('/clients', [\App\Modules\Admin\Controllers\ClientController::class, 'store']);
+    Route::put('/clients/{uuid}', [\App\Modules\Admin\Controllers\ClientController::class, 'update']);
+    Route::delete('/clients/{uuid}', [\App\Modules\Admin\Controllers\ClientController::class, 'destroy']);
     Route::get('/ai-settings', [AiSettingsController::class, 'show']);
     Route::put('/ai-settings', [AiSettingsController::class, 'update']);
     Route::post('/ai-settings/test', [AiSettingsController::class, 'test']);

@@ -174,6 +174,7 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
   { overview: GbpOverview | null; busy: boolean; onSync: () => void; onGoTab: (k: string) => void; onReload: () => void }) {
   const [showHidden, setShowHidden] = useState(false);
   const [locQuery, setLocQuery] = useState("");
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   async function setHidden(id: string, hidden: boolean) {
     const t = getToken(); if (!t) return;
     try { await api.gbp.setLocationHidden(t, id, hidden); onReload(); }
@@ -212,6 +213,12 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
   const locMatch = (s?: string | null) => (s ?? "").toLowerCase().includes(lq);
   const locs = lq ? allLocs.filter((l) => locMatch(l.name) || locMatch(l.address)) : allLocs;
   const hidden = lq ? allHidden.filter((h) => locMatch(h.name)) : allHidden;
+  // Active Google profile the customer is focused on (switchable). Defaults to the
+  // first unlocked location; locked ones are shown but can't be the active profile.
+  const unlockedLocs = allLocs.filter((l) => !l.locked);
+  const activeId = (activeProfileId && allLocs.some((l) => l.id === activeProfileId && !l.locked))
+    ? activeProfileId
+    : (unlockedLocs[0]?.id ?? null);
   const total = s.total_reviews;
   const avg = s.average_rating;
   const replied = charts?.replied ?? s.replied ?? 0;
@@ -430,7 +437,22 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
             )}
           </div>
         </div>
-        <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+        {/* Highlighted Google-profile switcher (when more than one profile) */}
+        {unlockedLocs.length > 1 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 4, padding: "12px 16px", borderRadius: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", boxShadow: "0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent)" }}>
+            <span style={{ fontSize: 22 }}>🏢</span>
+            <div style={{ flex: 1, minWidth: 140 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, opacity: .85, letterSpacing: ".4px" }}>ACTIVE GOOGLE PROFILE</div>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>{allLocs.find((l) => l.id === activeId)?.name ?? "—"}</div>
+            </div>
+            <select value={activeId ?? ""} onChange={(e) => setActiveProfileId(e.target.value)}
+              style={{ padding: "9px 12px", borderRadius: 10, border: "none", fontSize: 13.5, fontWeight: 700, minWidth: 180, cursor: "pointer", color: "var(--text)" }}>
+              {unlockedLocs.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+            <span style={{ fontSize: 11.5, opacity: .9 }}>🔁 Switch profile</span>
+          </div>
+        )}
+        <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
           Your connected Google account can manage several listings. Click <strong>Only this</strong> on your own business to keep it and permanently remove the rest — they won&apos;t return on the next Sync.
         </p>
         {allHidden.length > 0 && (
@@ -448,8 +470,12 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
           <p className="muted" style={{ fontSize: 13 }}>No visible locations. {hidden.length > 0 ? "Un-hide one below, or " : ""}Connect Google and Sync to pull your business locations.</p>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 12 }}>
-            {locs.map((l) => (
-              <div key={l.id} className="gbp-acct" style={{ position: "relative", opacity: l.locked ? 0.96 : 1 }}>
+            {locs.map((l) => {
+              const isActive = l.id === activeId && !l.locked;
+              return (
+              <div key={l.id} className="gbp-acct" onClick={() => { if (!l.locked) setActiveProfileId(l.id); }}
+                style={{ position: "relative", opacity: l.locked ? 0.96 : 1, cursor: l.locked ? "default" : "pointer", border: isActive ? "2px solid var(--accent)" : undefined, boxShadow: isActive ? "0 8px 22px color-mix(in srgb, var(--accent) 20%, transparent)" : undefined }}>
+                {isActive && <span style={{ position: "absolute", top: -9, left: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 999 }}>● ACTIVE</span>}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ width: 38, height: 38, borderRadius: 11, background: "#eef1ff", color: "var(--accent)", display: "grid", placeItems: "center", fontWeight: 700 }}>{(l.name ?? "?").slice(0, 1).toUpperCase()}</div>
                   <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: l.locked ? "#fff4e5" : l.is_verified ? "#e7f7ef" : "var(--bg)", color: l.locked ? "#b7791f" : l.is_verified ? "#0a7d47" : "var(--muted)" }}>{l.locked ? "🔒 Locked" : l.is_verified ? "Live" : "Synced"}</span>
@@ -475,7 +501,8 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
                   </div>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
