@@ -179,8 +179,9 @@ export default function Landing() {
           <nav className="lph-nav">
             <a href="#how">How it works</a>
             <a href="#features">Features</a>
+            <Link href="/whatsapp-marketing">WhatsApp</Link>
+            <Link href="/google-business-profile">Google Reviews</Link>
             <a href="#work">Our Work</a>
-            <a href="#clients">Our Clients</a>
             <a href="#pricing">Pricing</a>
             <Link href={loggedIn ? "/dashboard" : "/login"}>{loggedIn ? "Dashboard" : "Dashboard"}</Link>
             <Link href={loggedIn ? "/dashboard" : "/login"} className="lph-btn lph-btn-grad lph-btn-sm">{loggedIn ? "Open app" : "Login"}</Link>
@@ -429,6 +430,8 @@ export default function Landing() {
         <div className="lph-wrap lph-foot-in">
           <Link href="/" className="lph-foot-brand"><img src="/eydia-logo.png" alt="Eydia.ai" /></Link>
           <nav className="lph-foot-links">
+            <Link href="/whatsapp-marketing">WhatsApp</Link>
+            <Link href="/google-business-profile">Google Reviews</Link>
             <Link href="/pricing-policy">Pricing Policy</Link>
             <Link href="/shipping-policy">Shipping Policy</Link>
             <Link href="/terms">Terms &amp; Conditions</Link>
