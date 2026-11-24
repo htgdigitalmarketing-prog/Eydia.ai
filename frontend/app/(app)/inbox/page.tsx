@@ -82,6 +82,7 @@ const ATTACH_OPTIONS = [
   { key: "photos", label: "Photos & videos", icon: "🖼️", color: "#007bfc", accept: "image/*,video/*", enabled: true },
   { key: "camera", label: "Camera", icon: "📸", color: "#ff2e74", accept: "image/*", enabled: true, capture: true },
   { key: "audio", label: "Audio", icon: "🎧", color: "#ee6723", accept: "audio/*,.mp3,.aac,.ogg,.opus,.amr", enabled: true },
+  { key: "location", label: "Location", icon: "📍", color: "#1fa855", accept: "", enabled: true },
   { key: "contact", label: "Contact", icon: "👤", color: "#0795dc", accept: "", enabled: false },
   { key: "poll", label: "Poll", icon: "📊", color: "#02a698", accept: "", enabled: false },
   { key: "event", label: "Event", icon: "📅", color: "#ea4e3d", accept: "", enabled: false },
@@ -137,6 +138,31 @@ function MediaBubble({ msg }: { msg: InboxMessage }) {
       {att.url && (
         <a href={att.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "auto", padding: "6px 10px", background: "var(--primary)", color: "#fff", borderRadius: 8, fontSize: 12, textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>
           Download
+        </a>
+      )}
+    </div>
+  );
+}
+
+function LocationBubble({ msg }: { msg: InboxMessage }) {
+  const loc = msg.location;
+  const lat = loc?.latitude != null ? Number(loc.latitude) : NaN;
+  const lng = loc?.longitude != null ? Number(loc.longitude) : NaN;
+  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  const title = loc?.name || loc?.address || (hasCoords ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : "Location");
+  const mapsUrl = hasCoords ? `https://www.google.com/maps/search/?api=1&query=${lat},${lng}` : null;
+
+  return (
+    <div className="bubble-doc" style={{ alignItems: "center" }}>
+      <div className="bubble-doc-icon" style={{ background: "#1fa855" }}>📍</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="bubble-doc-name">{title}</div>
+        {loc?.address && loc?.name && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{loc.address}</div>}
+        {hasCoords && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{lat.toFixed(5)}, {lng.toFixed(5)}</div>}
+      </div>
+      {mapsUrl && (
+        <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "auto", padding: "6px 10px", background: "#1fa855", color: "#fff", borderRadius: 8, fontSize: 12, textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>
+          Open map
         </a>
       )}
     </div>
@@ -532,9 +558,62 @@ export default function InboxPage() {
     }
     if (opt.key === "camera") {
       openCamera();
+    } else if (opt.key === "location") {
+      shareLocation();
     } else {
       openFileFor(opt.accept);
     }
+  }
+
+  // Share a pinned location. Tries the device's current GPS location first;
+  // if that's denied/unavailable, falls back to pasting coordinates or a
+  // Google Maps link (…?q=lat,lng or /@lat,lng,… — we extract the pair).
+  async function shareLocation() {
+    const token = getToken();
+    if (!token || !activeId) return;
+    setShowAttach(false);
+
+    const post = async (latitude: number, longitude: number, name?: string) => {
+      setSending(true);
+      try {
+        const res = await api.inbox.sendLocation(token, activeId, { latitude, longitude, name });
+        setMessages((prev) => [res.message, ...prev]);
+        loadConversations();
+      } catch (err) {
+        setError((err as ApiError).message || "Failed to send location");
+      } finally {
+        setSending(false);
+      }
+    };
+
+    const askManual = () => {
+      const raw = window.prompt("Paste coordinates (lat, lng) or a Google Maps link:");
+      if (!raw) return;
+      const m = raw.match(/(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)/);
+      if (!m) {
+        showToast("Couldn't read coordinates. Use e.g. 28.6139, 77.2090");
+        return;
+      }
+      const lat = Number(m[1]);
+      const lng = Number(m[2]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+        showToast("Those coordinates look out of range.");
+        return;
+      }
+      post(lat, lng);
+    };
+
+    if (!navigator.geolocation) {
+      askManual();
+      return;
+    }
+
+    showToast("Getting your location…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => post(pos.coords.latitude, pos.coords.longitude, "My current location"),
+      () => askManual(),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
   }
 
   // Voice recording
@@ -944,6 +1023,8 @@ export default function InboxPage() {
                       </button>
                       {msg.attachments && msg.attachments.length > 0 ? (
                         <MediaBubble msg={msg} />
+                      ) : msg.type === "location" && msg.location ? (
+                        <LocationBubble msg={msg} />
                       ) : (
                         <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.body || `[${msg.type}]`}</div>
                       )}

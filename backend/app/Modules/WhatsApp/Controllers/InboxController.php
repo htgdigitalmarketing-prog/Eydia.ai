@@ -164,6 +164,68 @@ class InboxController extends Controller
         return $this->ok(['message' => new MessageResource($message->load(['sender', 'attachments']))]);
     }
 
+    /**
+     * Send a pinned location to the customer (lat/lng + optional name/address).
+     * Renders as a WhatsApp map card they can open or get directions to.
+     */
+    public function sendLocation(Request $request, string $conversationUuid): JsonResponse
+    {
+        $this->authorize('conversations.reply');
+
+        $conversation = Conversation::where('uuid', $conversationUuid)
+            ->with(['contact', 'phoneNumber'])
+            ->firstOrFail();
+        $this->guardConversationAccess($conversation);
+
+        if (! $conversation->windowIsOpen()) {
+            return $this->fail('The 24-hour messaging window has expired. Send a template message to re-open the conversation.', 422);
+        }
+
+        $data = $request->validate([
+            'latitude' => ['required', 'numeric', 'between:-90,90'],
+            'longitude' => ['required', 'numeric', 'between:-180,180'],
+            'name' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $phone = $conversation->phoneNumber;
+        $to = $conversation->contact->wa_id;
+        $lat = (float) $data['latitude'];
+        $lng = (float) $data['longitude'];
+        $name = $data['name'] ?? null;
+        $address = $data['address'] ?? null;
+
+        $result = $this->messages->sendLocation($phone, $to, $lat, $lng, $name, $address);
+        $wamid = $this->messages->wamid($result);
+
+        $label = $name ?: ($address ?: sprintf('%.5f, %.5f', $lat, $lng));
+
+        $message = Message::create([
+            'tenant_id' => $conversation->tenant_id,
+            'conversation_id' => $conversation->id,
+            'contact_id' => $conversation->contact_id,
+            'whatsapp_phone_number_id' => $phone->id,
+            'sender_user_id' => $request->user()->id,
+            'direction' => Message::DIRECTION_OUTBOUND,
+            'type' => 'location',
+            'body' => '📍 ' . $label,
+            'external_message_id' => $wamid,
+            'status' => 'sent',
+            'sent_at' => now(),
+            'payload' => [
+                'location' => ['latitude' => $lat, 'longitude' => $lng, 'name' => $name, 'address' => $address],
+                'result' => $result,
+            ],
+        ]);
+
+        $conversation->update([
+            'last_message_at' => now(),
+            'last_message_preview' => Str::limit($message->body, 100),
+        ]);
+
+        return $this->ok(['message' => new MessageResource($message->load(['sender', 'attachments']))]);
+    }
+
     private const MEDIA_TYPES = [
         'image' => ['image/jpeg', 'image/png', 'image/webp'],
         'video' => ['video/mp4', 'video/3gpp'],

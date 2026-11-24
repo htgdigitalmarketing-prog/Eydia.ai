@@ -31,12 +31,21 @@ Schedule::command('chatbot:lead-flow-run')->everyFiveMinutes()->withoutOverlappi
 // Run enabled GBP automations: AI review replies + keep the post queue topped up.
 Schedule::command('gbp:run-automations')->hourly()->withoutOverlapping(30);
 
-// Drain the (database) queue from the existing per-minute cron — no separate
-// hosting cron or long-running worker needed. Jobs like the WhatsApp webhook
-// processor run HERE instead of inside the web request, so a burst of inbound
-// messages no longer piles up PHP processes and trips the host's process cap
-// (the cause of the intermittent 503s). --stop-when-empty exits as soon as the
-// queue is clear; --max-time keeps it under a minute so runs never overlap.
-Schedule::command('queue:work --stop-when-empty --max-time=50 --max-jobs=200 --tries=3 --sleep=1')
+// Keep ONE queue worker alive continuously, driven by the per-minute cron — no
+// separate hosting cron or supervisor needed. Jobs like the WhatsApp webhook
+// processor (and so the chatbot auto-reply) run HERE instead of inside the web
+// request, so a burst of inbound messages never piles up PHP processes and trips
+// the host's process cap (the cause of the intermittent 503s).
+//
+// The worker now runs CONTINUOUSLY (no --stop-when-empty): it polls the queue
+// every second (--sleep=1), so an inbound message is picked up in ~1-2s and the
+// chatbot replies almost instantly — instead of waiting up to a full minute for
+// the next cron tick. It recycles every ~57s (--max-time) so a fresh run starts
+// each minute; runInBackground() frees schedule:run immediately so the other
+// scheduled commands still run; withoutOverlapping(2) guarantees only ONE worker
+// at a time (process-cap safe) and auto-clears the lock within 2 min even if the
+// host kills the worker uncleanly, so draining never stalls for longer than that.
+Schedule::command('queue:work --max-time=57 --max-jobs=300 --tries=3 --sleep=1 --rest=0')
     ->everyMinute()
-    ->withoutOverlapping();
+    ->runInBackground()
+    ->withoutOverlapping(2);

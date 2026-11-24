@@ -281,6 +281,8 @@ export const api = {
       }
       return json.data as { message: InboxMessage };
     },
+    sendLocation: (token: string, conversationId: string, body: { latitude: number; longitude: number; name?: string; address?: string }) =>
+      request<{ message: InboxMessage }>(`/whatsapp/conversations/${conversationId}/send-location`, { method: "POST", body, token }),
     deleteMessage: (token: string, conversationId: string, messageId: string) =>
       request<{ message: string }>(`/whatsapp/conversations/${conversationId}/messages/${messageId}`, { method: "DELETE", token }),
   },
@@ -1599,6 +1601,7 @@ export type InboxMessage = {
   external_message_id: string | null;
   sender?: { id: string; name: string } | null;
   attachments?: { type: string; mime_type: string | null; file_name: string | null; file_size: number | null; caption: string | null; url: string | null }[];
+  location?: { latitude: number | string | null; longitude: number | string | null; name: string | null; address: string | null } | null;
   error_code: string | null;
   error_message: string | null;
   sent_at: string | null;

@@ -14,6 +14,17 @@ class MessageResource extends JsonResource
             'direction' => $this->direction,
             'type' => $this->type,
             'body' => $this->body,
+            // For location messages, hand the frontend the coordinates (from the
+            // raw inbound payload, or the stored outbound payload) so it can render
+            // a tappable map card / "Open in Maps" link instead of plain text.
+            'location' => ($this->type === 'location' && is_array($this->payload) && isset($this->payload['location']))
+                ? [
+                    'latitude' => $this->payload['location']['latitude'] ?? null,
+                    'longitude' => $this->payload['location']['longitude'] ?? null,
+                    'name' => $this->payload['location']['name'] ?? null,
+                    'address' => $this->payload['location']['address'] ?? null,
+                ]
+                : null,
             'status' => $this->status,
             'external_message_id' => $this->external_message_id,
             'sender' => $this->whenLoaded('sender', fn () => [

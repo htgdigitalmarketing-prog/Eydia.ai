@@ -341,13 +341,22 @@ class WhatsAppWebhookService extends BaseService
         return match ($type) {
             'text' => $msg['text']['body'] ?? null,
             'image', 'video', 'document', 'sticker' => $msg[$type]['caption'] ?? null,
-            'location' => sprintf('Location: %s, %s', $msg['location']['latitude'] ?? '', $msg['location']['longitude'] ?? ''),
-            'contacts' => 'Contact card',
+            'location' => '📍 ' . (
+                $msg['location']['name']
+                ?? $msg['location']['address']
+                ?? trim(sprintf('%s, %s', $msg['location']['latitude'] ?? '', $msg['location']['longitude'] ?? ''), ', ')
+                ?: 'Location'
+            ),
+            'contacts' => '👤 ' . ($msg['contacts'][0]['name']['formatted_name'] ?? 'Contact card'),
             'reaction' => $msg['reaction']['emoji'] ?? null,
             'button' => $msg['button']['text'] ?? null,
             'interactive' => $msg['interactive']['button_reply']['title']
                 ?? $msg['interactive']['list_reply']['title']
                 ?? null,
+            // WhatsApp sends type "unsupported" for view-once media, polls, and
+            // formats newer than our Graph API version — Meta strips the actual
+            // content, so show a clear label instead of a raw "[unsupported]".
+            'unsupported' => '⚠️ Unsupported message (view-once, poll, or an unsupported format)',
             default => null,
         };
     }

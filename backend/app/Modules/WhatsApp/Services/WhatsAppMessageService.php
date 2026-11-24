@@ -95,6 +95,26 @@ class WhatsAppMessageService extends BaseService
         ]);
     }
 
+    /**
+     * Send a pinned location (lat/lng, with an optional place name + address).
+     * WhatsApp renders it as a map card the customer can open / get directions to.
+     */
+    public function sendLocation(WhatsappPhoneNumber $phone, string $to, float $latitude, float $longitude, ?string $name = null, ?string $address = null): array
+    {
+        $location = ['latitude' => $latitude, 'longitude' => $longitude];
+        if ($name !== null && trim($name) !== '') {
+            $location['name'] = $name;
+        }
+        if ($address !== null && trim($address) !== '') {
+            $location['address'] = $address;
+        }
+
+        return $this->provider($phone)->sendMessage($phone->phone_number_id, $to, [
+            'type' => 'location',
+            'location' => $location,
+        ]);
+    }
+
     /** Upload a local file to Meta and return its media id (for template headers). */
     public function uploadMediaFile(WhatsappPhoneNumber $phone, string $path, string $mime): ?string
     {

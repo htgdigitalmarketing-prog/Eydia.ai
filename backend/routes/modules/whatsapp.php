@@ -37,6 +37,7 @@ Route::prefix('whatsapp')->group(function () {
     Route::post('/conversations/{conversation}/mark-read', [InboxController::class, 'markRead']);
     Route::post('/conversations/{conversation}/send', [InboxController::class, 'send']);
     Route::post('/conversations/{conversation}/send-media', [InboxController::class, 'sendMedia']);
+    Route::post('/conversations/{conversation}/send-location', [InboxController::class, 'sendLocation']);
     Route::delete('/conversations/{conversation}/messages/{message}', [InboxController::class, 'deleteMessage']);
 
     // Bulk send — PAID. Requires an active plan (bulk messaging is a paid feature).
