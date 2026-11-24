@@ -4,143 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getToken } from "@/lib/auth";
 import { api, PublicPlan, PublicClient, PublicWorkItem } from "@/lib/api";
+import { LandingHeader, LandingFooter } from "@/components/landing-kit";
+import { STATS, STEPS, PILLARS, FEATURES, MODULES, LP_FEATURE_LABELS, FALLBACK_PLANS } from "@/lib/landing-data";
 
-// Feature keys → friendly labels for the pricing cards.
-const LP_FEATURE_LABELS: Record<string, string> = {
-  dash_whatsapp: "WhatsApp inbox, broadcasts & templates",
-  dash_gbp: "Google Reviews / GBP management",
-  dash_leads: "Leads CRM & automations",
-  chatbot: "AI chatbot auto-replies",
-  automations: "Workflow automations",
-  social: "Social posting",
-  seo: "SEO tools",
-  ads: "Ads reporting",
-  invoicing: "Invoicing",
-  advanced_reports: "Advanced reports",
-  export: "Export",
-  api_access: "API access",
-};
-
-// Eydia.ai marketing homepage — ReviewFlow-style layout, Eydia branding/logo and
-// content across the three pillars: Google Reviews / GBP, WhatsApp and Leads.
-
-const STATS = [
-  { v: "5,000+", l: "Businesses managed" },
-  { v: "2M+", l: "Reviews & messages handled" },
-  { v: "10K+", l: "AI replies sent" },
-  { v: "99.9%", l: "Uptime" },
-];
-
-const STEPS = [
-  {
-    n: 1, t: "Connect your channels",
-    d: "Link your Google Business Profile and WhatsApp in one click. Eydia imports every location, review and chat automatically.",
-  },
-  {
-    n: 2, t: "Automate with AI",
-    d: "AI drafts on-brand review replies, Google posts, WhatsApp messages and lead follow-ups. Sentiment is analysed as each review lands.",
-  },
-  {
-    n: 3, t: "Track & grow",
-    d: "Watch reviews, rankings and leads climb on the live dashboard — reply rate, local rank, pipeline and competitor gaps in real time.",
-  },
-];
-
-const PILLARS = [
-  {
-    icon: "⭐", bg: "#eef1ff", fg: "#2160ef", tag: "Google",
-    title: "Google Reviews & GBP",
-    lead: "Own your local reputation on Google.",
-    points: [
-      "Reply to every review in seconds with on-brand AI",
-      "Publish Google posts & photos across all locations",
-      "Live rating, sentiment & profile health score",
-      "Local rank tracking on a real geo-grid",
-    ],
-  },
-  {
-    icon: "💬", bg: "#e7f7ef", fg: "#0a7d47", tag: "WhatsApp",
-    title: "WhatsApp Engagement",
-    lead: "Talk to customers where they already are.",
-    points: [
-      "Official WhatsApp Business API & shared inbox",
-      "Broadcasts & automated drip campaigns",
-      "24/7 AI chatbot that answers & books",
-      "Approved templates with delivery reports",
-    ],
-  },
-  {
-    icon: "🎯", bg: "#f3eeff", fg: "#8b3df0", tag: "Leads",
-    title: "Leads CRM",
-    lead: "Turn conversations into paying customers.",
-    points: [
-      "Capture leads from Google, WhatsApp & your site",
-      "Visual pipeline with AI intent scoring",
-      "Automatic follow-ups so nothing slips",
-      "Track conversions & revenue by source",
-    ],
-  },
-];
-
-const FEATURES = [
-  {
-    icon: "⭐", bg: "#eef1ff", fg: "#4c57d8", title: "Google Reviews & GBP",
-    d: "Monitor, reply to and analyse reviews across every location. AI responses in seconds with live sentiment — plus posts, photos and a health score.",
-  },
-  {
-    icon: "💬", bg: "#e7f7ef", fg: "#0a7d47", title: "WhatsApp Engagement",
-    d: "Official WhatsApp API: broadcasts, drip campaigns, a 24/7 AI chatbot and approved templates — so every enquiry gets an instant reply.",
-  },
-  {
-    icon: "🎯", bg: "#f3eeff", fg: "#8b5cf6", title: "Leads CRM",
-    d: "Capture leads from Google, WhatsApp and your website into one pipeline, scored by intent, with automatic follow-ups so nothing slips.",
-  },
-  {
-    icon: "✨", bg: "#eaf6ff", fg: "#2b6fe8", title: "AI Content Studio",
-    d: "Generate Google posts, captions, review replies and images with built-in Gemini AI. Simple, transparent credit-based billing.",
-  },
-  {
-    icon: "📈", bg: "#fff4e6", fg: "#d97706", title: "Local Rank & Insights",
-    d: "Track keyword rankings on a real geo-grid, performance trends and competitor velocity so you always stay a step ahead locally.",
-  },
-  {
-    icon: "🧾", bg: "#fdeef4", fg: "#db2777", title: "Invoicing & Billing",
-    d: "Professional invoices, GST support, Tally export and expense tracking — the whole back office, built right into one dashboard.",
-  },
-];
-
-const MODULES = [
-  { icon: "⭐", label: "Reviews & Replies" },
-  { icon: "🖼️", label: "Posts & Photos" },
-  { icon: "💬", label: "WhatsApp Broadcasts" },
-  { icon: "🤖", label: "WhatsApp Chatbot" },
-  { icon: "🎯", label: "Leads CRM" },
-  { icon: "✨", label: "AI Content Studio" },
-  { icon: "🎨", label: "AI Generated Media" },
-  { icon: "🩺", label: "Google Audit" },
-  { icon: "📊", label: "Local Rank Checker" },
-  { icon: "🏁", label: "Competitor Analysis" },
-  { icon: "💡", label: "AI Marketing Chat" },
-  { icon: "🧾", label: "Invoicing & Tally" },
-];
-
-const PLANS = [
-  {
-    name: "Starter", price: "Free", per: "forever", credits: "100 AI credits / month", popular: false,
-    cta: "Get Started",
-    feats: ["WhatsApp inbox & templates", "1,000 contacts", "Reviews dashboard", "Basic reports"],
-  },
-  {
-    name: "Growth", price: "₹2,999", per: "/mo", credits: "1,000 AI credits / month", popular: true,
-    cta: "Start Free Trial",
-    feats: ["Google Reviews / GBP (5 locations)", "WhatsApp broadcasts + AI chatbot", "Leads CRM + automations", "Social posting & SEO"],
-  },
-  {
-    name: "Enterprise", price: "₹9,999", per: "/mo", credits: "50,000 AI credits / month", popular: false,
-    cta: "Contact Sales",
-    feats: ["Unlimited clients & locations", "White-label workspace", "Ads reporting & invoicing", "API access & priority support"],
-  },
-];
+// Eydia.ai marketing homepage — the full overview across the three pillars
+// (Google Reviews / GBP, WhatsApp and Leads). Each section also has its own
+// dedicated page (/features, /our-work, /pricing, /whatsapp-marketing,
+// /google-business-profile) for focused ad campaigns.
 
 export default function Landing() {
   const [loggedIn, setLoggedIn] = useState(false);
@@ -152,7 +22,6 @@ export default function Landing() {
   useEffect(() => { api.publicPlans().then((r) => setLivePlans(r.plans)).catch(() => setLivePlans(null)); }, []);
   useEffect(() => { api.publicClients().then((r) => setClients(r.clients)).catch(() => setClients([])); }, []);
   useEffect(() => { api.publicWork().then((r) => setWork(r.items)).catch(() => setWork([])); }, []);
-  const year = new Date().getFullYear();
   const cta = loggedIn ? "/dashboard" : "/register";
 
   const inr0 = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -168,26 +37,11 @@ export default function Landing() {
         cta: p.price > 0 ? "Start Free Trial" : "Get Started",
         feats: Object.keys(LP_FEATURE_LABELS).filter((k) => p.features?.[k]).slice(0, 5).map((k) => LP_FEATURE_LABELS[k]),
       }))
-    : PLANS;
+    : FALLBACK_PLANS;
 
   return (
     <div className="lph">
-      {/* ===== Header ===== */}
-      <header className="lph-head">
-        <div className="lph-head-in">
-          <Link href="/" className="lph-brand"><img src="/eydia-logo.png" alt="Eydia.ai" /></Link>
-          <nav className="lph-nav">
-            <a href="#how">How it works</a>
-            <a href="#features">Features</a>
-            <Link href="/whatsapp-marketing">WhatsApp</Link>
-            <Link href="/google-business-profile">Google Reviews</Link>
-            <a href="#work">Our Work</a>
-            <a href="#pricing">Pricing</a>
-            <Link href={loggedIn ? "/dashboard" : "/login"}>{loggedIn ? "Dashboard" : "Dashboard"}</Link>
-            <Link href={loggedIn ? "/dashboard" : "/login"} className="lph-btn lph-btn-grad lph-btn-sm">{loggedIn ? "Open app" : "Login"}</Link>
-          </nav>
-        </div>
-      </header>
+      <LandingHeader active="/" />
 
       {/* ===== Hero ===== */}
       <section className="lph-hero">
@@ -268,6 +122,10 @@ export default function Landing() {
               </div>
             ))}
           </div>
+          <div style={{ textAlign: "center", marginTop: 28, display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <Link href="/whatsapp-marketing" className="lph-btn lph-btn-outline">Explore WhatsApp →</Link>
+            <Link href="/google-business-profile" className="lph-btn lph-btn-outline">Explore Google Reviews →</Link>
+          </div>
         </div>
       </section>
 
@@ -303,6 +161,9 @@ export default function Landing() {
                 <p>{f.d}</p>
               </div>
             ))}
+          </div>
+          <div style={{ textAlign: "center", marginTop: 28 }}>
+            <Link href="/features" className="lph-btn lph-btn-outline">See all features →</Link>
           </div>
         </div>
       </section>
@@ -341,7 +202,7 @@ export default function Landing() {
                 ))}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 20 }}>
-                {shown.map((w, i) => {
+                {shown.slice(0, 6).map((w, i) => {
                   const card = (
                     <div style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 16, overflow: "hidden", boxShadow: "0 6px 20px rgba(20,25,60,.06)", height: "100%", display: "flex", flexDirection: "column" }}>
                       <div style={{ aspectRatio: "16 / 10", background: "#eef1ff", display: "grid", placeItems: "center", overflow: "hidden" }}>
@@ -361,6 +222,9 @@ export default function Landing() {
                     ? <a key={i} href={w.link} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>{card}</a>
                     : <div key={i}>{card}</div>;
                 })}
+              </div>
+              <div style={{ textAlign: "center", marginTop: 28 }}>
+                <Link href="/our-work" className="lph-btn lph-btn-outline">See all our work →</Link>
               </div>
             </div>
           </section>
@@ -411,6 +275,9 @@ export default function Landing() {
               </div>
             ))}
           </div>
+          <div style={{ textAlign: "center", marginTop: 28 }}>
+            <Link href="/pricing" className="lph-btn lph-btn-outline">See full pricing →</Link>
+          </div>
         </div>
       </section>
 
@@ -425,22 +292,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ===== Footer ===== */}
-      <footer className="lph-foot">
-        <div className="lph-wrap lph-foot-in">
-          <Link href="/" className="lph-foot-brand"><img src="/eydia-logo.png" alt="Eydia.ai" /></Link>
-          <nav className="lph-foot-links">
-            <Link href="/whatsapp-marketing">WhatsApp</Link>
-            <Link href="/google-business-profile">Google Reviews</Link>
-            <Link href="/pricing-policy">Pricing Policy</Link>
-            <Link href="/shipping-policy">Shipping Policy</Link>
-            <Link href="/terms">Terms &amp; Conditions</Link>
-            <Link href="/privacy">Privacy Policy</Link>
-            <Link href="/cancellation-policy">Cancellation / Refund</Link>
-          </nav>
-          <span className="lph-foot-copy">© {year} Eydia.ai. All rights reserved.</span>
-        </div>
-      </footer>
+      <LandingFooter />
     </div>
   );
 }

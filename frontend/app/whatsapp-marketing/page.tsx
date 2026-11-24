@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getToken } from "@/lib/auth";
 import { api, PublicPlan } from "@/lib/api";
+import { LandingHeader, LandingFooter } from "@/components/landing-kit";
 
 // Dedicated WhatsApp Marketing landing page — WhatsApp-only content + only the
 // plans that include the WhatsApp dashboard. Reuses the shared `lph-*` styles.
@@ -64,7 +65,6 @@ export default function WhatsAppLanding() {
   const [livePlans, setLivePlans] = useState<PublicPlan[] | null>(null);
   useEffect(() => { setLoggedIn(!!getToken()); }, []);
   useEffect(() => { api.publicPlans().then((r) => setLivePlans(r.plans)).catch(() => setLivePlans(null)); }, []);
-  const year = new Date().getFullYear();
   const cta = loggedIn ? "/dashboard" : "/register";
 
   const inr0 = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -86,19 +86,7 @@ export default function WhatsAppLanding() {
 
   return (
     <div className="lph">
-      {/* ===== Header ===== */}
-      <header className="lph-head">
-        <div className="lph-head-in">
-          <Link href="/" className="lph-brand"><img src="/eydia-logo.png" alt="Eydia.ai" /></Link>
-          <nav className="lph-nav">
-            <a href="#how">How it works</a>
-            <a href="#features">Features</a>
-            <a href="#pricing">Pricing</a>
-            <Link href="/google-business-profile">Google Reviews</Link>
-            <Link href={loggedIn ? "/dashboard" : "/login"} className="lph-btn lph-btn-grad lph-btn-sm">{loggedIn ? "Open app" : "Login"}</Link>
-          </nav>
-        </div>
-      </header>
+      <LandingHeader active="/whatsapp-marketing" />
 
       {/* ===== Hero ===== */}
       <section className="lph-hero">
@@ -234,20 +222,7 @@ export default function WhatsAppLanding() {
         </div>
       </section>
 
-      {/* ===== Footer ===== */}
-      <footer className="lph-foot">
-        <div className="lph-wrap lph-foot-in">
-          <Link href="/" className="lph-foot-brand"><img src="/eydia-logo.png" alt="Eydia.ai" /></Link>
-          <nav className="lph-foot-links">
-            <Link href="/">Home</Link>
-            <Link href="/google-business-profile">Google Reviews</Link>
-            <Link href="/terms">Terms &amp; Conditions</Link>
-            <Link href="/privacy">Privacy Policy</Link>
-            <Link href="/cancellation-policy">Cancellation / Refund</Link>
-          </nav>
-          <span className="lph-foot-copy">© {year} Eydia.ai. All rights reserved.</span>
-        </div>
-      </footer>
+      <LandingFooter />
     </div>
   );
 }
