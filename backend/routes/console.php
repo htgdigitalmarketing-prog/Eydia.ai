@@ -31,21 +31,25 @@ Schedule::command('chatbot:lead-flow-run')->everyFiveMinutes()->withoutOverlappi
 // Run enabled GBP automations: AI review replies + keep the post queue topped up.
 Schedule::command('gbp:run-automations')->hourly()->withoutOverlapping(30);
 
-// Keep ONE queue worker alive continuously, driven by the per-minute cron — no
-// separate hosting cron or supervisor needed. Jobs like the WhatsApp webhook
-// processor (and so the chatbot auto-reply) run HERE instead of inside the web
-// request, so a burst of inbound messages never piles up PHP processes and trips
-// the host's process cap (the cause of the intermittent 503s).
+// SAFETY-NET queue drainer: drains the (database) queue at least once a minute,
+// so a job is NEVER stuck longer than ~60s even if the fast worker below is down.
+// --stop-when-empty exits the instant the queue is clear (so it costs nothing
+// when the dedicated worker is already keeping up), and withoutOverlapping stops
+// two of these piling up.
 //
-// The worker now runs CONTINUOUSLY (no --stop-when-empty): it polls the queue
-// every second (--sleep=1), so an inbound message is picked up in ~1-2s and the
-// chatbot replies almost instantly — instead of waiting up to a full minute for
-// the next cron tick. It recycles every ~57s (--max-time) so a fresh run starts
-// each minute; runInBackground() frees schedule:run immediately so the other
-// scheduled commands still run; withoutOverlapping(2) guarantees only ONE worker
-// at a time (process-cap safe) and auto-clears the lock within 2 min even if the
-// host kills the worker uncleanly, so draining never stalls for longer than that.
-Schedule::command('queue:work --max-time=57 --max-jobs=300 --tries=3 --sleep=1 --rest=0')
+// For NEAR-INSTANT chatbot replies (1-2s instead of up to a minute) a dedicated
+// long-lived worker is kept alive by a SEPARATE Hostinger cron, independent of
+// this scheduler, because the host kills Laravel's runInBackground() processes:
+//
+//   * * * * * flock -n /home/<user>/domains/eydia.in/app/storage/queue.lock \
+//       -c '/usr/bin/php /home/<user>/domains/eydia.in/app/artisan \
+//           queue:work --sleep=1 --tries=3 --max-time=3600 --max-jobs=1000' \
+//       >> /dev/null 2>&1
+//
+// flock -n keeps exactly ONE worker alive (process-cap safe) and the OS frees the
+// lock the moment the worker dies — clean or killed — so the next minute's cron
+// restarts it. That worker polls every second, so inbound messages are picked up
+// almost immediately; this scheduler entry is only the fallback.
+Schedule::command('queue:work --stop-when-empty --max-time=50 --max-jobs=200 --tries=3 --sleep=1')
     ->everyMinute()
-    ->runInBackground()
-    ->withoutOverlapping(2);
+    ->withoutOverlapping();
