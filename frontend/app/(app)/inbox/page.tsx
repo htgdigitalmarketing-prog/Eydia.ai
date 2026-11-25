@@ -77,6 +77,21 @@ function formatDuration(sec: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+// WhatsApp sends type "unsupported" for view-once media, polls and formats newer
+// than our Graph API version — Meta strips the content, so show a clear label
+// instead of a raw "[unsupported]" (also fixes older messages stored before the
+// label change, whose body is null / "[unsupported]").
+const UNSUPPORTED_LABEL = "⚠️ Unsupported message";
+function bodyText(m: { body: string | null; type: string }): string {
+  if (m.body && m.body !== "[unsupported]") return m.body;
+  if (m.type === "unsupported" || m.body === "[unsupported]") return UNSUPPORTED_LABEL;
+  return `[${m.type}]`;
+}
+function previewText(s: string | null | undefined): string {
+  if (!s) return "No messages";
+  return s === "[unsupported]" ? UNSUPPORTED_LABEL : s;
+}
+
 const ATTACH_OPTIONS = [
   { key: "document", label: "Document", icon: "📄", color: "#7f66ff", accept: ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar,.csv", enabled: true },
   { key: "photos", label: "Photos & videos", icon: "🖼️", color: "#007bfc", accept: "image/*,video/*", enabled: true },
@@ -834,7 +849,7 @@ export default function InboxPage() {
             </div>
             <div style={{ padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
               <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 4 }}>Message</div>
-              <div style={{ fontSize: 14 }}>{msgInfo.body || `[${msgInfo.type}]`}</div>
+              <div style={{ fontSize: 14 }}>{bodyText(msgInfo)}</div>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, padding: "12px 0" }}>
               <div>
@@ -937,7 +952,7 @@ export default function InboxPage() {
                     </span>
                   </div>
                   <div className="convo-preview">
-                    <span>{conv.last_message_preview || "No messages"}</span>
+                    <span>{previewText(conv.last_message_preview)}</span>
                     {conv.unread_count > 0 && <span className="unread-badge">{conv.unread_count}</span>}
                   </div>
                 </div>
@@ -1026,7 +1041,7 @@ export default function InboxPage() {
                       ) : msg.type === "location" && msg.location ? (
                         <LocationBubble msg={msg} />
                       ) : (
-                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.body || `[${msg.type}]`}</div>
+                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{bodyText(msg)}</div>
                       )}
                       <div className="meta">
                         <span>{formatTime(msg.created_at)}</span>
@@ -1049,7 +1064,7 @@ export default function InboxPage() {
                 <div className="reply-bar-line" />
                 <div className="reply-bar-content">
                   <div className="reply-bar-name">{replyTo.direction === "inbound" ? (activeConv.contact?.name || "Contact") : "You"}</div>
-                  <div className="reply-bar-text">{replyTo.body || `[${replyTo.type}]`}</div>
+                  <div className="reply-bar-text">{bodyText(replyTo)}</div>
                 </div>
                 <button className="reply-bar-close" onClick={() => setReplyTo(null)}>✕</button>
               </div>

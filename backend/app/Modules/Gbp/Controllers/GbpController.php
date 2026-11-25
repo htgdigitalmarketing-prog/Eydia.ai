@@ -74,6 +74,15 @@ class GbpController extends Controller
      */
     public function overview(Request $request, GbpHealthService $health): JsonResponse
     {
+        // Keep the plan slots consistent on every dashboard load (not only after a
+        // Sync): this bootstraps an existing/first-time setup's visible location(s)
+        // into slots up to the plan limit, so a tenant whose single included
+        // location was synced before slots existed sees it already connected
+        // instead of a "buy a plan" lock.
+        if ($tid = $request->user()?->tenant_id) {
+            $this->slots->reconcile($tid);
+        }
+
         // Only the locations the tenant chose to manage here drive the dashboard;
         // hidden ones (e.g. other businesses the connected Google account can
         // access) are listed separately so they can be un-hidden.

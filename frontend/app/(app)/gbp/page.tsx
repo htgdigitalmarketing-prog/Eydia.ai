@@ -435,18 +435,26 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
         </div>
         {/* Highlighted Google-profile switcher (when more than one profile) */}
         {unlockedLocs.length > 1 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 4, padding: "12px 16px", borderRadius: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", boxShadow: "0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent)" }}>
-            <span style={{ fontSize: 22 }}>🏢</span>
-            <div style={{ flex: 1, minWidth: 140 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, opacity: .85, letterSpacing: ".4px" }}>ACTIVE GOOGLE PROFILE</div>
-              <div style={{ fontSize: 15, fontWeight: 800 }}>{allLocs.find((l) => l.id === activeId)?.name ?? "—"}</div>
+          <>
+            <style>{`@keyframes eydiaSwitchPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}50%{box-shadow:0 0 0 7px rgba(255,255,255,0)}}`}</style>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 4, padding: "13px 16px", borderRadius: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", boxShadow: "0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent)" }}>
+              <span style={{ fontSize: 22 }}>🏢</span>
+              <div style={{ flex: 1, minWidth: 140 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, opacity: .85, letterSpacing: ".4px" }}>
+                  ACTIVE GOOGLE PROFILE · <span style={{ opacity: .95 }}>{unlockedLocs.length} connected</span>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 800 }}>{allLocs.find((l) => l.id === activeId)?.name ?? "—"}</div>
+              </div>
+              {/* Highlighted Switch control */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.4)", borderRadius: 12, padding: "5px 6px 5px 12px", animation: "eydiaSwitchPulse 2.2s ease-in-out infinite" }}>
+                <span style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: ".3px", whiteSpace: "nowrap" }}>🔁 SWITCH</span>
+                <select value={activeId ?? ""} onChange={(e) => setActiveProfileId(e.target.value)}
+                  style={{ padding: "9px 12px", borderRadius: 9, border: "none", fontSize: 13.5, fontWeight: 800, minWidth: 180, cursor: "pointer", color: "var(--accent)", background: "#fff" }}>
+                  {unlockedLocs.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
             </div>
-            <select value={activeId ?? ""} onChange={(e) => setActiveProfileId(e.target.value)}
-              style={{ padding: "9px 12px", borderRadius: 10, border: "none", fontSize: 13.5, fontWeight: 700, minWidth: 180, cursor: "pointer", color: "var(--text)" }}>
-              {unlockedLocs.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-            </select>
-            <span style={{ fontSize: 11.5, opacity: .9 }}>🔁 Switch profile</span>
-          </div>
+          </>
         )}
         {(() => {
           const limit = overview.location_limit ?? overview.max_locations ?? null;
@@ -490,11 +498,23 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
                 <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.address ?? "—"}</div>
                 {l.locked ? (
                   <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-                    <p className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>Your plan includes one Google profile. Buy a plan to manage this additional location.</p>
-                    <button className="btn" style={{ width: "100%", padding: "8px 10px", fontSize: 13 }}
-                      onClick={() => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: "plan_required", message: "Buy a plan to manage more than one Google profile." } })); }}>
-                      🔒 Buy a plan to unlock
-                    </button>
+                    {(l.can_connect ?? true) ? (
+                      <>
+                        <p className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>Not connected yet. Connect this location to a plan slot to manage its reviews, posts &amp; insights.</p>
+                        <button className="btn" style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--accent)", color: "#fff" }}
+                          onClick={() => connectLoc(l.id, l.name ?? "this", overview.location_limit ?? overview.max_locations ?? null)}>
+                          ➕ Connect location
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>Location limit reached on your plan. Upgrade to connect more Google profiles.</p>
+                        <button className="btn" style={{ width: "100%", padding: "8px 10px", fontSize: 13 }}
+                          onClick={() => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: "plan_required", message: "Upgrade your plan to connect more Google profiles." } })); }}>
+                          🔒 Upgrade to connect
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", alignItems: "center" }}>
