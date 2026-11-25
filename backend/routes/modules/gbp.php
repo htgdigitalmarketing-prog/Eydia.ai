@@ -50,6 +50,9 @@ Route::prefix('gbp')->group(function () {
         Route::post('/optimize', [GbpController::class, 'optimize']);
 
         // Location management.
+        // Plan-slot connect / disconnect (limit + permanent-slot enforcement).
+        Route::post('/locations/{uuid}/connect', [GbpController::class, 'connectLocation']);
+        Route::post('/locations/{uuid}/disconnect', [GbpController::class, 'disconnectLocation']);
         Route::post('/locations/{uuid}/hidden', [GbpController::class, 'setLocationHidden']);
         Route::post('/locations/{uuid}/only', [GbpController::class, 'keepOnlyLocation']);
         Route::delete('/locations/{uuid}', [GbpController::class, 'destroyLocation']);

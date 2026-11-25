@@ -14,8 +14,10 @@ use App\Models\Integration;
  */
 class GbpSyncService
 {
-    public function __construct(private GoogleGbpProvider $provider)
-    {
+    public function __construct(
+        private GoogleGbpProvider $provider,
+        private GbpSlotService $slots,
+    ) {
     }
 
     /**
@@ -94,15 +96,22 @@ class GbpSyncService
             }
         }
 
-        // Pass 2 — pull reviews only for the locations the tenant actually
-        // manages here (visible ones), capped so a connected agency account with
-        // many locations never times out (504). After "keep only this" that's a
-        // single location, so re-syncs are instant.
-        $withReviews = array_values(array_filter($upserted, fn (GbpLocation $l) => ! $l->is_hidden));
+        // Reconcile plan-based slots: re-link slots to the fresh rows, bootstrap
+        // existing/first-sync setups into slots, and hide anything not connected.
+        // Visibility (is_hidden) now reflects the slot system.
+        $this->slots->reconcile($integration->tenant_id);
+
+        // Pass 2 — pull reviews only for the CONNECTED (visible) locations, capped
+        // so a connected agency account with many locations never times out (504).
+        $withReviews = GbpLocation::withoutGlobalScopes()
+            ->where('tenant_id', $integration->tenant_id)
+            ->where('is_hidden', false)
+            ->orderByDesc('review_count')
+            ->get()
+            ->all();
         if ($withReviews === []) {
-            $withReviews = $upserted; // first sync — nothing hidden yet
+            $withReviews = $upserted; // nothing connected yet — fall back to all
         }
-        usort($withReviews, fn ($a, $b) => (int) $b->review_count <=> (int) $a->review_count);
         $cap = 8;
         foreach (array_slice($withReviews, 0, $cap) as $location) {
             $reviewsSynced += $this->syncReviews($integration, $location);

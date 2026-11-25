@@ -172,33 +172,34 @@ const STAR_COLORS: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#f
 
 function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
   { overview: GbpOverview | null; busy: boolean; onSync: () => void; onGoTab: (k: string) => void; onReload: () => void }) {
-  const [showHidden, setShowHidden] = useState(false);
   const [locQuery, setLocQuery] = useState("");
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  async function setHidden(id: string, hidden: boolean) {
-    const t = getToken(); if (!t) return;
-    try { await api.gbp.setLocationHidden(t, id, hidden); onReload(); }
-    catch (e) { toastError(e as ApiError); }
-  }
-  async function keepOnly(id: string, name: string) {
-    const t = getToken(); if (!t) return;
-    if (!(await confirmDialog({ title: "Keep only this location?", message: `Show only "${name}" and permanently remove every other location? They won't come back on the next Sync.`, confirmText: "Keep only this", danger: true }))) return;
-    try { await api.gbp.keepOnlyLocation(t, id); onReload(); }
-    catch (e) { toastError(e as ApiError); }
-  }
   async function removeLoc(id: string, name: string) {
     const t = getToken(); if (!t) return;
     if (!(await confirmDialog({ message: `Permanently remove "${name}" and its reviews/posts? It won't come back on the next Sync.`, confirmText: "Remove", danger: true }))) return;
     try { await api.gbp.removeLocation(t, id); onReload(); }
     catch (e) { toastError(e as ApiError); }
   }
-  async function removeAllHidden(items: { id: string; name: string }[]) {
+  async function connectLoc(id: string, name: string, limit: number | null | undefined) {
     const t = getToken(); if (!t) return;
-    if (!(await confirmDialog({ title: "Remove all other locations?", message: `Permanently remove all ${items.length} other locations? Only the business(es) shown above stay. They won't come back on the next Sync.`, confirmText: "Remove all", danger: true }))) return;
-    try {
-      for (const it of items) { await api.gbp.removeLocation(t, it.id); }
-      onReload();
-    } catch (e) { toastError(e as ApiError); }
+    const slotsText = (limit === null || limit === undefined) ? "a location slot" : `1 of your ${limit} slots`;
+    if (!(await confirmDialog({
+      title: "Connect this location?",
+      message: `"${name}" will permanently occupy ${slotsText} and cannot be replaced later. If you disconnect it, the slot stays reserved for this same location only — another location can never take it.`,
+      confirmText: "Connect location",
+    }))) return;
+    try { await api.gbp.connectLocation(t, id); onReload(); }
+    catch (e) { toastError(e as ApiError); } // server returns the "limit reached" message
+  }
+  async function disconnectLoc(id: string, name: string) {
+    const t = getToken(); if (!t) return;
+    if (!(await confirmDialog({
+      title: "Disconnect this location?",
+      message: `"${name}" will be disconnected from your dashboard. Its slot stays reserved for this same location — only it can reconnect, and it still counts toward your plan limit.`,
+      confirmText: "Disconnect", danger: true,
+    }))) return;
+    try { await api.gbp.disconnectLocation(t, id); onReload(); }
+    catch (e) { toastError(e as ApiError); }
   }
   if (!overview) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Loading your dashboard…</span></div>;
 
@@ -430,11 +431,6 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
               <input value={locQuery} onChange={(e) => setLocQuery(e.target.value)} placeholder="🔍 Search locations…"
                 style={{ padding: "7px 12px", border: "1px solid var(--border)", borderRadius: 9, fontSize: 13, minWidth: 200 }} />
             )}
-            {allHidden.length > 0 && (
-              <button className="btn-mini" onClick={() => setShowHidden((v) => !v)}>
-                {showHidden ? "Hide" : "Show"} hidden ({allHidden.length})
-              </button>
-            )}
           </div>
         </div>
         {/* Highlighted Google-profile switcher (when more than one profile) */}
@@ -452,20 +448,27 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
             <span style={{ fontSize: 11.5, opacity: .9 }}>🔁 Switch profile</span>
           </div>
         )}
-        <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-          Your connected Google account can manage several listings. Click <strong>Only this</strong> on your own business to keep it and permanently remove the rest — they won&apos;t return on the next Sync.
-        </p>
-        {allHidden.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8, marginBottom: 2, padding: "9px 12px", borderRadius: 10, background: "#fff6f5", border: "1px solid #f3d6d2", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 12.5, color: "#a93226", flex: 1, minWidth: 180 }}>
-              {allHidden.length} other location{allHidden.length === 1 ? "" : "s"} from your connected account {allHidden.length === 1 ? "is" : "are"} hidden. Remove them so only your business shows.
-            </span>
-            <button className="btn-mini" style={{ color: "#fff", background: "#c0392b", border: "none" }}
-              onClick={() => removeAllHidden(allHidden.map((h) => ({ id: h.id, name: h.name })))}>
-              Remove all {allHidden.length} others
-            </button>
-          </div>
-        )}
+        {(() => {
+          const limit = overview.location_limit ?? overview.max_locations ?? null;
+          const used = overview.slots_connected ?? unlockedLocs.length;
+          const full = limit != null && (overview.slots_used ?? used) >= limit;
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, padding: "9px 13px", borderRadius: 10, background: full ? "#fff6f5" : "#eef6ff", border: `1px solid ${full ? "#f3d6d2" : "#d6e4ff"}`, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 13 }}>📍</span>
+              <span style={{ fontSize: 12.5, color: full ? "#a93226" : "#2160ef", flex: 1, minWidth: 180 }}>
+                Using <strong>{used}</strong> of <strong>{limit ?? "unlimited"}</strong> location slot{limit === 1 ? "" : "s"}.
+                {full ? " Limit reached — upgrade your plan to connect more locations." : " Connect a location to manage its reviews, posts & insights."}
+                {" "}Each connected location permanently keeps its slot — disconnecting reserves it for the same location only.
+              </span>
+              {full && (
+                <button className="btn-mini" style={{ color: "#fff", background: "#2160ef", border: "none" }}
+                  onClick={() => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: "plan_required", message: "Upgrade your plan to connect more Google locations." } })); }}>
+                  Upgrade plan
+                </button>
+              )}
+            </div>
+          );
+        })()}
         {locs.length === 0 ? (
           <p className="muted" style={{ fontSize: 13 }}>No visible locations. {hidden.length > 0 ? "Un-hide one below, or " : ""}Connect Google and Sync to pull your business locations.</p>
         ) : (
@@ -478,7 +481,10 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
                 {isActive && <span style={{ position: "absolute", top: -9, left: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 999 }}>● ACTIVE</span>}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ width: 38, height: 38, borderRadius: 11, background: "#eef1ff", color: "var(--accent)", display: "grid", placeItems: "center", fontWeight: 700 }}>{(l.name ?? "?").slice(0, 1).toUpperCase()}</div>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: l.locked ? "#fff4e5" : l.is_verified ? "#e7f7ef" : "var(--bg)", color: l.locked ? "#b7791f" : l.is_verified ? "#0a7d47" : "var(--muted)" }}>{l.locked ? "🔒 Locked" : l.is_verified ? "Live" : "Synced"}</span>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    {l.slot_no != null && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 999, background: "#eef1ff", color: "var(--accent)" }}>Slot {l.slot_no}</span>}
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: l.locked ? "#fff4e5" : l.is_verified ? "#e7f7ef" : "var(--bg)", color: l.locked ? "#b7791f" : l.is_verified ? "#0a7d47" : "var(--muted)" }}>{l.locked ? "🔒 Locked" : l.is_verified ? "Live" : "Synced"}</span>
+                  </div>
                 </div>
                 <div style={{ fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</div>
                 <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.address ?? "—"}</div>
@@ -495,8 +501,7 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
                     <div><b style={{ fontSize: 16 }}>{(l.avg_rating ?? l.rating ?? 0).toFixed(1)}</b><div className="muted" style={{ fontSize: 11 }}>★ Rating</div></div>
                     <div><b style={{ fontSize: 16 }}>{l.total_reviews ?? l.review_count ?? 0}</b><div className="muted" style={{ fontSize: 11 }}>Reviews</div></div>
                     <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                      <button className="btn-mini" title="Show only this location, hide all others" onClick={() => keepOnly(l.id, l.name ?? "this")}>Only this</button>
-                      <button className="btn-mini" title="Hide this location from your dashboard" onClick={() => setHidden(l.id, true)}>Hide</button>
+                      <button className="btn-mini" title="Disconnect — the slot stays reserved for this same location" onClick={() => disconnectLoc(l.id, l.name ?? "this")}>Disconnect</button>
                     </div>
                   </div>
                 )}
@@ -506,19 +511,37 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
           </div>
         )}
 
-        {showHidden && hidden.length > 0 && (
+        {hidden.length > 0 && (
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px dashed var(--border)" }}>
-            <div className="muted" style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>Hidden locations</div>
+            <div className="muted" style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
+              Available locations ({hidden.length}) — not connected
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {hidden.map((h) => (
-                <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 10, flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 600, fontSize: 13, flex: 1, minWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{h.name}</span>
+              {hidden.map((h) => {
+                const limit = overview.location_limit ?? overview.max_locations ?? null;
+                const canConnect = h.can_connect ?? true;
+                return (
+                <div key={h.id} title={canConnect ? undefined : "Location limit reached — upgrade your plan to connect more locations."}
+                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 10, flexWrap: "wrap", opacity: canConnect ? 0.9 : 0.6, background: "var(--bg)" }}>
+                  <span style={{ fontWeight: 600, fontSize: 13, flex: 1, minWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--muted)" }}>
+                    {h.name}
+                    {h.reserved && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 999, background: "#fff4e5", color: "#b7791f" }}>Reserved · Slot {h.slot_no}</span>}
+                  </span>
                   <span className="muted" style={{ fontSize: 11.5 }}>{h.review_count} reviews</span>
-                  <button className="btn-mini" title="Show only this one, hide all others" onClick={() => keepOnly(h.id, h.name)}>Only this</button>
-                  <button className="btn-mini" onClick={() => setHidden(h.id, false)}>Un-hide</button>
+                  {h.reserved ? (
+                    <button className="btn-mini" style={{ color: "#fff", background: "var(--accent)", border: "none" }}
+                      title="Reconnect this location to its reserved slot" onClick={() => connectLoc(h.id, h.name, limit)}>Reconnect</button>
+                  ) : canConnect ? (
+                    <button className="btn-mini" style={{ color: "#fff", background: "var(--accent)", border: "none" }}
+                      title="Connect this location into a plan slot" onClick={() => connectLoc(h.id, h.name, limit)}>Connect</button>
+                  ) : (
+                    <button className="btn-mini" title="Location limit reached — upgrade your plan"
+                      onClick={() => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: "plan_required", message: "Upgrade your plan to connect more Google locations." } })); }}>🔒 Upgrade to connect</button>
+                  )}
                   <button className="btn-mini" title="Permanently remove this location" style={{ color: "#c0392b" }} onClick={() => removeLoc(h.id, h.name)}>Remove</button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

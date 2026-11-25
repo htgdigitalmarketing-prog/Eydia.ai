@@ -724,6 +724,14 @@ export const api = {
       request<{ posts: GbpPostItem[]; created: number; with_images: boolean; credits: number | null; message: string }>(
         "/gbp/posts/auto-plan", { method: "POST", body, token }),
 
+    // Plan-slot connect / disconnect. Connect enforces the plan location limit +
+    // permanent-slot ownership server-side; disconnect reserves the slot for the
+    // SAME location (it can never be reassigned to a different location).
+    connectLocation: (token: string, id: string) =>
+      request<{ message: string; slot_no?: number }>(`/gbp/locations/${id}/connect`, { method: "POST", token }),
+    disconnectLocation: (token: string, id: string) =>
+      request<{ message: string }>(`/gbp/locations/${id}/disconnect`, { method: "POST", token }),
+
     // Hide / restore a synced location (keep only the ones you manage).
     setLocationHidden: (token: string, id: string, hidden: boolean) =>
       request<{ message: string }>(`/gbp/locations/${id}/hidden`, { method: "POST", body: { hidden }, token }),
@@ -1111,10 +1119,16 @@ export type AiMediaItem = {
   created_at: string | null;
 };
 
+export type GbpSlotFlags = { connected?: boolean; reserved?: boolean; slot_no?: number | null; can_connect?: boolean; locked?: boolean };
+
 export type GbpOverview = {
   max_locations?: number | null;
-  locations: (GbpLocationItem & { total_reviews?: number; avg_rating?: number; locked?: boolean })[];
-  hidden_locations?: { id: string; name: string; review_count: number }[];
+  location_limit?: number | null;
+  slots_used?: number;
+  slots_connected?: number;
+  slots_available?: number | null;
+  locations: (GbpLocationItem & { total_reviews?: number; avg_rating?: number } & GbpSlotFlags)[];
+  hidden_locations?: ({ id: string; name: string; review_count: number } & GbpSlotFlags)[];
   stats: {
     locations: number;
     total_reviews: number;

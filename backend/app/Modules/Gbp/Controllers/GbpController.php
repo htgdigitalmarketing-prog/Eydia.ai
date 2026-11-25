@@ -35,22 +35,20 @@ class GbpController extends Controller
         private readonly CreditService $credits,
         private readonly SentimentService $sentiment,
         private readonly \App\Modules\Billing\Services\PlanLimitService $planLimits,
+        private readonly \App\Modules\Gbp\Services\GbpSlotService $slots,
     ) {}
 
     /**
-     * How many Google locations/profiles this tenant may manage. A tenant with NO
-     * plan gets ONE free; a plan uses its max_locations limit (null = unlimited).
+     * How many Google locations/profiles this tenant may connect. A tenant with
+     * NO plan gets ONE free; a plan uses its location_limit (null = unlimited).
      */
     private function allowedLocations(?int $tenantId): ?int
     {
         if (! $tenantId) {
             return 1;
         }
-        if ($this->planLimits->planFor($tenantId) === null) {
-            return 1; // free / no plan → one profile; buy a plan for more
-        }
 
-        return $this->planLimits->limit($tenantId, 'max_locations'); // null = unlimited
+        return $this->slots->limit($tenantId); // free/no plan → 1, else plan limit (null = unlimited)
     }
 
     /** 402 when the tenant cannot afford an AI action; null when it can. */
@@ -143,22 +141,48 @@ class GbpController extends Controller
             ->with('location:id,uuid,name')
             ->orderByDesc('reviewed_at')->limit(5)->get();
 
-        // Free/limited plans may only manage N locations; the rest are shown but
-        // locked behind a plan purchase ("ek se adhik profile → buy ke liye bole").
-        $maxLocations = $this->allowedLocations($tenantId);
-        $locationsUnlimited = $maxLocations === null;
+        // Plan-based location slots: connected locations drive the dashboard and
+        // are switchable; everything else (including hidden ones) is shown but can
+        // only be selected once connected into a slot (within the plan limit).
+        $snap = $tenantId ? $this->slots->snapshot($tenantId) : ['byKey' => [], 'limit' => 1, 'used' => 0, 'connected' => 0, 'has_free' => true];
+        $maxLocations = $snap['limit'];                 // null = unlimited
+        $keyFor = fn (GbpLocation $l) => $this->slots->keyFor($l);
+
+        $decorate = function (GbpLocation $l) use ($snap, $keyFor) {
+            $slot = $snap['byKey'][$keyFor($l)] ?? null;
+            $connected = (bool) ($slot['connected'] ?? false);
+            $reserved = (bool) ($slot['reserved'] ?? false);
+            // can_connect: already owns a (reserved) slot, or there is free capacity.
+            $canConnect = $slot !== null ? true : $snap['has_free'];
+
+            return [
+                'connected' => $connected,
+                'reserved' => $reserved,
+                'slot_no' => $slot['slot_no'] ?? null,
+                'can_connect' => $canConnect,
+                // Kept for the existing UI: a location that is not connected can't
+                // be the active profile (shown greyed / locked).
+                'locked' => ! $connected,
+            ];
+        };
+
+        // Hidden locations carry their connect-ability too, so the UI can show a
+        // "Connect" button (or the limit message) on each.
+        $hiddenDecorated = $hidden->map(fn (GbpLocation $l) => [
+            'id' => $l->uuid, 'name' => $l->name, 'review_count' => (int) $l->review_count,
+        ] + $decorate($l))->all();
 
         return $this->ok([
             'max_locations' => $maxLocations,            // null = unlimited
-            'locations' => $locations->values()->map(fn (GbpLocation $l, int $i) => $this->locationArray($l) + [
+            'location_limit' => $maxLocations,           // alias (plan.location_limit)
+            'slots_used' => $snap['used'],
+            'slots_connected' => $snap['connected'],
+            'slots_available' => $maxLocations === null ? null : max(0, $maxLocations - $snap['used']),
+            'locations' => $locations->values()->map(fn (GbpLocation $l) => $this->locationArray($l) + [
                 'total_reviews' => (int) ($l->reviews_count ?? 0),
                 'avg_rating' => round((float) ($l->reviews_avg_rating ?? 0), 1),
-                // Beyond the allowed count → locked until a plan is bought.
-                'locked' => ! $locationsUnlimited && $i >= $maxLocations,
-            ])->all(),
-            'hidden_locations' => $hidden->map(fn (GbpLocation $l) => [
-                'id' => $l->uuid, 'name' => $l->name, 'review_count' => (int) $l->review_count,
-            ])->all(),
+            ] + $decorate($l))->all(),
+            'hidden_locations' => $hiddenDecorated,
             'stats' => [
                 'locations' => $locations->count(),
                 'total_reviews' => $total,
@@ -835,14 +859,60 @@ class GbpController extends Controller
         ];
     }
 
-    /** Hide or un-hide a location so only the ones the tenant wants drive the dashboard. */
+    /**
+     * Connect (activate) a location into a plan slot. Server-side enforces the
+     * plan location limit, slot ownership and the permanent no-swap rule.
+     */
+    public function connectLocation(Request $request, string $uuid): JsonResponse
+    {
+        $location = GbpLocation::where('uuid', $uuid)->firstOrFail();
+
+        $result = $this->slots->connect($location, $request->user()?->id);
+        if (! $result['ok']) {
+            return $this->fail($result['message'] ?? \App\Modules\Gbp\Services\GbpSlotService::LIMIT_MESSAGE, ['plan' => ['location_limit']], 422, $result['code']);
+        }
+
+        return $this->ok([
+            'message' => $location->name . ' connected.',
+            'slot_no' => $result['slot']?->slot_no,
+        ]);
+    }
+
+    /**
+     * Disconnect a location. The slot is KEPT and reserved for the SAME location
+     * to reconnect later — it can never be reassigned to a different location.
+     */
+    public function disconnectLocation(Request $request, string $uuid): JsonResponse
+    {
+        $location = GbpLocation::where('uuid', $uuid)->firstOrFail();
+        $this->slots->disconnect($location);
+
+        return $this->ok([
+            'message' => $location->name . ' disconnected. Its slot stays reserved — only this location can reconnect to it.',
+        ]);
+    }
+
+    /**
+     * Legacy hide/un-hide, now routed through the slot system so the plan limit
+     * and slot ownership still apply (un-hide = connect, hide = disconnect).
+     */
     public function setLocationHidden(Request $request, string $uuid): JsonResponse
     {
         $data = $request->validate(['hidden' => ['required', 'boolean']]);
         $location = GbpLocation::where('uuid', $uuid)->firstOrFail();
-        $location->update(['is_hidden' => $data['hidden']]);
 
-        return $this->ok(['message' => $data['hidden'] ? 'Location hidden.' : 'Location restored.']);
+        if ($data['hidden']) {
+            $this->slots->disconnect($location);
+
+            return $this->ok(['message' => 'Location disconnected.']);
+        }
+
+        $result = $this->slots->connect($location, $request->user()?->id);
+        if (! $result['ok']) {
+            return $this->fail($result['message'] ?? \App\Modules\Gbp\Services\GbpSlotService::LIMIT_MESSAGE, ['plan' => ['location_limit']], 422, $result['code']);
+        }
+
+        return $this->ok(['message' => 'Location connected.']);
     }
 
     /**

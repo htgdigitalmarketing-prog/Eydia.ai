@@ -11,7 +11,7 @@ const LIMIT_LABELS: Record<string, string> = {
   ai_credits: "AI credits / month",
   max_agents: "Max agents", max_contacts: "Max contacts", max_campaigns: "Max campaigns",
   max_chatbots: "Max chatbots", max_templates: "Max templates",
-  max_locations: "Max GBP locations", max_leads: "Max leads", max_keywords: "Max keywords",
+  max_locations: "GBP location limit (connect slots)", max_leads: "Max leads", max_keywords: "Max keywords",
 };
 const FEATURE_LABELS: Record<string, string> = {
   dash_whatsapp: "WhatsApp Marketing", dash_gbp: "Google Reviews / GBP", dash_leads: "Lead Management",
