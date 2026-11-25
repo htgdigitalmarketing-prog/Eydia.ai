@@ -18,6 +18,9 @@ class WhatsappNumberResource extends JsonResource
             'status' => $this->status,
             'is_default' => (bool) $this->is_default,
             'is_registered' => (bool) $this->is_registered,
+            // Onboarded via the WhatsApp Business app (coexistence) — no Cloud API
+            // /register step is needed; it can send directly.
+            'coexistence' => (bool) ($this->meta['coexistence'] ?? false),
             'waba' => $this->whenLoaded('businessAccount', fn () => [
                 'id' => $this->businessAccount->uuid,
                 'name' => $this->businessAccount->name,

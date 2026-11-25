@@ -184,7 +184,27 @@ class WhatsAppAccountService extends BaseService
     public function registerNumber(WhatsappPhoneNumber $phone, string $pin): WhatsappPhoneNumber
     {
         $provider = $this->factory->for($phone->businessAccount()->firstOrFail());
-        $provider->registerPhoneNumber($phone->phone_number_id, $pin);
+
+        try {
+            $provider->registerPhoneNumber($phone->phone_number_id, $pin);
+        } catch (\Throwable $e) {
+            // A number onboarded via the WhatsApp Business app (coexistence / SMB)
+            // is ALREADY registered — Meta's /register endpoint rejects it with
+            // "Register endpoint is not available for SMB businesses". That is not a
+            // failure: the number can send via the Cloud API without this step, so
+            // mark it registered and remember it is a coexistence number.
+            $msg = $e->getMessage();
+            if (stripos($msg, 'SMB') !== false || stripos($msg, 'not available') !== false) {
+                $phone->update([
+                    'is_registered' => true,
+                    'status' => 'registered',
+                    'meta' => array_merge($phone->meta ?? [], ['coexistence' => true]),
+                ]);
+
+                return $phone->fresh('businessAccount');
+            }
+            throw $e;
+        }
 
         $phone->update(['is_registered' => true, 'status' => 'registered']);
 

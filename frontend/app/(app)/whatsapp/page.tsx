@@ -386,10 +386,12 @@ export default function WhatsAppPage() {
                   <span style={{ flex: 1 }}><QualityBadge rating={n.quality_rating} /></span>
                   <span style={{ flex: 1 }}>
                     <span style={{ textTransform: "capitalize" }}>{n.status}</span>
-                    {!n.is_registered && <div style={{ fontSize: 11, color: "#c53030" }}>Not registered</div>}
+                    {n.coexistence
+                      ? <div style={{ fontSize: 11, color: "#0a7d47" }}>Ready · via WhatsApp Business app</div>
+                      : !n.is_registered && <div style={{ fontSize: 11, color: "#c53030" }}>Not registered</div>}
                   </span>
                   <span style={{ flex: 1.6, textAlign: "right", display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                    {!n.is_registered && (
+                    {!n.is_registered && !n.coexistence && (
                       <button className="btn-mini" style={{ background: "#ff9800", color: "#fff", border: "none" }} onClick={() => { setRegId(regId === n.id ? null : n.id); setRegPin(""); setNotice(null); }}>Register</button>
                     )}
                     <button className="btn-mini" onClick={() => { setSendId(sendId === n.id ? null : n.id); setSendTo(""); setNotice(null); }}>Send test</button>

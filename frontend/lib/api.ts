@@ -1398,6 +1398,7 @@ export type WaNumber = {
   status: string;
   is_default: boolean;
   is_registered: boolean;
+  coexistence?: boolean;
   waba?: { id: string; name: string; waba_id: string; status: string };
   created_at: string | null;
 };
