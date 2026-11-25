@@ -131,7 +131,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
     api
       .me(token)
-      .then((data) => setUser(data.user))
+      .then((data) => {
+        setUser(data.user);
+        // If the current account is the SUPER ADMIN themselves, we are NOT viewing
+        // a client — clear any leftover impersonation backup so the "viewing as"
+        // banner never appears on the admin's (or a client's) own dashboard.
+        if (data.user.is_super_admin && isImpersonating()) {
+          stopImpersonation();
+          setImpersonating(false);
+        }
+      })
       .catch((err) => {
         const e = err as ApiError;
         if (e.status === 401) {
@@ -230,13 +239,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </aside>
         <main className="main">
           <TopBar user={user} onMenuToggle={() => setSidebarOpen((v) => !v)} />
-          {impersonating && (
+          {impersonating && !user.is_super_admin && (
             <div style={{ background: "#2b2b8f", color: "#fff", padding: "9px 18px", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
               <span>👁 Viewing <strong>{user.tenant?.company_name ?? user.tenant?.name ?? "this client"}</strong>&apos;s dashboard as admin.</span>
               <button onClick={exitImpersonation} className="btn" style={{ fontSize: 13, padding: "5px 16px", background: "#fff", color: "#2b2b8f", whiteSpace: "nowrap" }}>Exit to admin</button>
             </div>
           )}
-          {!hasActivePlan && !impersonating && <SubscribeBanner expired={isExpired} />}
+          {!hasActivePlan && !impersonating && !user.is_super_admin && <SubscribeBanner expired={isExpired} />}
           <div className="main-content">
             {children}
           </div>
