@@ -101,8 +101,21 @@ function Dashboard() {
     navigator.clipboard?.writeText(assistUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }).catch(() => {});
   }
 
-  if (loading || !a) {
+  if (loading) {
     return <div><PageHeader title="Automation" subtitle="AI runs your Google Business Profile on autopilot." /><div className="loading-block"><span className="spinner" /><span>Loading…</span></div></div>;
+  }
+  if (!a) {
+    return (
+      <div>
+        <PageHeader title="Automation" subtitle="AI runs your Google Business Profile on autopilot." />
+        <ActiveLocationBanner module="Automation" />
+        {error && <div className="error" style={{ marginBottom: 12 }}>{error}</div>}
+        <div className="panel" style={{ textAlign: "center", padding: 28 }}>
+          <p className="muted">Couldn&apos;t load automation settings.</p>
+          <button className="btn-mini" onClick={() => load()}>Retry</button>
+        </div>
+      </div>
+    );
   }
 
   const activeCount = FEATURES.filter((f) => a[f.key]).length;
