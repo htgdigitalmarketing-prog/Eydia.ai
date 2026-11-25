@@ -28,17 +28,38 @@ export default function GbpPage() {
   return <GbpDashboard />;
 }
 
+const ACTIVE_LOC_KEY = "eydia:gbp:active-location";
+
 function GbpDashboard() {
   const [tab, setTab] = useState("overview");
   const [overview, setOverview] = useState<GbpOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The single ACTIVE Google profile the whole dashboard is focused on. Persisted
+  // per browser so the choice sticks; the backend scopes all data to it.
+  const [activeLoc, setActiveLoc] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try { return localStorage.getItem(ACTIVE_LOC_KEY); } catch { return null; }
+  });
+
+  const selectActive = useCallback((id: string) => {
+    setActiveLoc(id);
+    try { localStorage.setItem(ACTIVE_LOC_KEY, id); } catch {}
+  }, []);
 
   const loadOverview = useCallback(() => {
     const token = getToken();
     if (!token) return;
-    api.gbp.overview(token).then(setOverview).catch((e) => setError((e as ApiError).message));
-  }, []);
+    api.gbp.overview(token, activeLoc ?? undefined)
+      .then((o) => {
+        setOverview(o);
+        // Adopt the backend's resolved active location so switching + other tabs
+        // all agree on which profile is active.
+        const resolved = o.active_location?.id;
+        if (resolved && resolved !== activeLoc) { setActiveLoc(resolved); try { localStorage.setItem(ACTIVE_LOC_KEY, resolved); } catch {} }
+      })
+      .catch((e) => setError((e as ApiError).message));
+  }, [activeLoc]);
   useEffect(() => { loadOverview(); }, [loadOverview]);
 
   async function sync() {
@@ -70,11 +91,11 @@ function GbpDashboard() {
         ))}
       </div>
 
-      {tab === "overview" && <OverviewTab overview={overview} busy={busy} onSync={sync} onGoTab={setTab} onReload={loadOverview} />}
-      {tab === "reviews" && <ReviewsTab overview={overview} />}
-      {tab === "content" && <PostsPhotosTab locations={locations} />}
+      {tab === "overview" && <OverviewTab overview={overview} busy={busy} onSync={sync} onGoTab={setTab} onReload={loadOverview} onSelectActive={selectActive} />}
+      {tab === "reviews" && <ReviewsTab overview={overview} activeLoc={activeLoc} />}
+      {tab === "content" && <PostsPhotosTab locations={locations} activeLoc={activeLoc} />}
       {tab === "website" && <WebsiteTab hasLocations={locations.length > 0} />}
-      {tab === "insights" && <InsightsTab locations={locations} />}
+      {tab === "insights" && <InsightsTab locations={locations} activeLoc={activeLoc} />}
       {tab === "health" && <HealthTab />}
     </div>
   );
@@ -170,37 +191,175 @@ function StackedBars({ labels, series, max }:
 
 const STAR_COLORS: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#f59e0b", 4: "#84cc16", 5: "#22c55e" };
 
-function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
-  { overview: GbpOverview | null; busy: boolean; onSync: () => void; onGoTab: (k: string) => void; onReload: () => void }) {
-  const [locQuery, setLocQuery] = useState("");
-  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
-  async function removeLoc(id: string, name: string) {
+/* Accounts & Locations — the active-profile switcher + connected locations, with
+   an "All locations" popup (search + connect). Shown at the TOP of the dashboard;
+   the rest of the dashboard shows data for the ACTIVE location only. */
+function AccountsLocations({ overview, onSelectActive, onReload }:
+  { overview: GbpOverview; onSelectActive: (id: string) => void; onReload: () => void }) {
+  const [popup, setPopup] = useState(false);
+  const [q, setQ] = useState("");
+
+  const allLocs = overview.locations ?? [];
+  const available = overview.hidden_locations ?? [];
+  const connected = allLocs.filter((l) => !l.locked);
+  const limit = overview.location_limit ?? overview.max_locations ?? null;
+  const used = overview.slots_used ?? overview.slots_connected ?? connected.length;
+  const full = limit != null && used >= limit;
+  const activeId = overview.active_location?.id ?? connected[0]?.id ?? null;
+  const activeName = allLocs.find((l) => l.id === activeId)?.name ?? overview.active_location?.name ?? "—";
+
+  async function connectLoc(id: string, name: string) {
     const t = getToken(); if (!t) return;
-    if (!(await confirmDialog({ message: `Permanently remove "${name}" and its reviews/posts? It won't come back on the next Sync.`, confirmText: "Remove", danger: true }))) return;
-    try { await api.gbp.removeLocation(t, id); onReload(); }
-    catch (e) { toastError(e as ApiError); }
-  }
-  async function connectLoc(id: string, name: string, limit: number | null | undefined) {
-    const t = getToken(); if (!t) return;
-    const slotsText = (limit === null || limit === undefined) ? "a location slot" : `1 of your ${limit} slots`;
-    if (!(await confirmDialog({
-      title: "Connect this location?",
-      message: `"${name}" will permanently occupy ${slotsText} and cannot be replaced later. If you disconnect it, the slot stays reserved for this same location only — another location can never take it.`,
-      confirmText: "Connect location",
-    }))) return;
-    try { await api.gbp.connectLocation(t, id); onReload(); }
-    catch (e) { toastError(e as ApiError); } // server returns the "limit reached" message
+    const slotsText = limit == null ? "a location slot" : `1 of your ${limit} slots`;
+    if (!(await confirmDialog({ title: "Connect this location?", message: `"${name}" will permanently occupy ${slotsText} and cannot be replaced later. If you disconnect it, the slot stays reserved for this same location only — another location can never take it.`, confirmText: "Connect location" }))) return;
+    try { await api.gbp.connectLocation(t, id); onReload(); } catch (e) { toastError(e as ApiError); }
   }
   async function disconnectLoc(id: string, name: string) {
     const t = getToken(); if (!t) return;
-    if (!(await confirmDialog({
-      title: "Disconnect this location?",
-      message: `"${name}" will be disconnected from your dashboard. Its slot stays reserved for this same location — only it can reconnect, and it still counts toward your plan limit.`,
-      confirmText: "Disconnect", danger: true,
-    }))) return;
-    try { await api.gbp.disconnectLocation(t, id); onReload(); }
-    catch (e) { toastError(e as ApiError); }
+    if (!(await confirmDialog({ title: "Disconnect this location?", message: `"${name}" will be disconnected. Its slot stays reserved for this same location — only it can reconnect, and it still counts toward your plan limit.`, confirmText: "Disconnect", danger: true }))) return;
+    try { await api.gbp.disconnectLocation(t, id); onReload(); } catch (e) { toastError(e as ApiError); }
   }
+  async function removeLoc(id: string, name: string) {
+    const t = getToken(); if (!t) return;
+    if (!(await confirmDialog({ message: `Permanently remove "${name}" and its reviews/posts? It won't come back on the next Sync.`, confirmText: "Remove", danger: true }))) return;
+    try { await api.gbp.removeLocation(t, id); onReload(); } catch (e) { toastError(e as ApiError); }
+  }
+  const upgrade = () => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: "plan_required", message: "Upgrade your plan to connect more Google locations." } })); };
+
+  // One row in the "All locations" popup.
+  const ql = q.trim().toLowerCase();
+  type Row = { id: string; name: string; reviews: number; status: "connected" | "reserved" | "available"; slot_no?: number | null; can_connect?: boolean };
+  const rows: Row[] = [
+    ...connected.map((l) => ({ id: l.id, name: l.name ?? "—", reviews: l.total_reviews ?? l.review_count ?? 0, status: "connected" as const, slot_no: l.slot_no })),
+    ...available.map((h) => ({ id: h.id, name: h.name, reviews: h.review_count, status: (h.reserved ? "reserved" : "available") as "reserved" | "available", slot_no: h.slot_no, can_connect: h.can_connect })),
+  ].filter((r) => !ql || r.name.toLowerCase().includes(ql));
+
+  return (
+    <div className="panel">
+      <style>{`@keyframes eydiaSwitchPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}50%{box-shadow:0 0 0 7px rgba(255,255,255,0)}}`}</style>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <h2 style={{ fontSize: 15, margin: 0 }}>Your Accounts &amp; Locations</h2>
+        <button className="btn" style={{ padding: "8px 14px", fontSize: 13, fontWeight: 700 }} onClick={() => { setQ(""); setPopup(true); }}>
+          📋 All locations ({allLocs.length + available.length})
+        </button>
+      </div>
+
+      {/* Highlighted active-profile switcher (when more than one connected). */}
+      {connected.length > 1 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, padding: "13px 16px", borderRadius: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", boxShadow: "0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent)" }}>
+          <span style={{ fontSize: 22 }}>🏢</span>
+          <div style={{ flex: 1, minWidth: 140 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .85, letterSpacing: ".4px" }}>ACTIVE GOOGLE PROFILE · <span style={{ opacity: .95 }}>{connected.length} connected</span></div>
+            <div style={{ fontSize: 15, fontWeight: 800 }}>{activeName}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.4)", borderRadius: 12, padding: "5px 6px 5px 12px", animation: "eydiaSwitchPulse 2.2s ease-in-out infinite" }}>
+            <span style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: ".3px", whiteSpace: "nowrap" }}>🔁 SWITCH</span>
+            <select value={activeId ?? ""} onChange={(e) => onSelectActive(e.target.value)}
+              style={{ padding: "9px 12px", borderRadius: 9, border: "none", fontSize: 13.5, fontWeight: 800, minWidth: 180, cursor: "pointer", color: "var(--accent)", background: "#fff" }}>
+              {connected.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </div>
+        </div>
+      )}
+
+      {/* Slot usage */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 12, padding: "9px 13px", borderRadius: 10, background: full ? "#fff6f5" : "#eef6ff", border: `1px solid ${full ? "#f3d6d2" : "#d6e4ff"}`, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13 }}>📍</span>
+        <span style={{ fontSize: 12.5, color: full ? "#a93226" : "#2160ef", flex: 1, minWidth: 180 }}>
+          Using <strong>{used}</strong> of <strong>{limit ?? "unlimited"}</strong> location slot{limit === 1 ? "" : "s"}.
+          {full ? " Limit reached — upgrade your plan to connect more locations." : " Only the active location’s reviews, posts & insights are shown below."}
+        </span>
+        {full && <button className="btn-mini" style={{ color: "#fff", background: "#2160ef", border: "none" }} onClick={upgrade}>Upgrade plan</button>}
+      </div>
+
+      {/* Connected location cards (the switch set). */}
+      {connected.length === 0 ? (
+        <p className="muted" style={{ fontSize: 13, marginTop: 12 }}>No connected locations yet. Open <strong>All locations</strong> to connect one, or Connect Google and Sync.</p>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 12, marginTop: 12 }}>
+          {connected.map((l) => {
+            const isActive = l.id === activeId;
+            return (
+              <div key={l.id} className="gbp-acct" onClick={() => onSelectActive(l.id)}
+                style={{ position: "relative", cursor: "pointer", border: isActive ? "2px solid var(--accent)" : undefined, boxShadow: isActive ? "0 8px 22px color-mix(in srgb, var(--accent) 20%, transparent)" : undefined }}>
+                {isActive && <span style={{ position: "absolute", top: -9, left: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 999 }}>● ACTIVE</span>}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 11, background: "#eef1ff", color: "var(--accent)", display: "grid", placeItems: "center", fontWeight: 700 }}>{(l.name ?? "?").slice(0, 1).toUpperCase()}</div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    {l.slot_no != null && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 999, background: "#eef1ff", color: "var(--accent)" }}>Slot {l.slot_no}</span>}
+                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: l.is_verified ? "#e7f7ef" : "var(--bg)", color: l.is_verified ? "#0a7d47" : "var(--muted)" }}>{l.is_verified ? "Live" : "Synced"}</span>
+                  </div>
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</div>
+                <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.address ?? "—"}</div>
+                <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", alignItems: "center" }}>
+                  <div><b style={{ fontSize: 16 }}>{(l.avg_rating ?? l.rating ?? 0).toFixed(1)}</b><div className="muted" style={{ fontSize: 11 }}>★ Rating</div></div>
+                  <div><b style={{ fontSize: 16 }}>{l.total_reviews ?? l.review_count ?? 0}</b><div className="muted" style={{ fontSize: 11 }}>Reviews</div></div>
+                  <div style={{ marginLeft: "auto" }}>
+                    <button className="btn-mini" title="Disconnect — the slot stays reserved for this same location" onClick={(e) => { e.stopPropagation(); disconnectLoc(l.id, l.name ?? "this"); }}>Disconnect</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── All-locations popup (search + connect) ── */}
+      {popup && (
+        <div onClick={() => setPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", zIndex: 1000, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "6vh 16px" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "var(--card, #fff)", borderRadius: 16, width: "min(680px,100%)", maxHeight: "86vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 60px rgba(0,0,0,.3)" }}>
+            <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>All locations</div>
+                <div className="muted" style={{ fontSize: 12 }}>Using {used} of {limit ?? "unlimited"} slots · connect a location to manage it</div>
+              </div>
+              <button className="btn-mini" onClick={() => setPopup(false)}>✕ Close</button>
+            </div>
+            <div style={{ padding: "12px 18px", borderBottom: "1px solid var(--border)" }}>
+              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search locations…"
+                style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14 }} />
+            </div>
+            <div style={{ overflowY: "auto", padding: "10px 18px 18px" }}>
+              {rows.length === 0 ? (
+                <p className="muted" style={{ fontSize: 13, textAlign: "center", padding: 20 }}>No locations match “{q}”.</p>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  {rows.map((r) => (
+                    <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", border: "1px solid var(--border)", borderRadius: 10, flexWrap: "wrap", background: r.status === "connected" ? "color-mix(in srgb, var(--accent) 7%, transparent)" : "var(--bg)" }}>
+                      <span style={{ fontWeight: 700, fontSize: 13.5, flex: 1, minWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.name}
+                        {r.status === "connected" && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 999, background: "#e7f7ef", color: "#0a7d47" }}>● Connected · Slot {r.slot_no}</span>}
+                        {r.status === "reserved" && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 999, background: "#fff4e5", color: "#b7791f" }}>Reserved · Slot {r.slot_no}</span>}
+                      </span>
+                      <span className="muted" style={{ fontSize: 11.5 }}>{r.reviews} reviews</span>
+                      {r.status === "connected" ? (
+                        <>
+                          <button className="btn-mini" onClick={() => { onSelectActive(r.id); setPopup(false); }}>Make active</button>
+                          <button className="btn-mini" onClick={() => disconnectLoc(r.id, r.name)}>Disconnect</button>
+                        </>
+                      ) : r.status === "reserved" ? (
+                        <button className="btn-mini" style={{ color: "#fff", background: "var(--accent)", border: "none" }} onClick={() => connectLoc(r.id, r.name)}>Reconnect</button>
+                      ) : (r.can_connect ?? true) ? (
+                        <button className="btn-mini" style={{ color: "#fff", background: "var(--accent)", border: "none" }} onClick={() => connectLoc(r.id, r.name)}>Connect</button>
+                      ) : (
+                        <button className="btn-mini" onClick={upgrade}>🔒 Upgrade</button>
+                      )}
+                      <button className="btn-mini" title="Permanently remove" style={{ color: "#c0392b" }} onClick={() => removeLoc(r.id, r.name)}>Remove</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OverviewTab({ overview, busy, onSync, onGoTab, onReload, onSelectActive }:
+  { overview: GbpOverview | null; busy: boolean; onSync: () => void; onGoTab: (k: string) => void; onReload: () => void; onSelectActive: (id: string) => void }) {
   if (!overview) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Loading your dashboard…</span></div>;
 
   const s = overview.stats;
@@ -208,18 +367,6 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
   const health = overview.health;
   const charts = overview.charts;
   const recent = overview.recent_reviews ?? [];
-  const allLocs = overview.locations ?? [];
-  const allHidden = overview.hidden_locations ?? [];
-  const lq = locQuery.trim().toLowerCase();
-  const locMatch = (s?: string | null) => (s ?? "").toLowerCase().includes(lq);
-  const locs = lq ? allLocs.filter((l) => locMatch(l.name) || locMatch(l.address)) : allLocs;
-  const hidden = lq ? allHidden.filter((h) => locMatch(h.name)) : allHidden;
-  // Active Google profile the customer is focused on (switchable). Defaults to the
-  // first unlocked location; locked ones are shown but can't be the active profile.
-  const unlockedLocs = allLocs.filter((l) => !l.locked);
-  const activeId = (activeProfileId && allLocs.some((l) => l.id === activeProfileId && !l.locked))
-    ? activeProfileId
-    : (unlockedLocs[0]?.id ?? null);
   const total = s.total_reviews;
   const avg = s.average_rating;
   const replied = charts?.replied ?? s.replied ?? 0;
@@ -245,6 +392,10 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
+      {/* Accounts & Locations — pinned to the TOP; the dashboard below shows only
+          the ACTIVE location's data. */}
+      <AccountsLocations overview={overview} onSelectActive={onSelectActive} onReload={onReload} />
+
       {/* Hero */}
       <div className="gbp-hero">
         <div>
@@ -334,7 +485,7 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
 
       {/* KPI cards */}
       <div className="gbp-kpis">
-        <Kpi icon="🏢" grad="linear-gradient(135deg,#4c57d8,#6b8afd)" label="Business Accounts" value={Math.max(1, locs.length ? 1 : 0) || 1} sub="Google My Business" />
+        <Kpi icon="🏢" grad="linear-gradient(135deg,#4c57d8,#6b8afd)" label="Business Accounts" value={1} sub="Google My Business" />
         <Kpi icon="📍" grad="linear-gradient(135deg,#22c55e,#4ade80)" label="Business Locations" value={s.locations} sub="Active locations" />
         <Kpi icon="⭐" grad="linear-gradient(135deg,#f59e0b,#fbbf24)" label="Total Reviews" value={total} sub={`Avg ${avg.toFixed(1)} / 5`} />
         <Kpi icon="⚡" grad="linear-gradient(135deg,#8b5cf6,#a78bfa)" label="AI Credits" value={(sum?.credit_balance ?? 0).toLocaleString("en-IN")} sub="Available for AI" valueColor="#8b5cf6" />
@@ -422,151 +573,6 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload }:
         </div>
       )}
 
-      {/* Accounts & locations */}
-      <div className="panel">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <h2 style={{ fontSize: 15, margin: 0 }}>Your Accounts &amp; Locations</h2>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {(allLocs.length + allHidden.length) > 4 && (
-              <input value={locQuery} onChange={(e) => setLocQuery(e.target.value)} placeholder="🔍 Search locations…"
-                style={{ padding: "7px 12px", border: "1px solid var(--border)", borderRadius: 9, fontSize: 13, minWidth: 200 }} />
-            )}
-          </div>
-        </div>
-        {/* Highlighted Google-profile switcher (when more than one profile) */}
-        {unlockedLocs.length > 1 && (
-          <>
-            <style>{`@keyframes eydiaSwitchPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}50%{box-shadow:0 0 0 7px rgba(255,255,255,0)}}`}</style>
-            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginTop: 12, marginBottom: 4, padding: "13px 16px", borderRadius: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", boxShadow: "0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent)" }}>
-              <span style={{ fontSize: 22 }}>🏢</span>
-              <div style={{ flex: 1, minWidth: 140 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, opacity: .85, letterSpacing: ".4px" }}>
-                  ACTIVE GOOGLE PROFILE · <span style={{ opacity: .95 }}>{unlockedLocs.length} connected</span>
-                </div>
-                <div style={{ fontSize: 15, fontWeight: 800 }}>{allLocs.find((l) => l.id === activeId)?.name ?? "—"}</div>
-              </div>
-              {/* Highlighted Switch control */}
-              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,.16)", border: "1px solid rgba(255,255,255,.4)", borderRadius: 12, padding: "5px 6px 5px 12px", animation: "eydiaSwitchPulse 2.2s ease-in-out infinite" }}>
-                <span style={{ fontSize: 12.5, fontWeight: 800, letterSpacing: ".3px", whiteSpace: "nowrap" }}>🔁 SWITCH</span>
-                <select value={activeId ?? ""} onChange={(e) => setActiveProfileId(e.target.value)}
-                  style={{ padding: "9px 12px", borderRadius: 9, border: "none", fontSize: 13.5, fontWeight: 800, minWidth: 180, cursor: "pointer", color: "var(--accent)", background: "#fff" }}>
-                  {unlockedLocs.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                </select>
-              </div>
-            </div>
-          </>
-        )}
-        {(() => {
-          const limit = overview.location_limit ?? overview.max_locations ?? null;
-          const used = overview.slots_connected ?? unlockedLocs.length;
-          const full = limit != null && (overview.slots_used ?? used) >= limit;
-          return (
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, padding: "9px 13px", borderRadius: 10, background: full ? "#fff6f5" : "#eef6ff", border: `1px solid ${full ? "#f3d6d2" : "#d6e4ff"}`, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 13 }}>📍</span>
-              <span style={{ fontSize: 12.5, color: full ? "#a93226" : "#2160ef", flex: 1, minWidth: 180 }}>
-                Using <strong>{used}</strong> of <strong>{limit ?? "unlimited"}</strong> location slot{limit === 1 ? "" : "s"}.
-                {full ? " Limit reached — upgrade your plan to connect more locations." : " Connect a location to manage its reviews, posts & insights."}
-                {" "}Each connected location permanently keeps its slot — disconnecting reserves it for the same location only.
-              </span>
-              {full && (
-                <button className="btn-mini" style={{ color: "#fff", background: "#2160ef", border: "none" }}
-                  onClick={() => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: "plan_required", message: "Upgrade your plan to connect more Google locations." } })); }}>
-                  Upgrade plan
-                </button>
-              )}
-            </div>
-          );
-        })()}
-        {locs.length === 0 ? (
-          <p className="muted" style={{ fontSize: 13 }}>No visible locations. {hidden.length > 0 ? "Un-hide one below, or " : ""}Connect Google and Sync to pull your business locations.</p>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))", gap: 12 }}>
-            {locs.map((l) => {
-              const isActive = l.id === activeId && !l.locked;
-              return (
-              <div key={l.id} className="gbp-acct" onClick={() => { if (!l.locked) setActiveProfileId(l.id); }}
-                style={{ position: "relative", opacity: l.locked ? 0.96 : 1, cursor: l.locked ? "default" : "pointer", border: isActive ? "2px solid var(--accent)" : undefined, boxShadow: isActive ? "0 8px 22px color-mix(in srgb, var(--accent) 20%, transparent)" : undefined }}>
-                {isActive && <span style={{ position: "absolute", top: -9, left: 14, background: "var(--brand-grad, var(--accent))", color: "#fff", fontSize: 9.5, fontWeight: 800, padding: "2px 9px", borderRadius: 999 }}>● ACTIVE</span>}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 11, background: "#eef1ff", color: "var(--accent)", display: "grid", placeItems: "center", fontWeight: 700 }}>{(l.name ?? "?").slice(0, 1).toUpperCase()}</div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    {l.slot_no != null && <span style={{ fontSize: 10, fontWeight: 800, padding: "2px 8px", borderRadius: 999, background: "#eef1ff", color: "var(--accent)" }}>Slot {l.slot_no}</span>}
-                    <span style={{ fontSize: 10.5, fontWeight: 700, padding: "2px 9px", borderRadius: 999, background: l.locked ? "#fff4e5" : l.is_verified ? "#e7f7ef" : "var(--bg)", color: l.locked ? "#b7791f" : l.is_verified ? "#0a7d47" : "var(--muted)" }}>{l.locked ? "🔒 Locked" : l.is_verified ? "Live" : "Synced"}</span>
-                  </div>
-                </div>
-                <div style={{ fontWeight: 700, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.name}</div>
-                <div className="muted" style={{ fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.address ?? "—"}</div>
-                {l.locked ? (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-                    {(l.can_connect ?? true) ? (
-                      <>
-                        <p className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>Not connected yet. Connect this location to a plan slot to manage its reviews, posts &amp; insights.</p>
-                        <button className="btn" style={{ width: "100%", padding: "8px 10px", fontSize: 13, background: "var(--accent)", color: "#fff" }}
-                          onClick={() => connectLoc(l.id, l.name ?? "this", overview.location_limit ?? overview.max_locations ?? null)}>
-                          ➕ Connect location
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <p className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>Location limit reached on your plan. Upgrade to connect more Google profiles.</p>
-                        <button className="btn" style={{ width: "100%", padding: "8px 10px", fontSize: 13 }}
-                          onClick={() => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: "plan_required", message: "Upgrade your plan to connect more Google profiles." } })); }}>
-                          🔒 Upgrade to connect
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", gap: 16, marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", alignItems: "center" }}>
-                    <div><b style={{ fontSize: 16 }}>{(l.avg_rating ?? l.rating ?? 0).toFixed(1)}</b><div className="muted" style={{ fontSize: 11 }}>★ Rating</div></div>
-                    <div><b style={{ fontSize: 16 }}>{l.total_reviews ?? l.review_count ?? 0}</b><div className="muted" style={{ fontSize: 11 }}>Reviews</div></div>
-                    <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                      <button className="btn-mini" title="Disconnect — the slot stays reserved for this same location" onClick={() => disconnectLoc(l.id, l.name ?? "this")}>Disconnect</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              );
-            })}
-          </div>
-        )}
-
-        {hidden.length > 0 && (
-          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px dashed var(--border)" }}>
-            <div className="muted" style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 8 }}>
-              Available locations ({hidden.length}) — not connected
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {hidden.map((h) => {
-                const limit = overview.location_limit ?? overview.max_locations ?? null;
-                const canConnect = h.can_connect ?? true;
-                return (
-                <div key={h.id} title={canConnect ? undefined : "Location limit reached — upgrade your plan to connect more locations."}
-                  style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 10, flexWrap: "wrap", opacity: canConnect ? 0.9 : 0.6, background: "var(--bg)" }}>
-                  <span style={{ fontWeight: 600, fontSize: 13, flex: 1, minWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--muted)" }}>
-                    {h.name}
-                    {h.reserved && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 800, padding: "1px 7px", borderRadius: 999, background: "#fff4e5", color: "#b7791f" }}>Reserved · Slot {h.slot_no}</span>}
-                  </span>
-                  <span className="muted" style={{ fontSize: 11.5 }}>{h.review_count} reviews</span>
-                  {h.reserved ? (
-                    <button className="btn-mini" style={{ color: "#fff", background: "var(--accent)", border: "none" }}
-                      title="Reconnect this location to its reserved slot" onClick={() => connectLoc(h.id, h.name, limit)}>Reconnect</button>
-                  ) : canConnect ? (
-                    <button className="btn-mini" style={{ color: "#fff", background: "var(--accent)", border: "none" }}
-                      title="Connect this location into a plan slot" onClick={() => connectLoc(h.id, h.name, limit)}>Connect</button>
-                  ) : (
-                    <button className="btn-mini" title="Location limit reached — upgrade your plan"
-                      onClick={() => { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("eydia:upgrade", { detail: { code: "plan_required", message: "Upgrade your plan to connect more Google locations." } })); }}>🔒 Upgrade to connect</button>
-                  )}
-                  <button className="btn-mini" title="Permanently remove this location" style={{ color: "#c0392b" }} onClick={() => removeLoc(h.id, h.name)}>Remove</button>
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Recent reviews + quick actions */}
       <div className="gbp-grid-2">
         <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
@@ -635,20 +641,22 @@ function QuickAction({ icon, grad, title, sub, onClick }: { icon: string; grad: 
 }
 
 /* ---------------- Reviews ---------------- */
-function ReviewsTab({ overview }: { overview: GbpOverview | null }) {
+function ReviewsTab({ overview, activeLoc }: { overview: GbpOverview | null; activeLoc: string | null }) {
   const [reviews, setReviews] = useState<GbpReviewItem[]>([]);
   const [filter, setFilter] = useState<{ unreplied: boolean; rating: number }>({ unreplied: false, rating: 0 });
   const [replyTo, setReplyTo] = useState<GbpReviewItem | null>(null);
   const [autoSuggest, setAutoSuggest] = useState(false);
+  // Show only the ACTIVE location's reviews (resolved by the backend).
+  const loc = activeLoc ?? overview?.active_location?.id;
 
   const loadReviews = useCallback(async () => {
     const token = getToken();
     if (!token) return;
     try {
-      const res = await api.gbp.reviews(token, { unreplied: filter.unreplied || undefined, rating: filter.rating || undefined });
+      const res = await api.gbp.reviews(token, { location: loc, unreplied: filter.unreplied || undefined, rating: filter.rating || undefined });
       setReviews(res.reviews);
     } catch { /* surfaced elsewhere */ }
-  }, [filter]);
+  }, [filter, loc]);
   useEffect(() => { loadReviews(); }, [loadReviews]);
 
   const s = overview?.stats;
@@ -823,10 +831,10 @@ function ImageDrop({ value, onChange }: { value: string; onChange: (url: string)
 }
 
 /* Add Post modal — Update / Offer / Event, each pushed to Google as a localPost. */
-function PostModal({ locations, seed, onClose, onSaved }:
-  { locations: GbpLocationItem[]; seed?: { type?: string; summary?: string; image_url?: string } | null; onClose: () => void; onSaved: () => void }) {
+function PostModal({ locations, defaultLoc, seed, onClose, onSaved }:
+  { locations: GbpLocationItem[]; defaultLoc?: string | null; seed?: { type?: string; summary?: string; image_url?: string } | null; onClose: () => void; onSaved: () => void }) {
   const [type, setType] = useState(seed?.type ?? "STANDARD");
-  const [loc, setLoc] = useState(locations[0]?.id ?? "");
+  const [loc, setLoc] = useState(defaultLoc || locations[0]?.id || "");
   const [form, setForm] = useState({
     summary: seed?.summary ?? "", image_url: seed?.image_url ?? "", cta_url: "",
     coupon_code: "", terms: "", event_start: "", event_end: "", schedule_at: "",
@@ -920,8 +928,8 @@ function PostModal({ locations, seed, onClose, onSaved }:
 }
 
 /* Upload Photo modal — category + caption (with AI) + schedule. */
-function PhotoModal({ locations, onClose, onSaved }: { locations: GbpLocationItem[]; onClose: () => void; onSaved: () => void }) {
-  const [loc, setLoc] = useState(locations[0]?.id ?? "");
+function PhotoModal({ locations, defaultLoc, onClose, onSaved }: { locations: GbpLocationItem[]; defaultLoc?: string | null; onClose: () => void; onSaved: () => void }) {
+  const [loc, setLoc] = useState(defaultLoc || locations[0]?.id || "");
   const [form, setForm] = useState({ image_url: "", caption: "", category: "ADDITIONAL", schedule_at: "" });
   const [busy, setBusy] = useState(false);
   const [genBusy, setGenBusy] = useState(false);
@@ -1003,7 +1011,7 @@ function ContentStat({ label, value, icon, bg, fg }: { label: string; value: Rea
 
 const fmtDate = (s: string | null) => (s ? new Date(s).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "");
 
-function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
+function PostsPhotosTab({ locations, activeLoc }: { locations: GbpLocationItem[]; activeLoc: string | null }) {
   const [posts, setPosts] = useState<GbpPostItem[]>([]);
   const [counts, setCounts] = useState({ total: 0, published: 0, scheduled: 0, draft: 0 });
   const [photos, setPhotos] = useState<GbpPhotoItem[]>([]);
@@ -1169,8 +1177,8 @@ function PostsPhotosTab({ locations }: { locations: GbpLocationItem[] }) {
       {/* AI GENERATE */}
       {sub === "ai" && <AiGenerate locations={locations} onDraft={(s) => { setSeed(s); setShowPost(true); }} />}
 
-      {showPost && <PostModal locations={locations} seed={seed} onClose={() => setShowPost(false)} onSaved={() => { setShowPost(false); setSub("posts"); loadPosts(); }} />}
-      {showPhoto && <PhotoModal locations={locations} onClose={() => setShowPhoto(false)} onSaved={() => { setShowPhoto(false); setSub("photos"); loadPhotos(); }} />}
+      {showPost && <PostModal locations={locations} defaultLoc={activeLoc} seed={seed} onClose={() => setShowPost(false)} onSaved={() => { setShowPost(false); setSub("posts"); loadPosts(); }} />}
+      {showPhoto && <PhotoModal locations={locations} defaultLoc={activeLoc} onClose={() => setShowPhoto(false)} onSaved={() => { setShowPhoto(false); setSub("photos"); loadPhotos(); }} />}
     </div>
   );
 }
@@ -1306,7 +1314,7 @@ function isoDay(offsetDays: number) {
   return d.toISOString().slice(0, 10);
 }
 
-function InsightsTab({ locations }: { locations: GbpLocationItem[] }) {
+function InsightsTab({ locations, activeLoc }: { locations: GbpLocationItem[]; activeLoc: string | null }) {
   const [data, setData] = useState<GbpInsights | null>(null);
   const [days, setDays] = useState(30);
   const [mode, setMode] = useState<"preset" | "custom">("preset");
@@ -1321,8 +1329,9 @@ function InsightsTab({ locations }: { locations: GbpLocationItem[] }) {
     const t = getToken(); if (!t) return;
     setLoading(true);
     const range = custom && start && end ? { start, end } : undefined;
-    api.gbp.insights(t, days, undefined, range).then(setData).catch((e) => setErr((e as ApiError).message)).finally(() => setLoading(false));
-  }, [days, custom, start, end]);
+    // Insights for the ACTIVE location only.
+    api.gbp.insights(t, days, activeLoc ?? undefined, range).then(setData).catch((e) => setErr((e as ApiError).message)).finally(() => setLoading(false));
+  }, [days, custom, start, end, activeLoc]);
   useEffect(() => { load(); }, [load]);
 
   async function exportCsv() {

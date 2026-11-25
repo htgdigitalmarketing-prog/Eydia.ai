@@ -686,7 +686,8 @@ export const api = {
 
   // ---- Google Business Profile / Reviews dashboard ----
   gbp: {
-    overview: (token: string) => request<GbpOverview>("/gbp/overview", { token }),
+    overview: (token: string, location?: string) =>
+      request<GbpOverview>(`/gbp/overview${location ? `?location=${encodeURIComponent(location)}` : ""}`, { token }),
     reviews: (token: string, params?: { location?: string; unreplied?: boolean; rating?: number }) => {
       const qs = new URLSearchParams();
       if (params?.location) qs.set("location", params.location);
@@ -1127,6 +1128,7 @@ export type GbpOverview = {
   slots_used?: number;
   slots_connected?: number;
   slots_available?: number | null;
+  active_location?: { id: string; name: string } | null;
   locations: (GbpLocationItem & { total_reviews?: number; avg_rating?: number } & GbpSlotFlags)[];
   hidden_locations?: ({ id: string; name: string; review_count: number } & GbpSlotFlags)[];
   stats: {

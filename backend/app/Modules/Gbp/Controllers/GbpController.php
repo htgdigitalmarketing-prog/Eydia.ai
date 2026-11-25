@@ -90,9 +90,16 @@ class GbpController extends Controller
             ->withCount('reviews')
             ->withAvg('reviews as reviews_avg_rating', 'rating')
             ->get();
-        $visibleIds = $locations->pluck('id');
         $hidden = GbpLocation::query()->where('is_hidden', true)
             ->get(['id', 'uuid', 'name', 'review_count', 'is_hidden']);
+
+        // Focus the whole dashboard on ONE active (connected) location — the one
+        // passed as ?location=, else the first connected. Every aggregate below
+        // (stats, charts, recent reviews, posts/photos, health) is for IT alone,
+        // so the dashboard shows only the active profile's data & activity.
+        $activeUuid = $request->query('location');
+        $active = ($activeUuid ? $locations->firstWhere('uuid', $activeUuid) : null) ?: $locations->first();
+        $visibleIds = $active ? collect([$active->id]) : collect();
 
         $reviews = GbpReview::query()->whereIn('gbp_location_id', $visibleIds)
             ->get(['rating', 'reply', 'sentiment', 'reviewed_at', 'replied_at']);
@@ -133,9 +140,9 @@ class GbpController extends Controller
             ? round($repliedAll->avg(fn ($r) => $r->reviewed_at->diffInHours($r->replied_at)) / 24, 1)
             : 0;
 
-        // ---- Cross-module counts for the summary cards ----
-        $postsCount = GbpPost::query()->count();
-        $photosCount = GbpPhoto::query()->count();
+        // ---- Counts for the summary cards (posts/photos scoped to the active location) ----
+        $postsCount = $active ? GbpPost::query()->where('gbp_location_id', $active->id)->count() : 0;
+        $photosCount = $active ? GbpPhoto::query()->where('gbp_location_id', $active->id)->count() : 0;
         $socialCount = SocialPost::query()->count();
         $leadsCount = Lead::query()->count();
         $leadsConverted = Lead::query()->where('stage', 'CONVERTED')->count();
@@ -200,7 +207,8 @@ class GbpController extends Controller
                 'replied' => $replied,
                 'rating_distribution' => $dist,
             ],
-            'health' => $health->compute(),
+            'active_location' => $active ? ['id' => $active->uuid, 'name' => $active->name] : null,
+            'health' => $health->compute($active),
             'summary' => [
                 'reviews' => $total,
                 'avg_rating' => $avg,

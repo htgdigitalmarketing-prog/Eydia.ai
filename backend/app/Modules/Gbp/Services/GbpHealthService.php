@@ -15,20 +15,27 @@ use App\Models\Integration;
  */
 class GbpHealthService
 {
-    /** @return array{score:int, grade:string, sub_scores:array, actions:array} */
-    public function compute(): array
+    /**
+     * @param  GbpLocation|null  $location  when given, the score is for THIS
+     *                                       location only (the active profile).
+     * @return array{score:int, grade:string, sub_scores:array, actions:array}
+     */
+    public function compute(?GbpLocation $location = null): array
     {
+        $locId = $location?->id;
+        $scope = fn ($q) => $locId ? $q->where('gbp_location_id', $locId) : $q;
+
         $connected = (bool) Integration::where('provider', Integration::GOOGLE_GBP)->first()?->isConnected();
         $locations = GbpLocation::query()->count();
-        $reviews = GbpReview::query()->get(['rating', 'reply']);
+        $reviews = $scope(GbpReview::query())->get(['rating', 'reply']);
         $total = $reviews->count();
         $avg = $total ? (float) $reviews->avg('rating') : 0.0;
         $replied = $reviews->whereNotNull('reply')->count();
         $replyRate = $total ? $replied / $total : 0.0;
         $negatives = $reviews->where('rating', '<=', 2);
         $negUnreplied = $negatives->whereNull('reply')->count();
-        $postsPublished = GbpPost::where('status', 'PUBLISHED')->count();
-        $photos = GbpPhoto::query()->count();
+        $postsPublished = $scope(GbpPost::where('status', 'PUBLISHED'))->count();
+        $photos = $scope(GbpPhoto::query())->count();
 
         $sub = [
             'connection' => [
