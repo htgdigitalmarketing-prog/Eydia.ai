@@ -18,8 +18,7 @@ class GbpAutomationController extends Controller
 {
     public function show(Request $request): JsonResponse
     {
-        $automation = GbpAutomation::forTenant($request->user()->tenant_id);
-        $location = $this->primaryLocation($automation);
+        [$automation, $location] = $this->resolve($request);
 
         return $this->ok($this->payload($automation, $location));
     }
@@ -49,7 +48,7 @@ class GbpAutomationController extends Controller
             'brand.website' => ['sometimes', 'nullable', 'string', 'max:200'],
         ]);
 
-        $automation = GbpAutomation::forTenant($request->user()->tenant_id);
+        [$automation, $location] = $this->resolve($request);
         if (array_key_exists('brand', $data)) {
             $meta = $automation->meta ?? [];
             $meta['brand'] = array_filter(array_merge((array) ($meta['brand'] ?? []), $data['brand']), fn ($v) => $v !== null);
@@ -67,7 +66,6 @@ class GbpAutomationController extends Controller
             unset($data['posts_per_week']);
         }
         $automation->fill($data)->save();
-        $location = $this->primaryLocation($automation);
 
         return $this->ok($this->payload($automation, $location) + ['message' => 'Automation settings saved.']);
     }
@@ -80,7 +78,7 @@ class GbpAutomationController extends Controller
      */
     public function runNow(Request $request, GbpAutomationRunner $runner): JsonResponse
     {
-        $automation = GbpAutomation::forTenant($request->user()->tenant_id);
+        [$automation, $location] = $this->resolve($request);
 
         if (! $automation->auto_review_replies && ! $automation->auto_posts && ! $automation->auto_photos) {
             return $this->fail('Turn on at least one automation first.', [], 422);
@@ -103,8 +101,6 @@ class GbpAutomationController extends Controller
             $parts[] = $result['images'] . ' ' . ($result['images'] === 1 ? 'photo' : 'photos') . ' generated';
         }
 
-        $location = $this->primaryLocation($automation);
-
         return $this->ok($this->payload($automation, $location) + [
             'ran' => $result,
             'message' => $parts !== []
@@ -113,17 +109,27 @@ class GbpAutomationController extends Controller
         ]);
     }
 
-    /** Resolve (and remember) the location these automations act on. */
-    private function primaryLocation(GbpAutomation $automation): ?GbpLocation
+    /**
+     * Resolve the ACTIVE location (from ?location, else the primary connected one)
+     * and its own automation row — so each location keeps completely independent
+     * automation settings and Brand Kit. Falls back to a tenant-level row only
+     * when the tenant has no connected location yet.
+     *
+     * @return array{0: GbpAutomation, 1: ?GbpLocation}
+     */
+    private function resolve(Request $request): array
     {
-        $location = $automation->location
-            ?: GbpLocation::visible()->orderByDesc('review_count')->first();
-
-        if ($location && $automation->gbp_location_id !== $location->id) {
-            $automation->forceFill(['gbp_location_id' => $location->id])->saveQuietly();
+        $location = null;
+        if ($uuid = $request->query('location')) {
+            $location = GbpLocation::where('uuid', $uuid)->first();
         }
+        $location ??= GbpLocation::visible()->orderByDesc('review_count')->first();
 
-        return $location;
+        $automation = $location
+            ? GbpAutomation::forLocation($request->user()->tenant_id, $location->id)
+            : GbpAutomation::forTenant($request->user()->tenant_id);
+
+        return [$automation, $location];
     }
 
     private function payload(GbpAutomation $automation, ?GbpLocation $location): array

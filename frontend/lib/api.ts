@@ -747,13 +747,15 @@ export const api = {
       request<{ message: string }>(`/gbp/locations/${id}`, { method: "DELETE", token }),
 
     // Automation control centre (ON/OFF toggles + cadence + QR review-assist).
-    automation: (token: string) => request<GbpAutomationResponse>("/gbp/automation", { token }),
-    updateAutomation: (token: string, body: Partial<GbpAutomationSettings> & { brand?: GbpBrand }) =>
-      request<GbpAutomationResponse & { message: string }>("/gbp/automation", { method: "PUT", body, token }),
+    // All three are scoped to the ACTIVE location (its own settings + Brand Kit).
+    automation: (token: string, location?: string) =>
+      request<GbpAutomationResponse>(`/gbp/automation${location ? `?location=${location}` : ""}`, { token }),
+    updateAutomation: (token: string, body: Partial<GbpAutomationSettings> & { brand?: GbpBrand }, location?: string) =>
+      request<GbpAutomationResponse & { message: string }>(`/gbp/automation${location ? `?location=${location}` : ""}`, { method: "PUT", body, token }),
     // Run the enabled automations immediately (don't wait for the scheduler).
-    runAutomationsNow: (token: string) =>
+    runAutomationsNow: (token: string, location?: string) =>
       request<GbpAutomationResponse & { message: string; ran: { replies: number; posts: number; images: number } }>(
-        "/gbp/automation/run", { method: "POST", token }),
+        `/gbp/automation/run${location ? `?location=${location}` : ""}`, { method: "POST", token }),
 
     // Business insights + Google audit / health score.
     // Pass a custom range with { start, end } (YYYY-MM-DD) to see any period,

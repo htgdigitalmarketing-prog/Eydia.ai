@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { api, ApiError, GbpAutomationResponse, GbpAutomationSettings } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { getActiveLocationId } from "@/lib/activeLocation";
+import { ActiveLocationBanner } from "@/components/ActiveLocationBanner";
 
 const FEATURES: { key: keyof GbpAutomationSettings; title: string; desc: string; icon: string }[] = [
   { key: "auto_review_replies", title: "AI Review Replies", desc: "Automatically draft & post warm, professional replies to new customer reviews.", icon: "💬" },
@@ -27,13 +29,15 @@ function Dashboard() {
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const activeLoc = getActiveLocationId() ?? undefined;
+
   const load = useCallback(async () => {
     const token = getToken(); if (!token) return;
     setLoading(true);
-    try { setData(await api.gbp.automation(token)); }
+    try { setData(await api.gbp.automation(token, activeLoc)); }
     catch (e) { setError((e as ApiError).message); }
     finally { setLoading(false); }
-  }, []);
+  }, [activeLoc]);
   useEffect(() => { load(); }, [load]);
 
   const a = data?.automation;
@@ -51,7 +55,7 @@ function Dashboard() {
     const token = getToken(); if (!token) return;
     setSaving(label); setError(null); setNotice(null);
     try {
-      const res = await api.gbp.updateAutomation(token, body);
+      const res = await api.gbp.updateAutomation(token, body, activeLoc);
       setData(res);
       setNotice(res.message);
       setTimeout(() => setNotice(null), 2500);
@@ -63,7 +67,7 @@ function Dashboard() {
     const token = getToken(); if (!token) return;
     setSaving(label); setError(null); setNotice(null);
     try {
-      const res = await api.gbp.updateAutomation(token, { brand: { ...(data?.brand ?? {}), ...fields } });
+      const res = await api.gbp.updateAutomation(token, { brand: { ...(data?.brand ?? {}), ...fields } }, activeLoc);
       setData(res);
       setNotice("Brand kit saved.");
       setTimeout(() => setNotice(null), 2500);
@@ -84,7 +88,7 @@ function Dashboard() {
     const token = getToken(); if (!token) return;
     setSaving("run"); setError(null); setNotice(null);
     try {
-      const res = await api.gbp.runAutomationsNow(token);
+      const res = await api.gbp.runAutomationsNow(token, activeLoc);
       setData(res);
       setNotice(res.message);
       setTimeout(() => setNotice(null), 6000);
@@ -109,6 +113,8 @@ function Dashboard() {
         title="Automation"
         subtitle="Switch on the AI features that run your Google Business Profile automatically — reviews, posts, photos and reviews-via-QR."
       />
+
+      <ActiveLocationBanner module="Automation" />
 
       {error && <div className="error">{error}</div>}
       {notice && <div className="panel" style={{ background: "#e7f7ef", color: "#0a7d47", marginBottom: 16 }}>{notice}</div>}

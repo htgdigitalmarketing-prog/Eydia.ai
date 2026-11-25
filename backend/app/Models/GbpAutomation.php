@@ -48,6 +48,16 @@ class GbpAutomation extends Model
         return static::firstOrCreate(['tenant_id' => $tenantId]);
     }
 
+    /**
+     * The automation row for ONE location (its own settings + Brand Kit), created
+     * with defaults on first access. This is how each connected location keeps a
+     * completely independent automation config and brand kit.
+     */
+    public static function forLocation(int $tenantId, int $locationId): self
+    {
+        return static::firstOrCreate(['tenant_id' => $tenantId, 'gbp_location_id' => $locationId]);
+    }
+
     /** Give the public review-assist page a stable, shareable slug. */
     public function ensureSlug(?string $businessName = null): string
     {
