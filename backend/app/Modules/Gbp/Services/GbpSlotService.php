@@ -30,9 +30,23 @@ class GbpSlotService
      */
     public function limit(int $tenantId): ?int
     {
+        // 1) A super-admin per-tenant override always wins over the plan. Stored on
+        //    tenants.settings.location_limit: a number caps it (-1 / "unlimited" =
+        //    unlimited); absent/null = fall back to the plan.
+        $tenant = \App\Models\Tenant::find($tenantId);
+        $override = $tenant?->settings['location_limit'] ?? null;
+        if ($override !== null && $override !== '') {
+            if ($override === 'unlimited' || (int) $override < 0) {
+                return null; // unlimited
+            }
+
+            return (int) $override;
+        }
+
+        // 2) Otherwise the plan's limit. Free / no plan → a single location.
         $plan = $this->planLimits->planFor($tenantId);
         if (! $plan) {
-            return 1; // free / no plan → a single location; buy a plan for more
+            return 1;
         }
         $v = $plan->limit('location_limit', $plan->limit('max_locations'));
         if ($v === null || $v === '' || (int) $v < 0) {
@@ -40,6 +54,17 @@ class GbpSlotService
         }
 
         return (int) $v;
+    }
+
+    /** The super-admin override for a tenant (null = none set, falls back to plan). */
+    public function override(int $tenantId): ?int
+    {
+        $v = \App\Models\Tenant::find($tenantId)?->settings['location_limit'] ?? null;
+        if ($v === null || $v === '') {
+            return null;
+        }
+
+        return ($v === 'unlimited' || (int) $v < 0) ? -1 : (int) $v;
     }
 
     /** The permanent identity key for a location's slot (stable across re-syncs). */

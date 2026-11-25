@@ -467,6 +467,11 @@ export const api = {
       request<{ message: string; status: string }>(`/admin/companies/${id}/toggle`, { method: "POST", token }),
     assignPlan: (token: string, id: string, planId: string) =>
       request<{ message: string }>(`/admin/companies/${id}/plan`, { method: "POST", body: { plan_id: planId }, token }),
+    // Super-admin custom GBP location limit (overrides the plan). Pass null/"" to
+    // clear, "unlimited" or a negative number for unlimited, else an integer.
+    setLocationLimit: (token: string, id: string, location_limit: number | "unlimited" | null) =>
+      request<{ message: string; location_limit_override: number | null; location_limit_effective: number | null }>(
+        `/admin/companies/${id}/location-limit`, { method: "POST", body: { location_limit }, token }),
     impersonate: (token: string, id: string) =>
       request<{ token: string; user: User; company: string }>(`/admin/companies/${id}/impersonate`, { method: "POST", token }),
     removeCompany: (token: string, id: string) =>
@@ -709,9 +714,9 @@ export const api = {
     profile: (token: string, location?: string) =>
       request<{ profile: GbpProfile; connected: boolean; attribute_groups: string[] }>(
         `/gbp/profile${location ? `?location=${location}` : ""}`, { token }),
-    updateProfile: (token: string, body: Partial<GbpProfile>) =>
+    updateProfile: (token: string, body: Partial<GbpProfile>, location?: string) =>
       request<{ profile: GbpProfile; synced_to_google: boolean; message: string }>(
-        "/gbp/profile", { method: "PUT", body, token }),
+        `/gbp/profile${location ? `?location=${location}` : ""}`, { method: "PUT", body, token }),
     // AI: rewrite the business description for local SEO.
     aiRewriteProfile: (token: string, body: { keywords?: string[]; location?: string }) =>
       request<{ description: string; source: string; credits: number | null }>(
@@ -1303,6 +1308,8 @@ export type Company = {
   plan_name?: string | null;
   agents_used?: number;
   agents_limit?: number | null; // null = unlimited
+  location_limit_override?: number | null; // null = none set, -1 = unlimited, else int
+  location_limit_effective?: number | null; // null = unlimited (override or plan)
   trial_ends_at: string | null;
   created_at: string | null;
 };

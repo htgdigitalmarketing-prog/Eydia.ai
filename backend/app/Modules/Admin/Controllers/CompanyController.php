@@ -33,12 +33,14 @@ class CompanyController extends Controller
             ->get();
 
         $limits = app(\App\Modules\Billing\Services\PlanLimitService::class);
+        $slots = app(\App\Modules\Gbp\Services\GbpSlotService::class);
 
         return $this->ok([
-            'companies' => $tenants->map(function (Tenant $t) use ($limits) {
+            'companies' => $tenants->map(function (Tenant $t) use ($limits, $slots) {
                 $owner = \App\Models\User::where('tenant_id', $t->id)->orderBy('id')->first();
                 $plan = $limits->planFor($t->id);
                 $agentLimit = $limits->limit($t->id, 'max_agents');
+                $override = $slots->override($t->id); // null = none, -1 = unlimited, else int
                 return [
                     'id' => $t->uuid ?? (string) $t->id,
                     'name' => $t->company_name ?? $t->name,
@@ -50,6 +52,10 @@ class CompanyController extends Controller
                     'plan_name' => $plan?->name,
                     'agents_used' => $limits->usage($t->id, 'agents'),
                     'agents_limit' => $agentLimit, // null = unlimited
+                    // GBP location limit: the super-admin override (null = none set),
+                    // and the effective limit actually in force (override or plan).
+                    'location_limit_override' => $override,     // null | -1 (unlimited) | int
+                    'location_limit_effective' => $slots->limit($t->id), // null = unlimited
                     'trial_ends_at' => $t->trial_ends_at?->toIso8601String(),
                     'created_at' => $t->created_at?->toIso8601String(),
                 ];
@@ -107,6 +113,39 @@ class CompanyController extends Controller
         $this->setTenantPlan($tenant->id, $planId);
 
         return $this->ok(['message' => 'Plan assigned.']);
+    }
+
+    /**
+     * Super admin sets (or clears) a company's custom GBP location limit, which
+     * overrides the plan's limit. Body: { location_limit: <int> | "unlimited" |
+     * null }. null / "" clears the override (back to the plan limit).
+     */
+    public function setLocationLimit(Request $request, string $uuid): JsonResponse
+    {
+        $this->ensureSuperAdmin($request);
+        $tenant = $this->findTenant($uuid);
+
+        $raw = $request->input('location_limit');
+        $settings = $tenant->settings ?? [];
+
+        if ($raw === null || $raw === '') {
+            unset($settings['location_limit']); // clear → fall back to plan
+        } elseif ($raw === 'unlimited' || (int) $raw < 0) {
+            $settings['location_limit'] = 'unlimited';
+        } else {
+            $request->validate(['location_limit' => ['integer', 'min:0', 'max:100000']]);
+            $settings['location_limit'] = (int) $raw;
+        }
+
+        $tenant->update(['settings' => $settings]);
+
+        $effective = app(\App\Modules\Gbp\Services\GbpSlotService::class)->limit($tenant->id);
+
+        return $this->ok([
+            'message' => 'Location limit updated.',
+            'location_limit_override' => app(\App\Modules\Gbp\Services\GbpSlotService::class)->override($tenant->id),
+            'location_limit_effective' => $effective,
+        ]);
     }
 
     /**

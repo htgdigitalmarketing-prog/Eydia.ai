@@ -9,6 +9,7 @@ import {
   GbpPostItem, GbpPhotoItem, GbpInsights, GbpHealth, GbpLocationItem, GbpOptimizeResult, BusinessSiteInfo,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { getActiveLocationId, setActiveLocation } from "@/lib/activeLocation";
 
 const stars = (n: number) => "★★★★★".slice(0, n) + "☆☆☆☆☆".slice(0, 5 - n);
 
@@ -28,23 +29,20 @@ export default function GbpPage() {
   return <GbpDashboard />;
 }
 
-const ACTIVE_LOC_KEY = "eydia:gbp:active-location";
-
 function GbpDashboard() {
   const [tab, setTab] = useState("overview");
   const [overview, setOverview] = useState<GbpOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // The single ACTIVE Google profile the whole dashboard is focused on. Persisted
-  // per browser so the choice sticks; the backend scopes all data to it.
-  const [activeLoc, setActiveLoc] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    try { return localStorage.getItem(ACTIVE_LOC_KEY); } catch { return null; }
-  });
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "synced" | "failed">("idle");
+  // The single ACTIVE Google profile the whole dashboard (and every GBP module)
+  // is focused on. Shared across pages + persisted via the activeLocation util.
+  const [activeLoc, setActiveLoc] = useState<string | null>(() => getActiveLocationId());
 
   const selectActive = useCallback((id: string) => {
     setActiveLoc(id);
-    try { localStorage.setItem(ACTIVE_LOC_KEY, id); } catch {}
+    // Name is filled in once the scoped overview returns (loadOverview below).
+    setActiveLocation({ id, name: "" });
   }, []);
 
   const loadOverview = useCallback(() => {
@@ -53,10 +51,13 @@ function GbpDashboard() {
     api.gbp.overview(token, activeLoc ?? undefined)
       .then((o) => {
         setOverview(o);
-        // Adopt the backend's resolved active location so switching + other tabs
-        // all agree on which profile is active.
-        const resolved = o.active_location?.id;
-        if (resolved && resolved !== activeLoc) { setActiveLoc(resolved); try { localStorage.setItem(ACTIVE_LOC_KEY, resolved); } catch {} }
+        // Adopt the backend's resolved active location (id + name) so switching,
+        // the other tabs AND every other GBP module all agree on it.
+        const resolved = o.active_location;
+        if (resolved?.id) {
+          if (resolved.id !== activeLoc) setActiveLoc(resolved.id);
+          setActiveLocation({ id: resolved.id, name: resolved.name ?? "" });
+        }
       })
       .catch((e) => setError((e as ApiError).message));
   }, [activeLoc]);
@@ -65,17 +66,16 @@ function GbpDashboard() {
   async function sync() {
     const token = getToken();
     if (!token) return;
-    setBusy(true);
-    try { const r = await api.gbp.sync(token); toast(r.message, "success"); loadOverview(); }
-    catch (e) { toastError(e as ApiError); } finally { setBusy(false); }
+    setBusy(true); setSyncStatus("syncing");
+    try { const r = await api.gbp.sync(token); toast(r.message, "success"); setSyncStatus("synced"); loadOverview(); }
+    catch (e) { toastError(e as ApiError); setSyncStatus("failed"); } finally { setBusy(false); }
   }
 
   const locations = overview?.locations ?? [];
 
   return (
     <div>
-      <PageHeader title="Google Reviews / GBP" subtitle="Reviews, posts, photos, insights and a health score for your Google Business Profile."
-        action={<button className="btn-mini" disabled={busy} onClick={sync}>⟳ Sync from Google</button>} />
+      <PageHeader title="Google Reviews / GBP" subtitle="Reviews, posts, photos, insights and a health score for your active Google Business Profile." />
 
       {error && <div className="error" style={{ marginBottom: 12 }}>{error}</div>}
       <GbpConnectBar />
@@ -91,7 +91,7 @@ function GbpDashboard() {
         ))}
       </div>
 
-      {tab === "overview" && <OverviewTab overview={overview} busy={busy} onSync={sync} onGoTab={setTab} onReload={loadOverview} onSelectActive={selectActive} />}
+      {tab === "overview" && <OverviewTab overview={overview} busy={busy} syncStatus={syncStatus} onSync={sync} onGoTab={setTab} onReload={loadOverview} onSelectActive={selectActive} />}
       {tab === "reviews" && <ReviewsTab overview={overview} activeLoc={activeLoc} />}
       {tab === "content" && <PostsPhotosTab locations={locations} activeLoc={activeLoc} />}
       {tab === "website" && <WebsiteTab hasLocations={locations.length > 0} />}
@@ -194,8 +194,8 @@ const STAR_COLORS: Record<number, string> = { 1: "#ef4444", 2: "#f97316", 3: "#f
 /* Accounts & Locations — the active-profile switcher + connected locations, with
    an "All locations" popup (search + connect). Shown at the TOP of the dashboard;
    the rest of the dashboard shows data for the ACTIVE location only. */
-function AccountsLocations({ overview, onSelectActive, onReload }:
-  { overview: GbpOverview; onSelectActive: (id: string) => void; onReload: () => void }) {
+function AccountsLocations({ overview, onSelectActive, onReload, onSync, busy, syncStatus }:
+  { overview: GbpOverview; onSelectActive: (id: string) => void; onReload: () => void; onSync: () => void; busy: boolean; syncStatus: "idle" | "syncing" | "synced" | "failed" }) {
   const [popup, setPopup] = useState(false);
   const [q, setQ] = useState("");
 
@@ -237,11 +237,38 @@ function AccountsLocations({ overview, onSelectActive, onReload }:
   return (
     <div className="panel">
       <style>{`@keyframes eydiaSwitchPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.55)}50%{box-shadow:0 0 0 7px rgba(255,255,255,0)}}`}</style>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <h2 style={{ fontSize: 15, margin: 0 }}>Your Accounts &amp; Locations</h2>
-        <button className="btn" style={{ padding: "8px 14px", fontSize: 13, fontWeight: 700 }} onClick={() => { setQ(""); setPopup(true); }}>
-          📋 All locations ({allLocs.length + available.length})
-        </button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <div>
+          <h2 style={{ fontSize: 15, margin: 0 }}>Your Accounts &amp; Locations</h2>
+          {activeId && (
+            <div style={{ fontSize: 12.5, marginTop: 3 }}>
+              <span className="muted">Active location: </span>
+              <span style={{ fontWeight: 800, color: "var(--accent)" }}>● {activeName}</span>
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {/* ONE prominent, clearly-highlighted Sync Profile button + status. */}
+          <button
+            onClick={onSync}
+            disabled={busy}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 20px", borderRadius: 12, border: "none",
+              fontSize: 14, fontWeight: 800, cursor: busy ? "default" : "pointer", color: "#fff",
+              background: syncStatus === "failed" ? "#dc2626" : "var(--brand-grad, var(--accent))",
+              boxShadow: "0 8px 22px color-mix(in srgb, var(--accent) 30%, transparent)", opacity: busy ? 0.85 : 1,
+            }}
+            title="Sync the active business profile from Google"
+          >
+            {syncStatus === "syncing" || busy ? "⏳ Syncing…"
+              : syncStatus === "synced" ? "✓ Synced — Sync again"
+              : syncStatus === "failed" ? "⚠ Sync failed — Retry"
+              : "🔄 Sync Profile"}
+          </button>
+          <button className="btn" style={{ padding: "8px 14px", fontSize: 13, fontWeight: 700 }} onClick={() => { setQ(""); setPopup(true); }}>
+            📋 All locations ({allLocs.length + available.length})
+          </button>
+        </div>
       </div>
 
       {/* Highlighted active-profile switcher (when more than one connected). */}
@@ -358,8 +385,8 @@ function AccountsLocations({ overview, onSelectActive, onReload }:
   );
 }
 
-function OverviewTab({ overview, busy, onSync, onGoTab, onReload, onSelectActive }:
-  { overview: GbpOverview | null; busy: boolean; onSync: () => void; onGoTab: (k: string) => void; onReload: () => void; onSelectActive: (id: string) => void }) {
+function OverviewTab({ overview, busy, syncStatus, onSync, onGoTab, onReload, onSelectActive }:
+  { overview: GbpOverview | null; busy: boolean; syncStatus: "idle" | "syncing" | "synced" | "failed"; onSync: () => void; onGoTab: (k: string) => void; onReload: () => void; onSelectActive: (id: string) => void }) {
   if (!overview) return <div className="panel" style={{ padding: 28, textAlign: "center" }}><span className="muted">Loading your dashboard…</span></div>;
 
   const s = overview.stats;
@@ -394,7 +421,7 @@ function OverviewTab({ overview, busy, onSync, onGoTab, onReload, onSelectActive
     <div style={{ display: "grid", gap: 16 }}>
       {/* Accounts & Locations — pinned to the TOP; the dashboard below shows only
           the ACTIVE location's data. */}
-      <AccountsLocations overview={overview} onSelectActive={onSelectActive} onReload={onReload} />
+      <AccountsLocations overview={overview} onSelectActive={onSelectActive} onReload={onReload} onSync={onSync} busy={busy} syncStatus={syncStatus} />
 
       {/* Hero */}
       <div className="gbp-hero">

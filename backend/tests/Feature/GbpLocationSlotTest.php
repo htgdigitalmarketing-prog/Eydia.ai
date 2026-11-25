@@ -121,6 +121,24 @@ class GbpLocationSlotTest extends TestCase
         $this->assertSame(2, PlanLocationSlot::withoutGlobalScopes()->where('tenant_id', $owner->tenant_id)->count());
     }
 
+    public function test_super_admin_location_limit_override_beats_the_plan(): void
+    {
+        $owner = $this->owner(locationLimit: 1); // plan allows 1
+        [$l1, $l2] = $this->makeLocations($owner, 2);
+
+        // Plan limit 1 → the 2nd location is blocked.
+        $this->connect($owner, $l1)->assertOk();
+        $this->connect($owner, $l2)->assertStatus(422);
+
+        // Super-admin raises THIS tenant's limit to 5 via the override.
+        $tenant = \App\Models\Tenant::find($owner->tenant_id);
+        $tenant->update(['settings' => array_merge($tenant->settings ?? [], ['location_limit' => 5])]);
+
+        // Now the 2nd connects fine; the slot service reports the override.
+        $this->connect($owner, $l2)->assertOk();
+        $this->assertSame(5, app(\App\Modules\Gbp\Services\GbpSlotService::class)->limit($owner->tenant_id));
+    }
+
     public function test_overview_exposes_limit_and_connection_state(): void
     {
         $owner = $this->owner(locationLimit: 2);

@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { api, ApiError, GbpProfile, GbpHours } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { getActiveLocationId } from "@/lib/activeLocation";
+import { ActiveLocationBanner } from "@/components/ActiveLocationBanner";
 
 const TABS = [
   { k: "about", label: "About", icon: "ℹ️" },
@@ -37,15 +39,17 @@ function Editor() {
   const [copied, setCopied] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
 
+  const activeLoc = getActiveLocationId() ?? undefined;
+
   const load = useCallback(async () => {
     const token = getToken(); if (!token) return;
     setLoading(true); setError(null);
     try {
-      const res = await api.gbp.profile(token);
+      const res = await api.gbp.profile(token, activeLoc);
       setForm(res.profile); setGroups(res.attribute_groups); setConnected(res.connected);
     } catch (e) { setError((e as ApiError).message ?? "Failed to load profile."); }
     finally { setLoading(false); }
-  }, []);
+  }, [activeLoc]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -67,7 +71,7 @@ function Editor() {
     const token = getToken(); if (!token || !form) return;
     setSaving(true); setError(null); setNotice(null);
     try {
-      const res = await api.gbp.updateProfile(token, form);
+      const res = await api.gbp.updateProfile(token, form, activeLoc);
       setForm(res.profile);
       setNotice(res.message);
     } catch (e) { setError((e as ApiError).message ?? "Save failed."); }
@@ -78,7 +82,7 @@ function Editor() {
     const token = getToken(); if (!token || !form) return;
     setAiBusy(true); setError(null); setNotice(null);
     try {
-      const res = await api.gbp.aiRewriteProfile(token, {});
+      const res = await api.gbp.aiRewriteProfile(token, { location: activeLoc });
       set("description", res.description);
       setNotice("AI rewrote your description for SEO. Review it and click Save to keep it.");
     } catch (e) { setError((e as ApiError).message ?? "AI rewrite failed."); }
@@ -90,7 +94,7 @@ function Editor() {
     if (!confirm("Let AI analyse your business and set up your whole profile (description, highlights, keywords, service area, hours)? It won't overwrite anything you've already filled in.")) return;
     setAiBusy(true); setError(null); setNotice(null);
     try {
-      const res = await api.gbp.autoSetupProfile(token);
+      const res = await api.gbp.autoSetupProfile(token, activeLoc);
       setForm(res.profile);
       setNotice(res.message);
     } catch (e) { setError((e as ApiError).message ?? "AI auto-setup failed."); }
@@ -118,6 +122,8 @@ function Editor() {
         subtitle="Edit and manage your Google Business Profile — it keeps your listing, website and reports in sync."
         action={<button className="btn" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save changes"}</button>}
       />
+
+      <ActiveLocationBanner module="Business Info" />
 
       {error && <div className="error">{error}</div>}
       {notice && <div className="panel" style={{ background: "#e7f7ef", color: "#0a7d47", marginBottom: 16 }}>{notice}</div>}

@@ -131,6 +131,30 @@ export default function CompaniesPage() {
     }
   }, []);
 
+  async function changeLocationLimit(c: Company) {
+    const token = getToken();
+    if (!token) return;
+    const cur = c.location_limit_override == null ? "" : (c.location_limit_override < 0 ? "unlimited" : String(c.location_limit_override));
+    const raw = window.prompt(
+      `GBP location limit for "${c.name}"\n\nEnter a number (e.g. 5), "unlimited", or leave blank to use the plan's limit.\nThis overrides the subscription plan for this client.`,
+      cur,
+    );
+    if (raw === null) return; // cancelled
+    const v = raw.trim();
+    const payload: number | "unlimited" | null = v === "" ? null : (/^unlimited$/i.test(v) ? "unlimited" : Number(v));
+    if (payload !== null && payload !== "unlimited" && (!Number.isFinite(payload) || payload < 0)) {
+      setError("Enter a non-negative number, 'unlimited', or leave blank.");
+      return;
+    }
+    try {
+      await api.admin.setLocationLimit(token, c.id, payload);
+      flash("Location limit updated.");
+      await load();
+    } catch (err) {
+      setError((err as ApiError).message);
+    }
+  }
+
   async function changePlan(c: Company, planId: string) {
     const token = getToken();
     if (!token) return; // empty planId is valid — it means "— No plan —" (remove plan)
@@ -339,6 +363,15 @@ export default function CompaniesPage() {
                       <option value="">— No plan —</option>
                       {plans.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
+                    {/* Custom GBP location limit (overrides the plan). */}
+                    <div style={{ marginTop: 6, fontSize: 11.5, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <span className="muted">📍 Locations:</span>
+                      <strong>{c.location_limit_effective == null ? "∞" : c.location_limit_effective}</strong>
+                      {c.location_limit_override != null && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 999, background: "#eef1ff", color: "var(--accent)" }}>custom</span>
+                      )}
+                      <button className="btn-mini" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => changeLocationLimit(c)}>Set</button>
+                    </div>
                   </td>
                   <td style={{ padding: "12px 14px", fontVariantNumeric: "tabular-nums" }}>
                     {c.agents_used ?? 0}{c.agents_limit != null ? ` / ${c.agents_limit}` : " / ∞"}
