@@ -59,7 +59,9 @@ export const DASHBOARD_GROUPS: DashboardGroup[] = [
   {
     key: "dash_gbp", label: "Google Reviews / GBP", icon: "⭐", home: "/gbp",
     items: [
-      { label: "Reviews", href: "/gbp", icon: "⭐" },
+      // Home now includes Reviews (dashboard + recent reviews + Reviews tab),
+      // so there is no separate "Reviews" sidebar entry.
+      { label: "Home", href: "/gbp", icon: "🏠" },
       { label: "Business Info", href: "/gbp-profile", icon: "🏢" },
       { label: "Automation", href: "/gbp-automation", icon: "⚡" },
       { label: "SEO", href: "/seo", icon: "🔎", feature: "seo" },

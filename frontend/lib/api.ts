@@ -564,17 +564,20 @@ export const api = {
 
   // ---- AI Media generation (text-to-image, optional reference image) ----
   aiMedia: {
-    list: (token: string) => request<{ media: AiMediaItem[] }>("/ai-media", { token }),
-    generate: async (token: string, prompt: string, image?: File | null) => {
+    // Per-location AI Studio library: scope list + generate to the active location.
+    list: (token: string, location?: string) =>
+      request<{ media: AiMediaItem[] }>(`/ai-media${location ? `?location=${location}` : ""}`, { token }),
+    generate: async (token: string, prompt: string, image?: File | null, location?: string) => {
+      const qs = location ? `?location=${location}` : "";
       if (!image) {
         return request<{ media: AiMediaItem; source: string; reason?: string | null; credits: number | null }>(
-          "/ai-media", { method: "POST", body: { prompt }, token }
+          `/ai-media${qs}`, { method: "POST", body: { prompt }, token }
         );
       }
       const form = new FormData();
       form.append("prompt", prompt);
       form.append("image", image);
-      const res = await fetch(`${BASE}/ai-media`, { method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, body: form });
+      const res = await fetch(`${BASE}/ai-media${qs}`, { method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, body: form });
       const json = await res.json().catch(() => null);
       if (!res.ok || (json && json.success === false)) {
         const err: ApiError = { message: json?.message ?? `Generation failed (${res.status})`, errors: json?.errors, status: res.status };
@@ -808,8 +811,11 @@ export const api = {
 
   // ---- SEO toolkit (keyword tracking, rank checker, competitor analysis) ----
   seo: {
-    overview: (token: string) => request<SeoOverview>("/seo/overview", { token }),
-    keywords: (token: string) => request<{ keywords: SeoKeywordItem[] }>("/seo/keywords", { token }),
+    // overview / keywords / competitors are scoped to the ACTIVE GBP location.
+    overview: (token: string, location?: string) =>
+      request<SeoOverview>(`/seo/overview${location ? `?location=${location}` : ""}`, { token }),
+    keywords: (token: string, location?: string) =>
+      request<{ keywords: SeoKeywordItem[] }>(`/seo/keywords${location ? `?location=${location}` : ""}`, { token }),
     addKeyword: (token: string, body: { keyword: string; city?: string; location_id?: string }) =>
       request<{ keyword: SeoKeywordItem }>("/seo/keywords", { method: "POST", body, token }),
     checkKeyword: (token: string, id: string) =>
@@ -820,7 +826,8 @@ export const api = {
       request<{ message: string }>(`/seo/keywords/${id}`, { method: "DELETE", token }),
     generate: (token: string, body: { business: string; city: string; industry?: string }) =>
       request<{ groups: { theme: string; keywords: string[] }[]; source: string }>("/seo/keywords/generate", { method: "POST", body, token }),
-    competitors: (token: string) => request<{ competitors: SeoCompetitorItem[] }>("/seo/competitors", { token }),
+    competitors: (token: string, location?: string) =>
+      request<{ competitors: SeoCompetitorItem[] }>(`/seo/competitors${location ? `?location=${location}` : ""}`, { token }),
     addCompetitor: (token: string, body: { name: string; city?: string; location_id?: string }) =>
       request<{ competitor: SeoCompetitorItem }>("/seo/competitors", { method: "POST", body, token }),
     analyzeCompetitor: (token: string, id: string) =>

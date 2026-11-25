@@ -9,6 +9,8 @@ import {
   SeoRankResult, SeoCompetitorResult,
 } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { getActiveLocationId } from "@/lib/activeLocation";
+import { ActiveLocationBanner } from "@/components/ActiveLocationBanner";
 
 export default function SeoPage() {
   const user = useUser();
@@ -21,16 +23,20 @@ function SeoDashboard() {
   const [overview, setOverview] = useState<SeoOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const activeLoc = getActiveLocationId() ?? undefined;
+
   const loadOverview = useCallback(() => {
     const token = getToken();
     if (!token) return;
-    api.seo.overview(token).then(setOverview).catch((e) => setError((e as ApiError).message));
-  }, []);
+    api.seo.overview(token, activeLoc).then(setOverview).catch((e) => setError((e as ApiError).message));
+  }, [activeLoc]);
   useEffect(() => { loadOverview(); }, [loadOverview]);
 
   return (
     <div>
-      <PageHeader title="SEO Toolkit" subtitle="Track keyword ranks, generate keyword ideas and size up competitors." />
+      <PageHeader title="SEO Toolkit" subtitle="Track keyword ranks, generate keyword ideas and size up competitors — for your active location." />
+
+      <ActiveLocationBanner module="SEO" />
 
       {error && <div className="error" style={{ marginBottom: 12 }}>{error}</div>}
 
@@ -51,8 +57,8 @@ function SeoDashboard() {
         ))}
       </div>
 
-      {tab === "keywords" && <KeywordsTab locations={overview?.locations ?? []} context={overview?.context ?? null} onChange={loadOverview} />}
-      {tab === "competitors" && <CompetitorsTab locations={overview?.locations ?? []} onChange={loadOverview} />}
+      {tab === "keywords" && <KeywordsTab activeLoc={activeLoc} locations={overview?.locations ?? []} context={overview?.context ?? null} onChange={loadOverview} />}
+      {tab === "competitors" && <CompetitorsTab activeLoc={activeLoc} locations={overview?.locations ?? []} onChange={loadOverview} />}
       {tab === "ideas" && <IdeasTab context={overview?.context ?? null} />}
     </div>
   );
@@ -60,7 +66,7 @@ function SeoDashboard() {
 
 type SeoContext = { business: string; city: string | null; industry: string | null; location_id: string } | null;
 
-function KeywordsTab({ locations, context, onChange }: { locations: { id: string; name: string }[]; context: SeoContext; onChange: () => void }) {
+function KeywordsTab({ locations, context, onChange, activeLoc }: { locations: { id: string; name: string }[]; context: SeoContext; onChange: () => void; activeLoc?: string }) {
   const [keywords, setKeywords] = useState<SeoKeywordItem[]>([]);
   const [form, setForm] = useState({ keyword: "", city: "", location_id: "" });
   const [busy, setBusy] = useState(false);
@@ -76,8 +82,8 @@ function KeywordsTab({ locations, context, onChange }: { locations: { id: string
   const load = useCallback(() => {
     const token = getToken();
     if (!token) return;
-    api.seo.keywords(token).then((r) => setKeywords(r.keywords)).catch((e) => setErr((e as ApiError).message));
-  }, []);
+    api.seo.keywords(token, activeLoc).then((r) => setKeywords(r.keywords)).catch((e) => setErr((e as ApiError).message));
+  }, [activeLoc]);
   useEffect(() => { load(); }, [load]);
 
   async function add(e: React.FormEvent) {
@@ -151,7 +157,7 @@ function KeywordsTab({ locations, context, onChange }: { locations: { id: string
   );
 }
 
-function CompetitorsTab({ locations, onChange }: { locations: { id: string; name: string }[]; onChange: () => void }) {
+function CompetitorsTab({ locations, onChange, activeLoc }: { locations: { id: string; name: string }[]; onChange: () => void; activeLoc?: string }) {
   const [list, setList] = useState<SeoCompetitorItem[]>([]);
   const [form, setForm] = useState({ name: "", city: "", location_id: "" });
   const [busy, setBusy] = useState(false);
@@ -161,8 +167,8 @@ function CompetitorsTab({ locations, onChange }: { locations: { id: string; name
   const load = useCallback(() => {
     const token = getToken();
     if (!token) return;
-    api.seo.competitors(token).then((r) => setList(r.competitors)).catch((e) => setErr((e as ApiError).message));
-  }, []);
+    api.seo.competitors(token, activeLoc).then((r) => setList(r.competitors)).catch((e) => setErr((e as ApiError).message));
+  }, [activeLoc]);
   useEffect(() => { load(); }, [load]);
 
   async function add(e: React.FormEvent) {

@@ -42,24 +42,28 @@ class SeoController extends Controller
 
     public function overview(Request $request): JsonResponse
     {
-        // Prefill the SEO tools from the connected Business Profile so the user
-        // doesn't retype their business name, city and industry every time.
-        $primary = GbpLocation::visible()->orderByDesc('review_count')->first();
-        $context = $primary ? [
-            'business' => $primary->name,
-            'city' => ($primary->meta['service_area'][0] ?? null)
-                ?: \App\Modules\Gbp\Services\GbpProfileService::cityFromAddress($primary->address),
-            'industry' => $primary->category,
-            'location_id' => $primary->uuid,
+        // SEO is per-location: everything here is for the ACTIVE location only,
+        // and the tools are prefilled from it so the user never retypes details.
+        $locId = $this->activeLocationId($request);
+        $active = $locId ? GbpLocation::find($locId) : null;
+        $context = $active ? [
+            'business' => $active->name,
+            'city' => ($active->meta['service_area'][0] ?? null)
+                ?: \App\Modules\Gbp\Services\GbpProfileService::cityFromAddress($active->address),
+            'industry' => $active->category,
+            'location_id' => $active->uuid,
         ] : null;
 
         return $this->ok([
-            'keywords' => SeoKeyword::count(),
-            'competitors' => SeoCompetitor::count(),
-            'checks_this_month' => SeoRankSnapshot::where('checked_at', '>=', now()->startOfMonth())->count(),
+            'keywords' => SeoKeyword::when($locId, fn ($q) => $q->where('gbp_location_id', $locId))->count(),
+            'competitors' => SeoCompetitor::when($locId, fn ($q) => $q->where('gbp_location_id', $locId))->count(),
+            'checks_this_month' => SeoRankSnapshot::where('checked_at', '>=', now()->startOfMonth())
+                ->when($locId, fn ($q) => $q->whereHas('keyword', fn ($k) => $k->where('gbp_location_id', $locId)))
+                ->count(),
             'ai_configured' => $this->ai->configured(),
             'locations' => GbpLocation::get(['uuid', 'name'])
                 ->map(fn ($l) => ['id' => $l->uuid, 'name' => $l->name])->all(),
+            'active_location' => $active ? ['id' => $active->uuid, 'name' => $active->name] : null,
             'context' => $context,
         ]);
     }
@@ -68,8 +72,10 @@ class SeoController extends Controller
 
     public function keywords(Request $request): JsonResponse
     {
+        $locId = $this->activeLocationId($request);
         $keywords = SeoKeyword::with('location:id,uuid,name')
             ->withCount('snapshots')
+            ->when($locId, fn ($q) => $q->where('gbp_location_id', $locId))
             ->latest()
             ->get();
 
@@ -89,7 +95,8 @@ class SeoController extends Controller
         $keyword = SeoKeyword::create([
             'keyword' => $data['keyword'],
             'city' => $data['city'] ?? null,
-            'gbp_location_id' => $this->resolveLocationId($data['location_id'] ?? null),
+            // Default to the active location so keywords belong to it.
+            'gbp_location_id' => $this->resolveLocationId($data['location_id'] ?? null) ?? $this->activeLocationId($request),
         ]);
 
         return $this->ok(['keyword' => $this->keywordArray($keyword->fresh('location')->loadCount('snapshots'))], 201);
@@ -190,7 +197,10 @@ class SeoController extends Controller
 
     public function competitors(Request $request): JsonResponse
     {
-        $competitors = SeoCompetitor::with('location:id,uuid,name')->latest()->get();
+        $locId = $this->activeLocationId($request);
+        $competitors = SeoCompetitor::with('location:id,uuid,name')
+            ->when($locId, fn ($q) => $q->where('gbp_location_id', $locId))
+            ->latest()->get();
 
         return $this->ok([
             'competitors' => $competitors->map(fn (SeoCompetitor $c) => $this->competitorArray($c))->all(),
@@ -208,7 +218,7 @@ class SeoController extends Controller
         $competitor = SeoCompetitor::create([
             'name' => $data['name'],
             'city' => $data['city'] ?? null,
-            'gbp_location_id' => $this->resolveLocationId($data['location_id'] ?? null),
+            'gbp_location_id' => $this->resolveLocationId($data['location_id'] ?? null) ?? $this->activeLocationId($request),
         ]);
 
         return $this->ok(['competitor' => $this->competitorArray($competitor->fresh('location'))], 201);
@@ -307,6 +317,18 @@ class SeoController extends Controller
         }
 
         return GbpLocation::where('uuid', $uuid)->value('id');
+    }
+
+    /** The ACTIVE GBP location id (from ?location=, else the primary connected one). */
+    private function activeLocationId(Request $request): ?int
+    {
+        if ($uuid = $request->query('location')) {
+            if ($id = GbpLocation::where('uuid', $uuid)->value('id')) {
+                return $id;
+            }
+        }
+
+        return GbpLocation::visible()->orderByDesc('review_count')->value('id');
     }
 
     private function keywordArray(SeoKeyword $k): array

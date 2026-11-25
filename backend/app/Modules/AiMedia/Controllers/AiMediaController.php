@@ -24,9 +24,25 @@ class AiMediaController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $media = AiMedia::query()->latest()->limit(100)->get();
+        // AI Studio is per-location: show the active location's library only.
+        $locId = $this->activeLocationId($request);
+        $media = AiMedia::query()
+            ->when($locId, fn ($q) => $q->where('gbp_location_id', $locId))
+            ->latest()->limit(100)->get();
 
         return $this->ok(['media' => $media->map(fn (AiMedia $m) => $this->arr($m))->all()]);
+    }
+
+    /** The ACTIVE GBP location id (from ?location=, else the primary connected one). */
+    private function activeLocationId(Request $request): ?int
+    {
+        if ($uuid = $request->query('location')) {
+            if ($id = \App\Models\GbpLocation::where('uuid', $uuid)->value('id')) {
+                return $id;
+            }
+        }
+
+        return \App\Models\GbpLocation::visible()->orderByDesc('review_count')->value('id');
     }
 
     public function generate(Request $request): JsonResponse
@@ -63,6 +79,7 @@ class AiMediaController extends Controller
 
         $media = AiMedia::create([
             'created_by' => $request->user()->id,
+            'gbp_location_id' => $this->activeLocationId($request), // belongs to the active location
             'type' => 'image',
             'prompt' => $data['prompt'],
             'image_data' => $image,

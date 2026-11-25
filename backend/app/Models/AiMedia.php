@@ -18,6 +18,6 @@ class AiMedia extends Model
     protected $table = 'ai_media';
 
     protected $fillable = [
-        'tenant_id', 'created_by', 'type', 'prompt', 'image_data', 'model', 'source',
+        'tenant_id', 'gbp_location_id', 'created_by', 'type', 'prompt', 'image_data', 'model', 'source',
     ];
 }

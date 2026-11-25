@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, AiMediaItem } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
+import { getActiveLocationId } from "@/lib/activeLocation";
+import { ActiveLocationBanner } from "@/components/ActiveLocationBanner";
 
 type Tab = "images" | "chat";
 type ChatMsg = { role: "user" | "assistant"; text: string };
@@ -24,6 +26,8 @@ export default function AiStudioPage() {
         title="AI Studio"
         subtitle="Generate marketing images and get on-demand marketing advice — powered by AI."
       />
+
+      <ActiveLocationBanner module="AI Studio" />
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <button className={tab === "images" ? "btn" : "btn-mini"} style={{ width: "auto", padding: "8px 16px" }} onClick={() => setTab("images")}>
@@ -49,19 +53,21 @@ function ImagesTab() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const activeLoc = getActiveLocationId() ?? undefined;
+
   const load = useCallback(async () => {
     const token = getToken();
     if (!token) return;
     setLoading(true);
     try {
-      const res = await api.aiMedia.list(token);
+      const res = await api.aiMedia.list(token, activeLoc);
       setMedia(res.media);
     } catch (err) {
       setError((err as ApiError).message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeLoc]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -78,7 +84,7 @@ function ImagesTab() {
     setError(null);
     setNotice(null);
     try {
-      const res = await api.aiMedia.generate(token, prompt.trim() || "Recreate and enhance this image as a polished marketing visual", refImage);
+      const res = await api.aiMedia.generate(token, prompt.trim() || "Recreate and enhance this image as a polished marketing visual", refImage, activeLoc);
       setMedia((m) => [res.media, ...m]);
       setPrompt("");
       pickRef(null);
