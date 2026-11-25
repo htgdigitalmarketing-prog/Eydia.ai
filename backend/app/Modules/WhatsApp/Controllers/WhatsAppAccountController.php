@@ -32,6 +32,11 @@ class WhatsAppAccountController extends Controller
             'app_id' => config('services.meta.app_id'),
             'config_id' => config('services.meta.config_id'),
             'api_version' => config('services.meta.api_version', 'v23.0'),
+            // Embedded Signup feature type. "" = default (connect NEW numbers not
+            // on WhatsApp). "whatsapp_business_app_onboarding" = coexistence, to
+            // connect a number already on the WhatsApp Business app. Set via the
+            // META_ES_FEATURE_TYPE env (no rebuild needed).
+            'es_feature_type' => config('services.meta.es_feature_type', ''),
             'embedded_signup_configured' => $this->embedded->isConfigured(),
         ]);
     }

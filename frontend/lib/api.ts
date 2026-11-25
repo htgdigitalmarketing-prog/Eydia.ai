@@ -1406,6 +1406,7 @@ export type WaConfig = {
   app_id: string | null;
   config_id: string | null;
   api_version: string;
+  es_feature_type?: string;
   embedded_signup_configured: boolean;
 };
 

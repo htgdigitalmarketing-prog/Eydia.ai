@@ -25,12 +25,15 @@ export function EmbeddedSignupButton({
   appId,
   configId,
   apiVersion,
+  featureType,
   onComplete,
   onError,
 }: {
   appId: string;
   configId: string;
   apiVersion: string;
+  /** "" = new numbers; "whatsapp_business_app_onboarding" = coexistence. */
+  featureType?: string;
   onComplete: (r: SignupResult) => void;
   onError: (message: string) => void;
 }) {
@@ -148,7 +151,7 @@ export function EmbeddedSignupButton({
         config_id: configId,
         response_type: "code",
         override_default_response_type: true,
-        extras: { setup: {}, featureType: "", sessionInfoVersion: "3" },
+        extras: { setup: {}, featureType: featureType || "", sessionInfoVersion: "3" },
       }
     );
     } catch (e: any) {

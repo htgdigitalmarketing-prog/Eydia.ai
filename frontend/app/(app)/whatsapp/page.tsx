@@ -275,6 +275,7 @@ export default function WhatsAppPage() {
                 appId={config.app_id}
                 configId={config.config_id}
                 apiVersion={config.api_version}
+                featureType={config.es_feature_type}
                 onComplete={onEmbeddedComplete}
                 onError={(m) => setError(m)}
               />
