@@ -137,6 +137,10 @@ class AiFeaturesTest extends TestCase
             'reviewed_at' => now()->subMonths(2),
         ]);
 
+        // Locations are not connected by default — the client connects explicitly
+        // before the dashboard shows that location's data.
+        $this->postJson("/api/v1/gbp/locations/{$location->uuid}/connect")->assertOk();
+
         $this->getJson('/api/v1/gbp/overview')
             ->assertOk()
             ->assertJsonPath('data.stats.total_reviews', 2)

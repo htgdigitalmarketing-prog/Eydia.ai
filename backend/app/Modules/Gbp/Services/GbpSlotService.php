@@ -213,13 +213,12 @@ class GbpSlotService
     }
 
     /**
-     * Reconcile slots after a sync:
-     *   1. re-link every slot to the freshly-synced GbpLocation row and apply its
-     *      visibility (connected → visible, disconnected → hidden);
-     *   2. first time only (no slots yet) → bootstrap: adopt the currently-visible
-     *      locations as connected slots (up to the limit) so existing setups and
-     *      the first-ever sync keep a populated dashboard;
-     *   3. any location WITHOUT a slot → hidden (must be connected explicitly).
+     * Reconcile slots after a sync. Connection is ALWAYS explicit — nothing is
+     * auto-connected. We only:
+     *   1. re-link existing slots to the freshly-synced GbpLocation rows and apply
+     *      their visibility (connected → visible, disconnected → hidden);
+     *   2. keep every location WITHOUT a connected slot hidden, so it appears in
+     *      "Available locations" for the client to Connect themselves.
      */
     public function reconcile(int $tenantId): void
     {
@@ -227,6 +226,7 @@ class GbpSlotService
         $byKey = $locations->keyBy(fn (GbpLocation $l) => $this->keyFor($l));
 
         $slots = $this->slots($tenantId);
+        $connectedKeys = [];
 
         // 1) Re-link existing slots + apply their visibility.
         foreach ($slots as $slot) {
@@ -237,42 +237,15 @@ class GbpSlotService
                 }
                 $this->setVisible($loc, $slot->isConnected());
             }
-        }
-
-        // 2) Bootstrap when the tenant has no slots yet.
-        if ($slots->isEmpty()) {
-            $limit = $this->limit($tenantId);
-            // Prefer the locations already marked visible; else the busiest one so
-            // the dashboard is never empty after the first sync.
-            $candidates = $locations->where('is_hidden', false)->sortByDesc('review_count')->values();
-            if ($candidates->isEmpty()) {
-                $top = $locations->sortByDesc('review_count')->first();
-                $candidates = $top ? collect([$top]) : collect();
-            }
-            $no = 0;
-            foreach ($candidates as $loc) {
-                if ($limit !== null && $no >= $limit) {
-                    break;
-                }
-                $no++;
-                $s = new PlanLocationSlot([
-                    'plan_id' => $this->planLimits->planFor($tenantId)?->id,
-                    'slot_no' => $no,
-                    'gbp_location_id' => $loc->id,
-                    'location_key' => $this->keyFor($loc),
-                    'location_name' => $loc->name,
-                    'status' => PlanLocationSlot::STATUS_CONNECTED,
-                ]);
-                $s->tenant_id = $tenantId;
-                $s->save();
-                $this->setVisible($loc, true);
+            if ($slot->isConnected()) {
+                $connectedKeys[] = $slot->location_key;
             }
         }
 
-        // 3) Everything without a slot is not connected → hidden.
-        $slotKeys = $this->slots($tenantId)->pluck('location_key')->all();
+        // 2) Any location that is NOT explicitly connected stays hidden (it shows
+        //    in "Available locations" with a Connect button). No auto-connect.
         foreach ($locations as $loc) {
-            if (! in_array($this->keyFor($loc), $slotKeys, true) && ! $loc->is_hidden) {
+            if (! in_array($this->keyFor($loc), $connectedKeys, true) && ! $loc->is_hidden) {
                 $this->setVisible($loc, false);
             }
         }

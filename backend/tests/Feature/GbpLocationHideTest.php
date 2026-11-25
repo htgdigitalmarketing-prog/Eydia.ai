@@ -37,6 +37,8 @@ class GbpLocationHideTest extends TestCase
             'plan_id' => Plan::where('slug', 'enterprise')->value('id'),
             'status' => 'active', 'current_period_start' => now(), 'current_period_end' => now()->addMonth(),
         ]);
+        // Allow plenty of location slots so the explicit connects below succeed.
+        \App\Models\Tenant::find($this->owner->tenant_id)->update(['settings' => ['location_limit' => 'unlimited']]);
     }
 
     private function makeLocation(string $name): GbpLocation
@@ -44,20 +46,31 @@ class GbpLocationHideTest extends TestCase
         return GbpLocation::withoutGlobalScopes()->create([
             'tenant_id' => $this->owner->tenant_id, 'name' => $name,
             'google_location_id' => 'loc-' . strtolower($name), 'review_count' => 5,
+            'is_hidden' => true, // not connected until the client explicitly connects it
         ]);
     }
 
-    public function test_hiding_removes_a_location_from_the_dashboard(): void
+    private function connect(GbpLocation $loc): void
+    {
+        $this->actingAs($this->owner, 'api')
+            ->postJson("/api/v1/gbp/locations/{$loc->uuid}/connect")->assertOk();
+    }
+
+    public function test_disconnecting_removes_a_location_from_the_dashboard(): void
     {
         $mine = $this->makeLocation('MyBiz');
         $other = $this->makeLocation('SomeoneElse');
+
+        // Nothing is connected by default — the client connects explicitly.
+        $this->connect($mine);
+        $this->connect($other);
 
         $this->actingAs($this->owner, 'api')->getJson('/api/v1/gbp/overview')
             ->assertOk()
             ->assertJsonCount(2, 'data.locations')
             ->assertJsonCount(0, 'data.hidden_locations');
 
-        // Hide the other business.
+        // Disconnect the other business (legacy /hidden route → disconnect).
         $this->actingAs($this->owner, 'api')
             ->postJson("/api/v1/gbp/locations/{$other->uuid}/hidden", ['hidden' => true])
             ->assertOk();
@@ -69,7 +82,7 @@ class GbpLocationHideTest extends TestCase
             ->assertJsonCount(1, 'data.hidden_locations')
             ->assertJsonPath('data.hidden_locations.0.name', 'SomeoneElse');
 
-        // Un-hide restores it.
+        // Reconnect restores it.
         $this->actingAs($this->owner, 'api')
             ->postJson("/api/v1/gbp/locations/{$other->uuid}/hidden", ['hidden' => false])
             ->assertOk();
@@ -83,6 +96,7 @@ class GbpLocationHideTest extends TestCase
         $mine = $this->makeLocation('MyBiz');
         $this->makeLocation('Other1');
         $this->makeLocation('Other2');
+        $this->connect($mine);
 
         $this->actingAs($this->owner, 'api')
             ->postJson("/api/v1/gbp/locations/{$mine->uuid}/only")
