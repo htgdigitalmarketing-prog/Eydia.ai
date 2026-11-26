@@ -49,9 +49,13 @@ html, body {
   margin: 0;
   padding: 0;
   /* Never let a stray wide element create a horizontal scroll on the whole page
-     — the #1 cause of a "zoomed-out / broken" look on phones. */
+     — the #1 cause of a "zoomed-out / broken" look on phones. `clip` (not
+     `hidden`) is used so the page is NOT turned into a scroll container, which
+     would break `position: sticky` headers; `hidden` is kept as a fallback for
+     older browsers. */
   max-width: 100%;
   overflow-x: hidden;
+  overflow-x: clip;
   background: var(--bg);
   color: var(--text);
   font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
