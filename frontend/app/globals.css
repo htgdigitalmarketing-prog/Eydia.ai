@@ -1203,6 +1203,9 @@ a:hover { text-decoration: underline; }
 .lph-nav a { color: var(--muted); font-size: 14px; font-weight: 600; text-decoration: none; }
 .lph-nav a:hover { color: var(--text); }
 .lph-nav a.lph-btn-grad { color: #fff; }
+/* Mobile hamburger + dropdown nav (hidden on desktop). */
+.lph-burger { display: none; background: none; border: none; font-size: 24px; line-height: 1; cursor: pointer; color: var(--text); padding: 2px 6px; }
+.lph-mnav { display: none; }
 
 /* Hero */
 .lph-hero { background: var(--bg); padding: 56px 0 64px; overflow: hidden; }
@@ -1364,8 +1367,12 @@ a:hover { text-decoration: underline; }
   .lph-plans { grid-template-columns: 1fr; max-width: 420px; margin-left: auto; margin-right: auto; }
 }
 @media (max-width: 620px) {
-  .lph-nav { gap: 14px; }
+  .lph-nav { gap: 12px; }
   .lph-nav a:not(.lph-btn) { display: none; }
+  .lph-burger { display: inline-flex; align-items: center; }
+  .lph-nav-badges { display: none; } /* app badges live in the dropdown on mobile */
+  .lph-mnav.open { display: flex; flex-direction: column; background: #fff; border-top: 1px solid #eef1f6; padding: 6px 20px 14px; }
+  .lph-mnav.open > a { padding: 12px 4px; font-size: 15.5px; font-weight: 600; color: var(--text); text-decoration: none; border-bottom: 1px solid #f1f3f8; }
   .lph-stats-in { grid-template-columns: repeat(2, 1fr); gap: 24px; }
   .lph-steps, .lph-feats, .lph-mods, .lph-pillars { grid-template-columns: 1fr; }
   .lph-h1 { font-size: 34px; }

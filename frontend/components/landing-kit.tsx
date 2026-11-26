@@ -44,6 +44,7 @@ export function StoreBadges({ compact }: { compact?: boolean }) {
 
 export function LandingHeader({ active }: { active?: string }) {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [open, setOpen] = useState(false);
   useEffect(() => { setLoggedIn(!!getToken()); }, []);
 
   return (
@@ -57,12 +58,26 @@ export function LandingHeader({ active }: { active?: string }) {
               {n.label}
             </Link>
           ))}
-          <StoreBadges compact />
+          <span className="lph-nav-badges"><StoreBadges compact /></span>
           <Link href={loggedIn ? "/dashboard" : "/login"} className="lph-btn lph-btn-grad lph-btn-sm">
             {loggedIn ? "Open app" : "Login"}
           </Link>
+          {/* Hamburger — shown only on mobile (CSS). Reveals the nav links. */}
+          <button className="lph-burger" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+            {open ? "✕" : "☰"}
+          </button>
         </nav>
       </div>
+      {/* Mobile dropdown nav */}
+      <nav className={`lph-mnav ${open ? "open" : ""}`}>
+        {NAV.map((n) => (
+          <Link key={n.href} href={n.href} onClick={() => setOpen(false)}
+            style={active === n.href ? { color: "var(--primary, #2160ef)" } : undefined}>
+            {n.label}
+          </Link>
+        ))}
+        <div style={{ paddingTop: 10 }}><StoreBadges /></div>
+      </nav>
     </header>
   );
 }
