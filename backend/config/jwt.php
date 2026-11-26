@@ -89,7 +89,10 @@ return [
     |
     */
 
-    'ttl' => (int) env('JWT_TTL', 60),
+    // Keep users signed in until they explicitly log out: the access token lasts
+    // ~1 year by default (was 60 min, which logged everyone out hourly). Override
+    // with JWT_TTL in .env if a shorter session is ever wanted.
+    'ttl' => (int) env('JWT_TTL', 525600),
 
     /*
     |--------------------------------------------------------------------------
@@ -118,9 +121,9 @@ return [
     */
 
     'refresh_iat' => env('JWT_REFRESH_IAT', false),
-    // 30 days (43200 min) so the mobile app keeps users signed in while they use
-    // it regularly, per the mobile API contract. Access token TTL stays 60 min.
-    'refresh_ttl' => (int) env('JWT_REFRESH_TTL', 43200),
+    // Refresh window must be >= the access-token TTL. ~2 years so a token can
+    // always be refreshed within its lifetime.
+    'refresh_ttl' => (int) env('JWT_REFRESH_TTL', 1051200),
 
     /*
     |--------------------------------------------------------------------------

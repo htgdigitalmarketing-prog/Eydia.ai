@@ -1,7 +1,35 @@
 // Thin fetch wrapper around the Laravel API. Every response uses the
 // { success, data } / { success, message, errors } envelope from the backend.
 
+import { getToken, saveToken } from "./auth";
+
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
+
+// Keep the session alive: if an authenticated request comes back 401 (the access
+// token expired), silently exchange the still-valid token for a fresh one at
+// /auth/refresh and retry — so the user stays logged in until they log out,
+// without ever seeing a re-login. Concurrent 401s share one refresh.
+let refreshPromise: Promise<string | null> | null = null;
+async function refreshAccessToken(): Promise<string | null> {
+  const token = getToken();
+  if (!token) return null;
+  if (!refreshPromise) {
+    refreshPromise = fetch(`${BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        const j = await res.json().catch(() => null);
+        const fresh = j?.data?.token;
+        if (res.ok && fresh) { saveToken(fresh); return fresh as string; }
+        return null;
+      })
+      .catch(() => null)
+      .finally(() => { refreshPromise = null; });
+  }
+  return refreshPromise;
+}
 
 export type ApiError = {
   message: string;
@@ -20,16 +48,25 @@ async function request<T>(
   path: string,
   options: { method?: string; body?: unknown; token?: string | null } = {}
 ): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+  const doFetch = (token?: string | null) => fetch(`${BASE}${path}`, {
     method: options.method ?? "GET",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      ...(options.token ? { Authorization: `Bearer ${options.token}` } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,
     cache: "no-store",
   });
+
+  let res = await doFetch(options.token);
+
+  // Access token expired → refresh once and retry (authenticated calls only,
+  // never the refresh call itself to avoid a loop).
+  if (res.status === 401 && options.token && !path.startsWith("/auth/refresh")) {
+    const fresh = await refreshAccessToken();
+    if (fresh) res = await doFetch(fresh);
+  }
 
   let json: any = null;
   try {
