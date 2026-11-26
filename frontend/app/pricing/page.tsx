@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api, CyclePrice, PricingOffer, PublicPlan } from "@/lib/api";
 import { getToken } from "@/lib/auth";
+import { StoreBadges } from "@/components/landing-kit";
 
 // Public pricing page. Cycles, per-cycle discounts and the limited-time launch
 // offer (countdown) are all BACKEND-MANAGED (/public/plans).
@@ -140,7 +141,13 @@ export default function PricingPage() {
       </section>
 
       <footer style={{ background: "#0f1b2d", color: "#aeb8cc", padding: "28px 0", textAlign: "center", fontSize: 13 }}>
-        © {new Date().getFullYear()} Eydia.ai · <Link href="/" style={{ color: "#fff" }}>Home</Link> · <Link href="/terms" style={{ color: "#fff" }}>Terms</Link> · <Link href="/privacy" style={{ color: "#fff" }}>Privacy</Link>
+        <div className="pr-wrap" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+            <span style={{ fontWeight: 700, color: "#fff" }}>📱 Get the Eydia app:</span>
+            <StoreBadges />
+          </div>
+          <div>© {new Date().getFullYear()} Eydia.ai · <Link href="/" style={{ color: "#fff" }}>Home</Link> · <Link href="/terms" style={{ color: "#fff" }}>Terms</Link> · <Link href="/privacy" style={{ color: "#fff" }}>Privacy</Link></div>
+        </div>
       </footer>
     </div>
   );
