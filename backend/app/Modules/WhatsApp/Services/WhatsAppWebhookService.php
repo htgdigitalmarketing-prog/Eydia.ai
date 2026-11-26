@@ -181,14 +181,14 @@ class WhatsAppWebhookService extends BaseService
         $type = $msgType;
         $isNew = $isNewContact;
 
-        app()->terminating(function () use ($tenantId, $contactId, $conversationId, $bodyText, $type, $isNew) {
+        $finalize = function () use ($tenantId, $contactId, $conversationId, $bodyText, $type, $isNew) {
             $contact = Contact::withoutGlobalScopes()->find($contactId);
             $conversation = Conversation::withoutGlobalScopes()->find($conversationId);
             if (! $contact || ! $conversation) {
                 return;
             }
 
-            // Mobile push for the new inbound message (best-effort, after response).
+            // Mobile push for the new inbound message (best-effort).
             try {
                 app(\App\Modules\Mobile\Services\PushNotificationService::class)->notifyConversation(
                     $conversation,
@@ -201,6 +201,8 @@ class WhatsAppWebhookService extends BaseService
                 Log::warning('push: inbound notify failed: ' . $e->getMessage());
             }
 
+            // Hot-lead detection: analyse the chat and add interested customers to
+            // the Hot List (AI, with a keyword fallback).
             try {
                 app(\App\Modules\Chatbot\Services\HotLeadDetector::class)
                     ->evaluate($contact, $conversation, $type, $bodyText);
@@ -219,7 +221,16 @@ class WhatsAppWebhookService extends BaseService
             } catch (\Throwable $e) {
                 Log::warning('Automation dispatch error: ' . $e->getMessage());
             }
-        });
+        };
+
+        // The webhook is processed by a QUEUED job (console context), where
+        // app()->terminating() callbacks do NOT fire — so run the post-reply work
+        // inline there. In an HTTP request, defer it until after the 200 response.
+        if (app()->runningInConsole()) {
+            $finalize();
+        } else {
+            app()->terminating($finalize);
+        }
     }
 
     public function handleStatusUpdate(WebhookEvent $event): void

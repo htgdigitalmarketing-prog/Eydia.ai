@@ -18,6 +18,10 @@ Schedule::command('gbp:publish-due')->everyMinute()->withoutOverlapping();
 // Finish bulk sends / campaigns whose web worker was killed mid-way.
 Schedule::command('whatsapp:resume-sends')->everyMinute()->withoutOverlapping(30);
 
+// Catch-up Hot List scan: the AI re-checks recent chats and tags interested
+// customers as Hot (a safety net alongside the live per-message detection).
+Schedule::command('hotlist:scan --days=30 --limit=60')->everyThreeHours()->withoutOverlapping(30);
+
 // Nudge quiet customers (two follow-ups, at +6h and +12h).
 Schedule::command('whatsapp:send-followups')->everyTenMinutes()->withoutOverlapping(20);
 

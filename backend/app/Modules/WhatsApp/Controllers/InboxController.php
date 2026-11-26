@@ -38,6 +38,24 @@ class InboxController extends Controller
         }
     }
 
+    /**
+     * Analyse the tenant's recent chats with AI and add interested customers to
+     * the Hot List. Queued so the request returns instantly; the Hot List
+     * auto-refreshes as hot leads appear.
+     */
+    public function scanHotLeads(Request $request): JsonResponse
+    {
+        $this->authorize('conversations.view');
+
+        \Illuminate\Support\Facades\Artisan::queue('hotlist:scan', [
+            '--tenant' => $request->user()->tenant_id,
+            '--days' => 60,
+            '--limit' => 150,
+        ]);
+
+        return $this->ok(['message' => 'Scanning your chats for hot leads — new ones will appear here shortly.']);
+    }
+
     public function conversations(Request $request): JsonResponse
     {
         $this->authorize('conversations.view');

@@ -31,6 +31,9 @@ Route::prefix('whatsapp')->group(function () {
     Route::put('/numbers/{number}/token', [WhatsAppAccountController::class, 'updateToken']);
     Route::delete('/numbers/{number}', [WhatsAppAccountController::class, 'destroy']);
 
+    // Hot List — AI scan of recent chats to find interested customers.
+    Route::post('/hot-list/scan', [InboxController::class, 'scanHotLeads']);
+
     // Inbox
     Route::get('/conversations', [InboxController::class, 'conversations']);
     Route::get('/conversations/{conversation}/messages', [InboxController::class, 'messages']);

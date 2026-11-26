@@ -322,6 +322,9 @@ export const api = {
       request<{ message: InboxMessage }>(`/whatsapp/conversations/${conversationId}/send-location`, { method: "POST", body, token }),
     deleteMessage: (token: string, conversationId: string, messageId: string) =>
       request<{ message: string }>(`/whatsapp/conversations/${conversationId}/messages/${messageId}`, { method: "DELETE", token }),
+    // Analyse recent chats with AI and add interested customers to the Hot List.
+    scanHotLeads: (token: string) =>
+      request<{ message: string }>("/whatsapp/hot-list/scan", { method: "POST", token }),
   },
 
   campaigns: {

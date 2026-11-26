@@ -28,6 +28,8 @@ export default function HotListPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async (silent = false) => {
     const token = getToken();
@@ -51,6 +53,22 @@ export default function HotListPage() {
     return () => clearInterval(t);
   }, [load]);
 
+  async function scanChats() {
+    const token = getToken();
+    if (!token) return;
+    setScanning(true); setError(null); setNotice(null);
+    try {
+      const res = await api.inbox.scanHotLeads(token);
+      setNotice(res.message);
+      // Refresh a few times as the AI tags hot leads in the background.
+      [4000, 9000, 15000, 25000].forEach((ms) => setTimeout(() => load(true), ms));
+    } catch (err) {
+      setError((err as ApiError).message);
+    } finally {
+      setScanning(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -59,10 +77,14 @@ export default function HotListPage() {
       />
 
       {error && <div className="error">{error}</div>}
+      {notice && <div className="panel" style={{ background: "#e7f7ef", color: "#0a7d47", marginBottom: 12 }}>{notice}</div>}
 
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, phone, email…"
           style={{ flex: 1, minWidth: 200, padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14 }} />
+        <button className="btn" style={{ width: "auto", padding: "10px 18px", whiteSpace: "nowrap" }} disabled={scanning} onClick={scanChats}>
+          {scanning ? "Scanning…" : "🔍 Scan chats for hot leads"}
+        </button>
       </div>
 
       {loading ? (
@@ -71,8 +93,10 @@ export default function HotListPage() {
         <div className="panel" style={{ textAlign: "center", padding: 40 }}>
           <div style={{ fontSize: 40 }}>🔥</div>
           <h3 style={{ margin: "12px 0 4px" }}>No hot leads yet</h3>
-          <p className="muted">When a customer asks about price, a demo, or says they are interested, they will show up here.</p>
-          
+          <p className="muted">When a customer asks about price, a demo, or says they are interested, they show up here automatically.</p>
+          <button className="btn" style={{ width: "auto", padding: "10px 20px", margin: "14px auto 0" }} disabled={scanning} onClick={scanChats}>
+            {scanning ? "Scanning…" : "🔍 Scan existing chats now"}
+          </button>
         </div>
       ) : (
         <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
