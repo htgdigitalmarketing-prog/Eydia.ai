@@ -138,6 +138,29 @@ export default function WhatsAppLanding() {
         </div>
       </section>
 
+      {/* ===== Pricing (above How it works) ===== */}
+      <section id="pricing" className="lph-sec">
+        <div className="lph-wrap">
+          <div className="lph-eyebrow">PRICING</div>
+          <h2 className="lph-h2">WhatsApp plans</h2>
+          <p className="lph-sub">Start free, upgrade when you grow. Every plan includes monthly AI credits for chatbot &amp; content.</p>
+          <div className="lph-plans">
+            {pricingCards.map((p) => (
+              <div key={p.name} className={`lph-plan ${p.popular ? "pop" : ""}`}>
+                {p.popular && <span className="lph-plan-tag">Most Popular</span>}
+                <div className="lph-plan-name">{p.name}</div>
+                <div className="lph-plan-price">{p.price}<span>{p.per}</span></div>
+                <div className="lph-plan-credits">{p.credits}</div>
+                <ul className="lph-plan-feats">
+                  {p.feats.map((x) => <li key={x}>✓ {x}</li>)}
+                </ul>
+                <Link href={cta} className={`lph-btn ${p.popular ? "lph-btn-grad" : "lph-btn-outline"} lph-btn-block`}>{p.cta}</Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ===== How it works ===== */}
       <section id="how" className="lph-sec lph-sec-soft">
         <div className="lph-wrap">
@@ -183,29 +206,6 @@ export default function WhatsAppLanding() {
           <div className="lph-mods">
             {MODULES.map((m) => (
               <div key={m.label} className="lph-mod"><span className="lph-mod-ic">{m.icon}</span>{m.label}</div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== Pricing ===== */}
-      <section id="pricing" className="lph-sec">
-        <div className="lph-wrap">
-          <div className="lph-eyebrow">PRICING</div>
-          <h2 className="lph-h2">WhatsApp plans</h2>
-          <p className="lph-sub">Start free, upgrade when you grow. Every plan includes monthly AI credits for chatbot &amp; content.</p>
-          <div className="lph-plans">
-            {pricingCards.map((p) => (
-              <div key={p.name} className={`lph-plan ${p.popular ? "pop" : ""}`}>
-                {p.popular && <span className="lph-plan-tag">Most Popular</span>}
-                <div className="lph-plan-name">{p.name}</div>
-                <div className="lph-plan-price">{p.price}<span>{p.per}</span></div>
-                <div className="lph-plan-credits">{p.credits}</div>
-                <ul className="lph-plan-feats">
-                  {p.feats.map((x) => <li key={x}>✓ {x}</li>)}
-                </ul>
-                <Link href={cta} className={`lph-btn ${p.popular ? "lph-btn-grad" : "lph-btn-outline"} lph-btn-block`}>{p.cta}</Link>
-              </div>
             ))}
           </div>
         </div>

@@ -47,7 +47,7 @@ export function LandingHeader({ active }: { active?: string }) {
   useEffect(() => { setLoggedIn(!!getToken()); }, []);
 
   return (
-    <header className="lph-head">
+    <header className="lph-head" style={{ position: "sticky", top: 0, zIndex: 200, background: "#fff", backdropFilter: "saturate(180%) blur(6px)", borderBottom: "1px solid #eef1f6" }}>
       <div className="lph-head-in">
         <Link href="/" className="lph-brand"><img src="/eydia-logo.png" alt="Eydia.ai" /></Link>
         <nav className="lph-nav">
