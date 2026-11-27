@@ -223,7 +223,14 @@ class AiReplyService
      */
     private function providerChain(): array
     {
-        // Every provider that currently has a key.
+        // When the admin has chosen an active provider, use ONLY that one — no
+        // fallback to the others — so exactly one provider runs at a time.
+        if ($active = $this->settings()->activeProvider()) {
+            return [$active];
+        }
+
+        // No provider forced → auto-detect: every provider that has a key,
+        // preferred first.
         $available = [];
         foreach (AiSetting::PROVIDERS as $p) {
             if ($this->keyFor($p)) {
@@ -234,13 +241,7 @@ class AiReplyService
             return [];
         }
 
-        // The admin's chosen active provider is used FIRST; the other providers
-        // that also have a key stay as AUTOMATIC FALLBACKS, so one provider's
-        // outage or billing problem (e.g. "Gemini prepayment credits depleted")
-        // never silently kills the chatbot / AI features — it just switches.
-        $active = $this->settings()->activeProvider();
-        $pref = ($active && isset($available[$active])) ? $active : config('services.ai.provider');
-
+        $pref = config('services.ai.provider');
         $order = in_array($pref, AiSetting::PROVIDERS, true)
             ? array_merge([$pref], array_values(array_diff(AiSetting::PROVIDERS, [$pref])))
             : AiSetting::PROVIDERS;
