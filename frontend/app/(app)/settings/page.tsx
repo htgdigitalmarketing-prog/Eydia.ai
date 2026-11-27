@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, InvoiceSettings, AiSettings, SiteSettings } from "@/lib/api";
+import { api, ApiError, InvoiceSettings, AiSettings, SiteSettings, SiteRatings } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/PageHeader";
@@ -121,9 +121,24 @@ export default function SettingsPage() {
   );
 }
 
+const DEFAULT_RATINGS: SiteRatings = {
+  app_store: { score: "4.8", count: "247 ratings" },
+  google_play: { score: "4.6", count: "676 ratings" },
+  google: { score: "4.8", count: "2,347 reviews" },
+  trustpilot: { score: "4.6", count: "176 reviews" },
+};
+
+const RATING_PLATFORMS: { key: keyof SiteRatings; label: string }[] = [
+  { key: "app_store", label: " App Store" },
+  { key: "google_play", label: "▶ Google Play" },
+  { key: "google", label: "Google" },
+  { key: "trustpilot", label: "★ Trustpilot" },
+];
+
 const EMPTY_SITE: SiteSettings = {
   email: "", phone: "", whatsapp: "", address: "",
   facebook: "", instagram: "", youtube: "", linkedin: "",
+  ratings: DEFAULT_RATINGS,
 };
 
 /** Super Admin → website footer / contact details shown on the marketing site. */
@@ -145,6 +160,12 @@ function SiteContactCard() {
   useEffect(() => { load(); }, [load]);
 
   const set = <K extends keyof SiteSettings>(k: K, v: SiteSettings[K]) => setForm((f) => ({ ...f, [k]: v }));
+
+  const setRating = (key: keyof SiteRatings, field: "score" | "count", v: string) =>
+    setForm((f) => {
+      const base = f.ratings ?? DEFAULT_RATINGS;
+      return { ...f, ratings: { ...base, [key]: { ...base[key], [field]: v } } };
+    });
 
   async function save() {
     const token = getToken(); if (!token) return;
@@ -205,6 +226,28 @@ function SiteContactCard() {
           <input value={form.linkedin ?? ""} onChange={(e) => set("linkedin", e.target.value)} placeholder="https://linkedin.com/company/eydia" />
         </div>
       </div>
+      <div style={{ borderTop: "1px solid var(--border)", margin: "6px 0 14px", paddingTop: 14 }}>
+        <h4 style={{ margin: "0 0 2px" }}>⭐ Homepage ratings</h4>
+        <p className="muted" style={{ marginTop: 0, fontSize: 12.5 }}>
+          The App Store / Google Play / Google / Trustpilot rating cards in the home-page &quot;Trusted by&quot; section.
+        </p>
+        <div style={{ display: "grid", gap: 10 }}>
+          {RATING_PLATFORMS.map(({ key, label }) => {
+            const r = form.ratings?.[key] ?? DEFAULT_RATINGS[key];
+            return (
+              <div key={key} style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontWeight: 700, fontSize: 13.5, minWidth: 120 }}>{label}</span>
+                <input value={r.score} onChange={(e) => setRating(key, "score", e.target.value)} placeholder="4.8"
+                  style={{ width: 80, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14 }} />
+                <span className="muted" style={{ fontSize: 13 }}>/5</span>
+                <input value={r.count} onChange={(e) => setRating(key, "count", e.target.value)} placeholder="247 ratings"
+                  style={{ flex: 1, minWidth: 160, padding: "8px 10px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 14 }} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {msg && <div className="panel" style={{ marginBottom: 12, background: msg.ok ? "#e7f7ef" : "#fdecec", color: msg.ok ? "#0a7d47" : "#c0392b", fontSize: 13 }}>{msg.text}</div>}
       <button className="btn" type="button" onClick={save} disabled={saving} style={{ width: "auto", padding: "11px 24px" }}>{saving ? "Saving…" : "Save contact details"}</button>
     </div>

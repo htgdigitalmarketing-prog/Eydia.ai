@@ -33,9 +33,28 @@ class SiteSettingController extends Controller
             'instagram' => ['nullable', 'string', 'max:500'],
             'youtube' => ['nullable', 'string', 'max:500'],
             'linkedin' => ['nullable', 'string', 'max:500'],
+            'ratings' => ['nullable', 'array'],
+            'ratings.*.score' => ['nullable', 'string', 'max:8'],
+            'ratings.*.count' => ['nullable', 'string', 'max:40'],
         ]);
 
         $settings = SiteSetting::current();
+
+        // Merge rating edits over the known platforms only (ignore stray keys).
+        if (array_key_exists('ratings', $data)) {
+            $current = $settings->ratingsWithDefaults();
+            $incoming = $data['ratings'] ?? [];
+            foreach (array_keys(SiteSetting::DEFAULT_RATINGS) as $key) {
+                if (isset($incoming[$key])) {
+                    $current[$key] = [
+                        'score' => (string) ($incoming[$key]['score'] ?? $current[$key]['score']),
+                        'count' => (string) ($incoming[$key]['count'] ?? $current[$key]['count']),
+                    ];
+                }
+            }
+            $data['ratings'] = $current;
+        }
+
         $settings->update($data);
 
         return $this->ok([

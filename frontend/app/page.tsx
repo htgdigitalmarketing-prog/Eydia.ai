@@ -3,9 +3,42 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getToken } from "@/lib/auth";
-import { api, PublicPlan, PublicClient, PublicWorkItem } from "@/lib/api";
+import { api, PublicPlan, PublicClient, PublicWorkItem, SiteRatings } from "@/lib/api";
 import { LandingHeader, LandingFooter } from "@/components/landing-kit";
 import { STEPS, PILLARS, FEATURES, MODULES, LP_FEATURE_LABELS, FALLBACK_PLANS } from "@/lib/landing-data";
+
+// ── Brand logos for the "Trusted by" rating cards (full colour) ──────────────
+const AppleLogo = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="#111" aria-hidden>
+    <path d="M16.365 1.43c0 1.14-.46 2.17-1.2 2.93-.9.92-2.36 1.63-3.56 1.53-.14-1.12.44-2.3 1.14-3.03.84-.88 2.34-1.55 3.62-1.6.01.06.01.11.01.17zM20.8 17.1c-.56 1.3-.83 1.88-1.55 3.03-1 1.6-2.42 3.6-4.17 3.6-1.55.02-1.95-1.01-4.05-1-2.1.01-2.54 1.02-4.1.99-1.75-.03-3.1-1.83-4.1-3.43-2.8-4.5-3.1-9.77-1.37-12.58 1.23-2 3.17-3.17 5-3.17 1.86 0 3.03 1.02 4.57 1.02 1.5 0 2.4-1.02 4.56-1.02 1.63 0 3.36.89 4.59 2.42-4.03 2.21-3.38 7.97.62 9.52z"/>
+  </svg>
+);
+const PlayLogo = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden>
+    <path fill="#00D7FE" d="M3.6 2.1c-.3.3-.4.7-.4 1.2v17.4c0 .5.1.9.4 1.2l.06.06 9.75-9.75v-.23L3.66 2.04z"/>
+    <path fill="#FFCE00" d="M17 15.33l-3.25-3.25v-.23L17 8.6l.08.05 3.86 2.19c1.1.63 1.1 1.65 0 2.28l-3.86 2.2z"/>
+    <path fill="#FF3A44" d="M17.08 15.28L13.75 11.96 3.6 22.1c.36.39.96.44 1.64.05l11.84-6.87"/>
+    <path fill="#00F076" d="M17.08 8.65L5.24 1.9c-.68-.4-1.28-.35-1.64.04l10.15 10.02z"/>
+  </svg>
+);
+const GoogleGLogo = () => (
+  <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden>
+    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+  </svg>
+);
+const TrustpilotStar = () => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="#00B67A" aria-hidden>
+    <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/>
+  </svg>
+);
+const MetaLogo = () => (
+  <svg viewBox="0 0 36 24" width="26" height="18" fill="#0866ff" aria-hidden>
+    <path d="M10.3 3.2C6.4 3.2 4 7.2 4 11.9c0 3.9 1.7 6.9 4.6 6.9 2 0 3.3-1.4 5-4.3.6-1 1.4-2.5 2.2-4l-1.4-2.6c-1.6 3-2.1 3.9-3 5.2-.8 1.2-1.4 1.6-2.2 1.6-1.2 0-2-1.3-2-3.3 0-3 1.3-5.2 3-5.2 1 0 1.8.7 2.9 2.4.8-1.3 1.3-2 1.9-2.7-1.4-1.7-2.7-2.4-4.5-2.4zm15.2 0c-2.3 0-4.1 1.8-5.7 4.3-1.1-1.6-2.1-2.6-3.3-3.4l1.4 2.6c.3.2.6.6 1 1.1-.4.7-.9 1.5-1.4 2.4l-.1.3 1.4 2.6c.3-.6.7-1.3 1-1.9 1.5 2 2.8 3.3 4.8 3.3 3 0 4.8-3.1 4.8-7 0-4.8-2.3-6.9-4.6-6.9zm-.2 3c1.5 0 2.5 2 2.5 4.6 0 2.1-.7 3.4-1.9 3.4-.9 0-1.6-.6-2.7-2.4.8-1.5 1.3-2.3 1.4-2.6 1-1.9 1.9-3 2.6-3z"/>
+  </svg>
+);
 
 // Eydia.ai marketing homepage — the full overview across the three pillars
 // (Google Reviews / GBP, WhatsApp and Leads). Each section also has its own
@@ -18,10 +51,12 @@ export default function Landing() {
   const [clients, setClients] = useState<PublicClient[]>([]);
   const [work, setWork] = useState<PublicWorkItem[]>([]);
   const [workCat, setWorkCat] = useState<string>("All");
+  const [ratings, setRatings] = useState<SiteRatings | null>(null);
   useEffect(() => { setLoggedIn(!!getToken()); }, []);
   useEffect(() => { api.publicPlans().then((r) => setLivePlans(r.plans)).catch(() => setLivePlans(null)); }, []);
   useEffect(() => { api.publicClients().then((r) => setClients(r.clients)).catch(() => setClients([])); }, []);
   useEffect(() => { api.publicWork().then((r) => setWork(r.items)).catch(() => setWork([])); }, []);
+  useEffect(() => { api.publicSiteSettings().then((r) => setRatings(r.site_settings.ratings ?? null)).catch(() => {}); }, []);
   const cta = loggedIn ? "/dashboard" : "/register";
 
   const inr0 = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
@@ -125,26 +160,31 @@ export default function Landing() {
             </div>
           )}
 
-          {/* Rating cards */}
+          {/* Rating cards — real brand logos, numbers managed by Super Admin */}
           <div className="lph-ratings" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
             {[
-              { icon: "", label: "App Store", score: "4.8", count: "247 ratings" },
-              { icon: "▶", label: "Google Play", score: "4.6", count: "676 ratings" },
-              { icon: "🅖", label: "Google", score: "4.8", count: "2,347 reviews" },
-              { icon: "★", label: "Trustpilot", score: "4.6", count: "176 reviews" },
-            ].map((r) => (
-              <div key={r.label} style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 16, padding: "16px 18px", boxShadow: "0 6px 20px rgba(20,25,60,.05)", textAlign: "left" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontWeight: 800, fontSize: 14 }}>
-                  <span style={{ fontSize: 18 }}>{r.icon}</span>{r.label}
+              { key: "app_store" as const, label: "App Store", logo: <AppleLogo />, score: "4.8", count: "247 ratings" },
+              { key: "google_play" as const, label: "Google Play", logo: <PlayLogo />, score: "4.6", count: "676 ratings" },
+              { key: "google" as const, label: "Google", logo: <GoogleGLogo />, score: "4.8", count: "2,347 reviews" },
+              { key: "trustpilot" as const, label: "Trustpilot", logo: <TrustpilotStar />, score: "4.6", count: "176 reviews" },
+            ].map((r) => {
+              const score = ratings?.[r.key]?.score || r.score;
+              const count = ratings?.[r.key]?.count || r.count;
+              return (
+                <div key={r.key} style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 16, padding: "16px 18px", boxShadow: "0 6px 20px rgba(20,25,60,.06)", textAlign: "left" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 9, fontWeight: 800, fontSize: 14.5 }}>
+                    <span style={{ display: "grid", placeItems: "center", width: 32, height: 32, borderRadius: 9, background: "#f5f7ff" }}>{r.logo}</span>
+                    {r.label}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 5, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 27, fontWeight: 900 }}>{score}</span>
+                    <span className="muted" style={{ fontSize: 12.5 }}>/5</span>
+                    <span style={{ color: "#f5a623", marginLeft: 2, letterSpacing: -1 }}>★★★★★</span>
+                  </div>
+                  <div className="muted" style={{ fontSize: 12.5, marginTop: 3 }}>{count}</div>
                 </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 5, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 26, fontWeight: 900 }}>{r.score}</span>
-                  <span className="muted" style={{ fontSize: 12.5 }}>/5</span>
-                  <span style={{ color: "#f5a623", marginLeft: 2 }}>★</span>
-                  <span className="muted" style={{ fontSize: 12.5 }}>{r.count}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Partner badges */}
@@ -152,7 +192,7 @@ export default function Landing() {
             <span className="muted" style={{ fontSize: 14 }}>Eydia is an official <strong style={{ color: "var(--text)" }}>Meta Business Partner</strong> and <strong style={{ color: "var(--text)" }}>Google Partner</strong>.</span>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
               <div style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 12, padding: "9px 16px", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 14px rgba(20,25,60,.05)" }}>
-                <span style={{ fontWeight: 900, color: "#0866ff", fontSize: 15 }}>∞ Meta</span>
+                <MetaLogo /><span style={{ fontWeight: 900, color: "#0866ff", fontSize: 15 }}>Meta</span>
                 <span className="muted" style={{ fontSize: 11 }}>Business Partner</span>
               </div>
               <div style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 12, padding: "9px 16px", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 14px rgba(20,25,60,.05)" }}>

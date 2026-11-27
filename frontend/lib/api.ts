@@ -2070,6 +2070,14 @@ export type AiInsights = {
   note: string;
 };
 
+export type RatingStat = { score: string; count: string };
+export type SiteRatings = {
+  app_store: RatingStat;
+  google_play: RatingStat;
+  google: RatingStat;
+  trustpilot: RatingStat;
+};
+
 export type SiteSettings = {
   email: string | null;
   phone: string | null;
@@ -2079,6 +2087,7 @@ export type SiteSettings = {
   instagram: string | null;
   youtube: string | null;
   linkedin: string | null;
+  ratings?: SiteRatings;
 };
 
 export type InvoiceSettings = {

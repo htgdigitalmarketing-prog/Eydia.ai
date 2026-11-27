@@ -13,7 +13,19 @@ class SiteSetting extends Model
 {
     protected $fillable = [
         'email', 'phone', 'whatsapp', 'address',
-        'facebook', 'instagram', 'youtube', 'linkedin',
+        'facebook', 'instagram', 'youtube', 'linkedin', 'ratings',
+    ];
+
+    protected $casts = [
+        'ratings' => 'array',
+    ];
+
+    /** Default homepage rating cards (score + count), shown until the admin edits them. */
+    public const DEFAULT_RATINGS = [
+        'app_store' => ['score' => '4.8', 'count' => '247 ratings'],
+        'google_play' => ['score' => '4.6', 'count' => '676 ratings'],
+        'google' => ['score' => '4.8', 'count' => '2,347 reviews'],
+        'trustpilot' => ['score' => '4.6', 'count' => '176 reviews'],
     ];
 
     /** The single settings row, created with sensible defaults on first access. */
@@ -26,10 +38,25 @@ class SiteSetting extends Model
             'address' => 'Nehru Place, New Delhi, 110019, India',
             'facebook' => 'https://www.facebook.com/eydia.ai',
             'instagram' => 'https://www.instagram.com/eydia.ai',
+            'ratings' => self::DEFAULT_RATINGS,
         ]);
     }
 
-    /** Public-facing snapshot used by the website footer. */
+    /** Ratings merged with defaults so every platform key is always present. */
+    public function ratingsWithDefaults(): array
+    {
+        $saved = is_array($this->ratings) ? $this->ratings : [];
+        $out = [];
+        foreach (self::DEFAULT_RATINGS as $key => $def) {
+            $out[$key] = [
+                'score' => $saved[$key]['score'] ?? $def['score'],
+                'count' => $saved[$key]['count'] ?? $def['count'],
+            ];
+        }
+        return $out;
+    }
+
+    /** Public-facing snapshot used by the website footer + homepage ratings. */
     public function toPublicArray(): array
     {
         return [
@@ -41,6 +68,7 @@ class SiteSetting extends Model
             'instagram' => $this->instagram,
             'youtube' => $this->youtube,
             'linkedin' => $this->linkedin,
+            'ratings' => $this->ratingsWithDefaults(),
         ];
     }
 }
