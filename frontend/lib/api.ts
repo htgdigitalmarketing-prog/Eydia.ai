@@ -125,6 +125,8 @@ export const api = {
   publicPlans: () => request<{ plans: PublicPlan[]; offer: PricingOffer; gst_rate: number }>("/public/plans"),
   publicClients: () => request<{ clients: PublicClient[] }>("/public/clients"),
   publicWork: () => request<{ items: PublicWorkItem[] }>("/public/work"),
+  // Public website / footer contact details (no auth).
+  publicSiteSettings: () => request<{ site_settings: SiteSettings }>("/public/site-settings"),
 
   health: () => request<{ status: string }>("/health"),
 
@@ -553,6 +555,12 @@ export const api = {
       request<{ settings: InvoiceSettings }>("/admin/settings", { token }),
     updateSettings: (token: string, body: Partial<InvoiceSettings>) =>
       request<{ settings: InvoiceSettings; message: string }>("/admin/settings", { method: "PUT", body, token }),
+
+    // Public website / footer contact details (email, phone, address, socials).
+    siteSettings: (token: string) =>
+      request<{ site_settings: SiteSettings }>("/admin/site-settings", { token }),
+    updateSiteSettings: (token: string, body: Partial<SiteSettings>) =>
+      request<{ site_settings: SiteSettings; message: string }>("/admin/site-settings", { method: "PUT", body, token }),
 
     // AI provider configuration (select provider + key + model, activate, test)
     aiInsights: (token: string, range: string = "30d") =>
@@ -2060,6 +2068,17 @@ export type AiInsights = {
   }>;
   source: string;
   note: string;
+};
+
+export type SiteSettings = {
+  email: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  address: string | null;
+  facebook: string | null;
+  instagram: string | null;
+  youtube: string | null;
+  linkedin: string | null;
 };
 
 export type InvoiceSettings = {

@@ -28,7 +28,7 @@ export default function FeaturesPage() {
               tool your business or agency needs, together in one dashboard.
             </p>
             <div className="lph-hero-cta" style={{ justifyContent: "center" }}>
-              <Link href={cta} className="lph-btn lph-btn-grad lph-btn-lg">Get Started Free</Link>
+              <Link href={cta} className="lph-btn lph-btn-grad lph-btn-lg">Get Started Now</Link>
               <Link href="/pricing" className="lph-btn lph-btn-outline lph-btn-lg">See Pricing</Link>
             </div>
           </div>
@@ -113,7 +113,7 @@ export default function FeaturesPage() {
           <div className="lph-cta">
             <h2>Ready to see it in action?</h2>
             <p>Start free — no credit card required. Explore every feature on the free Starter plan.</p>
-            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Free</Link>
+            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Now</Link>
           </div>
         </div>
       </section>

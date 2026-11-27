@@ -121,6 +121,19 @@ class WhatsAppAccountController extends Controller
 
             $tier = $raw['phone']['messaging_limit_tier'] ?? null;
 
+            // Meta only populates messaging_limit_tier once a number has sent
+            // enough quality messages. For a number that is already approved /
+            // connected that simply means the standard starting tier (250 unique
+            // customers per 24h) — not "pending review". Fall back to it so an
+            // approved number never shows a perpetual "Pending Meta review".
+            if ($tier === null) {
+                $reviewStatus = strtoupper((string) ($raw['waba']['account_review_status'] ?? ''));
+                $nameStatus = strtoupper((string) ($raw['phone']['name_status'] ?? ''));
+                if (in_array($reviewStatus, ['APPROVED', 'VERIFIED'], true) || $nameStatus === 'APPROVED') {
+                    $tier = 'TIER_250';
+                }
+            }
+
             return $this->ok([
                 'connected' => true,
                 'health' => array_merge($raw, [

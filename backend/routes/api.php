@@ -49,6 +49,14 @@ Route::prefix('v1')->middleware('throttle:api')->group(function () {
         return response()->json(['success' => true, 'data' => ['items' => $items]]);
     })->middleware('throttle:60,1');
 
+    // Public website / footer contact details for the landing pages (no auth).
+    Route::get('/public/site-settings', function () {
+        return response()->json([
+            'success' => true,
+            'data' => ['site_settings' => \App\Models\SiteSetting::current()->toPublicArray()],
+        ]);
+    })->middleware('throttle:60,1');
+
     // Public mobile app config (forced-update + maintenance switch).
     Route::get('/app/config', [\App\Modules\Mobile\Controllers\AppConfigController::class, 'index'])
         ->middleware('throttle:60,1');

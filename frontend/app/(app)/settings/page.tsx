@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, InvoiceSettings, AiSettings } from "@/lib/api";
+import { api, ApiError, InvoiceSettings, AiSettings, SiteSettings } from "@/lib/api";
 import { getToken } from "@/lib/auth";
 import { useUser } from "@/lib/user-context";
 import { PageHeader } from "@/components/PageHeader";
@@ -115,7 +115,98 @@ export default function SettingsPage() {
         </form>
       )}
 
+      {!loading && <SiteContactCard />}
       {!loading && <AiProviderCard />}
+    </div>
+  );
+}
+
+const EMPTY_SITE: SiteSettings = {
+  email: "", phone: "", whatsapp: "", address: "",
+  facebook: "", instagram: "", youtube: "", linkedin: "",
+};
+
+/** Super Admin → website footer / contact details shown on the marketing site. */
+function SiteContactCard() {
+  const [form, setForm] = useState<SiteSettings>(EMPTY_SITE);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    const token = getToken(); if (!token) return;
+    setLoading(true);
+    try {
+      const { site_settings } = await api.admin.siteSettings(token);
+      setForm({ ...EMPTY_SITE, ...site_settings });
+    } catch { /* non-super admins never render this */ }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const set = <K extends keyof SiteSettings>(k: K, v: SiteSettings[K]) => setForm((f) => ({ ...f, [k]: v }));
+
+  async function save() {
+    const token = getToken(); if (!token) return;
+    setSaving(true); setMsg(null);
+    try {
+      const { site_settings } = await api.admin.updateSiteSettings(token, form);
+      setForm({ ...EMPTY_SITE, ...site_settings });
+      setMsg({ ok: true, text: "Website contact details saved. (They appear in the site footer right away.)" });
+    } catch (e) { setMsg({ ok: false, text: (e as ApiError).message }); }
+    finally { setSaving(false); }
+  }
+
+  if (loading) return null;
+
+  return (
+    <div className="panel" style={{ maxWidth: 640, marginTop: 18 }}>
+      <h3 style={{ marginTop: 0 }}>🌐 Website footer &amp; contact</h3>
+      <p className="muted" style={{ marginTop: 0, fontSize: 13 }}>
+        These show in the public website footer (email, phone, address &amp; social links). Changes go live immediately.
+      </p>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div className="field" style={{ flex: 1, minWidth: 220 }}>
+          <label>Email</label>
+          <input type="email" value={form.email ?? ""} onChange={(e) => set("email", e.target.value)} placeholder="hello@eydia.in" />
+        </div>
+        <div className="field" style={{ flex: 1, minWidth: 180 }}>
+          <label>Phone</label>
+          <input value={form.phone ?? ""} onChange={(e) => set("phone", e.target.value)} placeholder="+91 93119 15615" />
+        </div>
+      </div>
+      <div className="field">
+        <label>WhatsApp number <span className="muted" style={{ fontWeight: 400 }}>(digits only, country code first — e.g. 919311915615)</span></label>
+        <input value={form.whatsapp ?? ""} onChange={(e) => set("whatsapp", e.target.value.replace(/[^0-9]/g, ""))} placeholder="919311915615" />
+      </div>
+      <div className="field">
+        <label>Address</label>
+        <textarea value={form.address ?? ""} onChange={(e) => set("address", e.target.value)} rows={2}
+          placeholder="Nehru Place, New Delhi, 110019, India"
+          style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", resize: "vertical" }} />
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div className="field" style={{ flex: 1, minWidth: 220 }}>
+          <label>Facebook URL</label>
+          <input value={form.facebook ?? ""} onChange={(e) => set("facebook", e.target.value)} placeholder="https://facebook.com/eydia.ai" />
+        </div>
+        <div className="field" style={{ flex: 1, minWidth: 220 }}>
+          <label>Instagram URL</label>
+          <input value={form.instagram ?? ""} onChange={(e) => set("instagram", e.target.value)} placeholder="https://instagram.com/eydia.ai" />
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <div className="field" style={{ flex: 1, minWidth: 220 }}>
+          <label>YouTube URL <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+          <input value={form.youtube ?? ""} onChange={(e) => set("youtube", e.target.value)} placeholder="https://youtube.com/@eydia" />
+        </div>
+        <div className="field" style={{ flex: 1, minWidth: 220 }}>
+          <label>LinkedIn URL <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+          <input value={form.linkedin ?? ""} onChange={(e) => set("linkedin", e.target.value)} placeholder="https://linkedin.com/company/eydia" />
+        </div>
+      </div>
+      {msg && <div className="panel" style={{ marginBottom: 12, background: msg.ok ? "#e7f7ef" : "#fdecec", color: msg.ok ? "#0a7d47" : "#c0392b", fontSize: 13 }}>{msg.text}</div>}
+      <button className="btn" type="button" onClick={save} disabled={saving} style={{ width: "auto", padding: "11px 24px" }}>{saving ? "Saving…" : "Save contact details"}</button>
     </div>
   );
 }

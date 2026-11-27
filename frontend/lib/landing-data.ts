@@ -127,7 +127,7 @@ export const FALLBACK_PLANS = [
   },
   {
     name: "Growth", price: "₹2,999", per: "/mo", credits: "1,000 AI credits / month", popular: true,
-    cta: "Get Started Free",
+    cta: "Get Started Now",
     feats: ["Google Reviews / GBP (5 locations)", "WhatsApp broadcasts + AI chatbot", "Leads CRM + automations", "Social posting & SEO"],
   },
   {

@@ -34,7 +34,7 @@ export default function Landing() {
         per: p.price > 0 ? "/mo" : "forever",
         credits: `${Number(p.limits?.ai_credits ?? 0).toLocaleString("en-IN")} AI credits / month`,
         popular: livePlans.length >= 3 ? i === Math.floor(livePlans.length / 2) : i === 0,
-        cta: p.price > 0 ? "Get Started Free" : "Get Started",
+        cta: p.price > 0 ? "Get Started Now" : "Get Started",
         feats: Object.keys(LP_FEATURE_LABELS).filter((k) => p.features?.[k]).slice(0, 5).map((k) => LP_FEATURE_LABELS[k]),
       }))
     : FALLBACK_PLANS;
@@ -55,7 +55,7 @@ export default function Landing() {
               fast and convert more.
             </p>
             <div className="lph-hero-cta">
-              <Link href={cta} className="lph-btn lph-btn-grad lph-btn-lg">Get Started Free</Link>
+              <Link href={cta} className="lph-btn lph-btn-grad lph-btn-lg">Get Started Now</Link>
               <Link href="/login" className="lph-btn lph-btn-outline lph-btn-lg">Sign In</Link>
             </div>
             <div className="lph-hero-trust">
@@ -348,7 +348,7 @@ export default function Landing() {
           <div className="lph-cta">
             <h2>Ready to grow your local business?</h2>
             <p>Join thousands of businesses & agencies managing their Google, WhatsApp and leads with Eydia.</p>
-            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Free</Link>
+            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Now</Link>
           </div>
         </div>
       </section>

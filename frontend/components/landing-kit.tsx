@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { getToken } from "@/lib/auth";
+import { api } from "@/lib/api";
 
 // Shared header + footer for every public landing page, so the navigation is
 // identical across Home, WhatsApp, Google, Features, Our Work and Pricing.
@@ -16,6 +17,34 @@ const SITE = {
   facebook: "https://www.facebook.com/eydia.ai",     // ← update
   instagram: "https://www.instagram.com/eydia.ai",   // ← update
 };
+
+type SiteInfo = typeof SITE;
+
+// Live footer/contact details (Super Admin → Settings). Cached across the
+// session; falls back to the SITE defaults above until/if the fetch returns.
+let siteCache: SiteInfo | null = null;
+function useSite(): SiteInfo {
+  const [site, setSite] = useState<SiteInfo>(siteCache ?? SITE);
+  useEffect(() => {
+    if (siteCache) return;
+    let on = true;
+    api.publicSiteSettings().then((res) => {
+      const s = res.site_settings || ({} as Partial<SiteInfo>);
+      const merged: SiteInfo = {
+        email: s.email || SITE.email,
+        phone: s.phone || SITE.phone,
+        whatsapp: s.whatsapp || SITE.whatsapp,
+        address: s.address || SITE.address,
+        facebook: s.facebook || SITE.facebook,
+        instagram: s.instagram || SITE.instagram,
+      };
+      siteCache = merged;
+      if (on) setSite(merged);
+    }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+  return site;
+}
 
 const NAV = [
   { href: "/", label: "Home" },
@@ -52,9 +81,10 @@ export function StoreBadges({ compact }: { compact?: boolean }) {
 
 /** Floating WhatsApp chat button — bottom-right of every landing page. */
 export function WhatsAppWidget() {
+  const site = useSite();
   return (
     <a
-      href={`https://wa.me/${SITE.whatsapp}?text=${encodeURIComponent("Hi Eydia, I'd like to know more.")}`}
+      href={`https://wa.me/${site.whatsapp}?text=${encodeURIComponent("Hi Eydia, I'd like to know more.")}`}
       target="_blank" rel="noopener noreferrer" aria-label="Chat on WhatsApp"
       style={{
         position: "fixed", right: 20, bottom: 20, zIndex: 300, width: 58, height: 58, borderRadius: "50%",
@@ -113,6 +143,7 @@ const IgIcon = () => (
 );
 
 export function LandingFooter() {
+  const site = useSite();
   const year = new Date().getFullYear();
   const social: CSSProperties = { width: 36, height: 36, borderRadius: 10, display: "grid", placeItems: "center", background: "rgba(255,255,255,.12)", color: "#fff" };
   return (
@@ -127,9 +158,9 @@ export function LandingFooter() {
               Eydia helps local &amp; multi-location businesses manage Google reviews, WhatsApp conversations and leads from one AI-powered dashboard — get found, reply fast and convert more.
             </p>
             <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-              <a href={SITE.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" style={social}><FbIcon /></a>
-              <a href={SITE.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" style={social}><IgIcon /></a>
-              <a href={`https://wa.me/${SITE.whatsapp}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" style={social}>
+              <a href={site.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook" style={social}><FbIcon /></a>
+              <a href={site.instagram} target="_blank" rel="noopener noreferrer" aria-label="Instagram" style={social}><IgIcon /></a>
+              <a href={`https://wa.me/${site.whatsapp}`} target="_blank" rel="noopener noreferrer" aria-label="WhatsApp" style={social}>
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.7 4.8-1.3A10 10 0 1 0 12 2Zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.4-.7-2.9-1.1-4.7-4-4.9-4.2-.1-.2-1.1-1.5-1.1-2.8 0-1.3.7-2 .9-2.3.2-.2.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.6c-.2.2-.3.4-.2.7.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.2.1.4.1.6-.1l.8-1c.2-.2.4-.2.6-.1l1.9.9c.3.1.5.2.5.4.1.2.1.9-.1 1.5Z"/></svg>
               </a>
             </div>
@@ -163,10 +194,10 @@ export function LandingFooter() {
 
           <div className="lph-foot2-col">
             <h4>Contact Us</h4>
-            <a href={`mailto:${SITE.email}`}>✉ {SITE.email}</a>
-            <a href={`tel:${SITE.phone.replace(/\s/g, "")}`}>📞 {SITE.phone}</a>
-            <a href={`https://wa.me/${SITE.whatsapp}`} target="_blank" rel="noopener noreferrer">💬 WhatsApp us</a>
-            <span style={{ color: "rgba(255,255,255,.72)", fontSize: 13, lineHeight: 1.6, display: "block", marginTop: 4 }}>📍 {SITE.address}</span>
+            <a href={`mailto:${site.email}`}>✉ {site.email}</a>
+            <a href={`tel:${site.phone.replace(/\s/g, "")}`}>📞 {site.phone}</a>
+            <a href={`https://wa.me/${site.whatsapp}`} target="_blank" rel="noopener noreferrer">💬 WhatsApp us</a>
+            <span style={{ color: "rgba(255,255,255,.72)", fontSize: 13, lineHeight: 1.6, display: "block", marginTop: 4 }}>📍 {site.address}</span>
           </div>
         </div>
         <div className="lph-foot2-bottom">

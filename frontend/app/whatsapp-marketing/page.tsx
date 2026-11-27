@@ -56,7 +56,7 @@ const MODULES = [
 // Fallback cards until live plans load (or if none are tagged for WhatsApp).
 const FALLBACK_PLANS = [
   { name: "Starter", price: "Free", per: "forever", credits: "100 AI credits / month", popular: false, cta: "Get Started", feats: ["WhatsApp inbox & templates", "1,000 contacts", "Basic reports"] },
-  { name: "Growth", price: "₹2,999", per: "/mo", credits: "1,000 AI credits / month", popular: true, cta: "Get Started Free", feats: ["WhatsApp broadcasts + AI chatbot", "Drip automations", "Delivery & engagement reports"] },
+  { name: "Growth", price: "₹2,999", per: "/mo", credits: "1,000 AI credits / month", popular: true, cta: "Get Started Now", feats: ["WhatsApp broadcasts + AI chatbot", "Drip automations", "Delivery & engagement reports"] },
   { name: "Enterprise", price: "₹9,999", per: "/mo", credits: "50,000 AI credits / month", popular: false, cta: "Contact Sales", feats: ["Unlimited contacts", "WhatsApp API access", "Priority support"] },
 ];
 
@@ -82,7 +82,7 @@ export default function WhatsAppLanding() {
         per: p.price > 0 ? "/mo" : "forever",
         credits: `${Number(p.limits?.ai_credits ?? 0).toLocaleString("en-IN")} AI credits / month`,
         popular: sourcePlans.length >= 3 ? i === Math.floor(sourcePlans.length / 2) : i === 0,
-        cta: p.price > 0 ? "Get Started Free" : "Get Started",
+        cta: p.price > 0 ? "Get Started Now" : "Get Started",
         feats: Object.keys(WA_FEATURE_LABELS).filter((k) => p.features?.[k]).slice(0, 5).map((k) => WA_FEATURE_LABELS[k]),
       }))
     : FALLBACK_PLANS;
@@ -103,7 +103,7 @@ export default function WhatsAppLanding() {
               enquiry is ever missed.
             </p>
             <div className="lph-hero-cta">
-              <Link href={cta} className="lph-btn lph-btn-grad lph-btn-lg">Get Started Free</Link>
+              <Link href={cta} className="lph-btn lph-btn-grad lph-btn-lg">Get Started Now</Link>
               <Link href="/login" className="lph-btn lph-btn-outline lph-btn-lg">Sign In</Link>
             </div>
             <div className="lph-hero-trust">
@@ -220,7 +220,7 @@ export default function WhatsAppLanding() {
           <div className="lph-cta">
             <h2>Ready to grow on WhatsApp?</h2>
             <p>Join businesses using Eydia to turn WhatsApp into their best-performing sales channel.</p>
-            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Free</Link>
+            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Now</Link>
           </div>
         </div>
       </section>

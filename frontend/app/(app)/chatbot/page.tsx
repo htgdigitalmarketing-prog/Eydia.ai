@@ -400,12 +400,11 @@ export default function ChatbotPage() {
             value={ai.instructions}
             onChange={(e) => setAi((a) => ({ ...a, instructions: e.target.value }))}
             rows={6}
-            maxLength={8000}
             placeholder={"e.g.\nWe are Eydia.ai Store, open Mon–Sat 10am–8pm.\nWe sell mobile accessories; delivery across India in 3–5 days.\nReturns accepted within 7 days.\nFor prices, ask the customer which product they mean.\nIf someone wants to place an order, collect name, address and product."}
             style={{ width: "100%", padding: "10px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontFamily: "inherit", resize: "vertical" }}
           />
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-            <span className="muted" style={{ fontSize: 12 }}>{ai.instructions.length}/8000 · Needs an AI API key (Gemini or Claude) configured on the server.</span>
+            <span className="muted" style={{ fontSize: 12 }}>{ai.instructions.length.toLocaleString()} characters · unlimited · Needs an AI API key (Gemini or Claude) configured on the server.</span>
             <button className="btn" style={{ width: "auto", padding: "9px 18px" }} disabled={aiSaving} onClick={saveAi}>{aiSaving ? "Saving…" : "Save AI settings"}</button>
           </div>
         </div>

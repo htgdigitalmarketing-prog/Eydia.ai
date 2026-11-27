@@ -41,6 +41,10 @@ Route::prefix('admin')->middleware('super_admin')->group(function () {
     Route::get('/settings', [SettingsController::class, 'show']);
     Route::put('/settings', [SettingsController::class, 'update']);
 
+    // Public website / footer contact details (email, phone, address, socials).
+    Route::get('/site-settings', [\App\Modules\Admin\Controllers\SiteSettingController::class, 'show']);
+    Route::put('/site-settings', [\App\Modules\Admin\Controllers\SiteSettingController::class, 'update']);
+
     // Pricing: per-cycle discounts + launch offer countdown.
     Route::get('/billing-settings', [\App\Modules\Admin\Controllers\BillingSettingsController::class, 'show']);
     Route::put('/billing-settings', [\App\Modules\Admin\Controllers\BillingSettingsController::class, 'update']);

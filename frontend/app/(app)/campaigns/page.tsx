@@ -64,8 +64,19 @@ export default function CampaignsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [tags, setTags] = useState<TagItem[]>([]);
+  // form.tags holds tag NAMES (the backend matches audience by tag name).
   const [form, setForm] = useState({ name: "", template_id: "", tags: [] as string[], scheduled_at: "" });
+  const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  function addTag(name: string) {
+    const v = name.trim();
+    if (v && !form.tags.includes(v)) setForm((f) => ({ ...f, tags: [...f.tags, v] }));
+    setTagInput("");
+  }
+  function removeTag(name: string) {
+    setForm((f) => ({ ...f, tags: f.tags.filter((t) => t !== name) }));
+  }
 
   // Campaign detail
   const [detail, setDetail] = useState<CampaignDetail | null>(null);
@@ -228,6 +239,7 @@ export default function CampaignsPage() {
       setNotice("Campaign created.");
       setShowCreate(false);
       setForm({ name: "", template_id: "", tags: [], scheduled_at: "" });
+      setTagInput("");
       loadCampaigns();
     } catch (err) {
       const e = err as ApiError;
@@ -478,25 +490,48 @@ export default function CampaignsPage() {
               </div>
             </div>
             <div className="field">
-              <label>Target audience — tags (leave empty for all contacts)</label>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {tags.map((t) => (
-                  <label key={t.id} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={form.tags.includes(t.id)}
-                      onChange={(e) => {
-                        setForm((f) => ({
-                          ...f,
-                          tags: e.target.checked ? [...f.tags, t.id] : f.tags.filter((id) => id !== t.id),
-                        }));
-                      }}
-                    />
-                    <span style={{ background: t.color + "22", color: t.color, padding: "1px 8px", borderRadius: 999, fontWeight: 600 }}>{t.name}</span>
-                  </label>
-                ))}
-                {tags.length === 0 && <span className="muted">No tags — campaign will target all contacts</span>}
+              <label>Target audience — tag <span className="muted" style={{ fontWeight: 400 }}>(pick or type a tag; leave empty = all contacts)</span></label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <select
+                  value=""
+                  onChange={(e) => { if (e.target.value) addTag(e.target.value); }}
+                  style={{ padding: "9px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, minWidth: 180 }}
+                >
+                  <option value="">Select a tag…</option>
+                  {tags.filter((t) => !form.tags.includes(t.name)).map((t) => (
+                    <option key={t.id} value={t.name}>{t.name}</option>
+                  ))}
+                </select>
+                <input
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
+                  placeholder="or type a tag name"
+                  style={{ flex: 1, minWidth: 180, padding: "9px 12px", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14 }}
+                />
+                <button type="button" className="btn-mini" onClick={() => addTag(tagInput)}>+ Add tag</button>
               </div>
+              {form.tags.length > 0 ? (
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                  {form.tags.map((name) => (
+                    <span key={name} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#eef1ff", color: "#2160ef", padding: "3px 6px 3px 10px", borderRadius: 999, fontWeight: 600, fontSize: 13 }}>
+                      {name}
+                      <button type="button" onClick={() => removeTag(name)} aria-label={`Remove ${name}`}
+                        style={{ border: "none", background: "transparent", color: "#2160ef", cursor: "pointer", fontSize: 15, lineHeight: 1, padding: 0 }}>×</button>
+                    </span>
+                  ))}
+                  <span className="muted" style={{ fontSize: 12, alignSelf: "center" }}>
+                    Template will go to contacts tagged with {form.tags.length === 1 ? "this tag" : "any of these tags"}.
+                  </span>
+                </div>
+              ) : (
+                <div className="muted" style={{ fontSize: 12, marginTop: 8 }}>No tag selected — campaign will target <strong>all</strong> contacts.</div>
+              )}
+              {tags.length === 0 && (
+                <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>
+                  No saved tags yet — type a tag name you&apos;ve used on the Contacts page (e.g. <em>New Lead</em>) to target that audience.
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button className="btn" disabled={submitting}>{submitting ? "Creating..." : "Create Campaign"}</button>
