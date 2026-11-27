@@ -55,7 +55,7 @@ const MODULES = [
 // Fallback cards until live plans load (or if none are tagged for GBP).
 const FALLBACK_PLANS = [
   { name: "Starter", price: "Free", per: "forever", credits: "100 AI credits / month", popular: false, cta: "Get Started", feats: ["Reviews dashboard", "1 location", "Basic insights"] },
-  { name: "Growth", price: "₹2,999", per: "/mo", credits: "1,000 AI credits / month", popular: true, cta: "Start Free Trial", feats: ["AI review replies (5 locations)", "Google posts & photos", "Local SEO & rank tracking"] },
+  { name: "Growth", price: "₹2,999", per: "/mo", credits: "1,000 AI credits / month", popular: true, cta: "Get Started Free", feats: ["AI review replies (5 locations)", "Google posts & photos", "Local SEO & rank tracking"] },
   { name: "Enterprise", price: "₹9,999", per: "/mo", credits: "50,000 AI credits / month", popular: false, cta: "Contact Sales", feats: ["Unlimited locations", "Competitor analysis", "API access & priority support"] },
 ];
 
@@ -69,8 +69,11 @@ export default function GoogleLanding() {
   const inr0 = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
   // Only plans that include the Google / GBP dashboard. If none are tagged that
   // way, fall back to all live plans so the section is never empty.
-  const gbpPlans = (livePlans ?? []).filter((p) => p.features?.dash_gbp);
-  const sourcePlans = gbpPlans.length > 0 ? gbpPlans : (livePlans ?? []);
+  // Only the pure GBP plan(s) — exclude combined GBP+WhatsApp plans so this page
+  // shows just Google pricing. Fall back to any GBP plan, then all.
+  const gbpOnly = (livePlans ?? []).filter((p) => p.features?.dash_gbp && !p.features?.dash_whatsapp);
+  const gbpAny = (livePlans ?? []).filter((p) => p.features?.dash_gbp);
+  const sourcePlans = gbpOnly.length > 0 ? gbpOnly : (gbpAny.length > 0 ? gbpAny : (livePlans ?? []));
   const pricingCards = sourcePlans.length > 0
     ? sourcePlans.map((p, i) => ({
         name: p.name,
@@ -78,7 +81,7 @@ export default function GoogleLanding() {
         per: p.price > 0 ? "/mo" : "forever",
         credits: `${Number(p.limits?.ai_credits ?? 0).toLocaleString("en-IN")} AI credits / month`,
         popular: sourcePlans.length >= 3 ? i === Math.floor(sourcePlans.length / 2) : i === 0,
-        cta: p.price > 0 ? "Start Free Trial" : "Get Started",
+        cta: p.price > 0 ? "Get Started Free" : "Get Started",
         feats: Object.keys(GBP_FEATURE_LABELS).filter((k) => p.features?.[k]).slice(0, 5).map((k) => GBP_FEATURE_LABELS[k]),
       }))
     : FALLBACK_PLANS;
@@ -216,7 +219,7 @@ export default function GoogleLanding() {
           <div className="lph-cta">
             <h2>Ready to win on Google?</h2>
             <p>Join businesses using Eydia to grow their reviews, rankings and local reputation.</p>
-            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Start Free Trial</Link>
+            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Free</Link>
           </div>
         </div>
       </section>

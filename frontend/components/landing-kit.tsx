@@ -20,7 +20,7 @@ const SITE = {
 const NAV = [
   { href: "/", label: "Home" },
   { href: "/whatsapp-marketing", label: "WhatsApp" },
-  { href: "/google-business-profile", label: "Google Reviews" },
+  { href: "/google-business-profile", label: "GBP AI Master" },
   { href: "/features", label: "Features" },
   { href: "/our-work", label: "Our Work" },
   { href: "/pricing", label: "Pricing" },

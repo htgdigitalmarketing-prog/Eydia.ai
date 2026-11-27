@@ -98,7 +98,7 @@ export default function OurWorkPage() {
           <div className="lph-cta">
             <h2>Want results like these?</h2>
             <p>Let Eydia manage your Google, WhatsApp and leads — and grow your local business.</p>
-            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Start Free Trial</Link>
+            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Free</Link>
           </div>
         </div>
       </section>

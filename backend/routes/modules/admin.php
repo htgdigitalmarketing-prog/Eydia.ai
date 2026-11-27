@@ -57,6 +57,7 @@ Route::prefix('admin')->middleware('super_admin')->group(function () {
     // "Our Clients" — public landing-page client logos.
     Route::get('/clients', [\App\Modules\Admin\Controllers\ClientController::class, 'index']);
     Route::post('/clients', [\App\Modules\Admin\Controllers\ClientController::class, 'store']);
+    Route::post('/clients/upload-logo', [\App\Modules\Admin\Controllers\ClientController::class, 'uploadLogo']);
     Route::put('/clients/{uuid}', [\App\Modules\Admin\Controllers\ClientController::class, 'update']);
     Route::delete('/clients/{uuid}', [\App\Modules\Admin\Controllers\ClientController::class, 'destroy']);
 

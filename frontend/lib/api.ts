@@ -564,6 +564,19 @@ export const api = {
       request<{ client: AdminClient }>(`/admin/clients/${id}`, { method: "PUT", body, token }),
     deleteClient: (token: string, id: string) =>
       request<{ message: string }>(`/admin/clients/${id}`, { method: "DELETE", token }),
+    uploadClientLogo: async (token: string, file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${BASE}/admin/clients/upload-logo`, {
+        method: "POST", headers: { Accept: "application/json", Authorization: `Bearer ${token}` }, body: form,
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || (json && json.success === false)) {
+        const err: ApiError = { message: json?.message ?? `Upload failed (${res.status})`, errors: json?.errors, status: res.status };
+        throw err;
+      }
+      return json.data as { url: string; path: string };
+    },
     work: (token: string) => request<{ items: AdminWorkItem[]; categories: string[] }>("/admin/work", { token }),
     createWork: (token: string, body: Partial<AdminWorkItem>) =>
       request<{ item: AdminWorkItem }>("/admin/work", { method: "POST", body, token }),

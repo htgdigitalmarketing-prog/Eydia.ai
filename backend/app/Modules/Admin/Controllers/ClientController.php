@@ -39,6 +39,19 @@ class ClientController extends Controller
         return $this->ok(['message' => 'Client removed.']);
     }
 
+    /** Upload a client logo image and return its public URL (for the logo field). */
+    public function uploadLogo(Request $request): JsonResponse
+    {
+        $request->validate([
+            // `image` rule rejects SVG, so allow logo formats via mimes instead.
+            'file' => ['required', 'file', 'mimes:jpg,jpeg,png,webp,gif,svg', 'max:4096'],
+        ]);
+
+        $path = $request->file('file')->store('clients/' . now()->format('Y/m'), 'public');
+
+        return $this->ok(['url' => url('media/' . $path), 'path' => $path]);
+    }
+
     private function validated(Request $request): array
     {
         return $request->validate([

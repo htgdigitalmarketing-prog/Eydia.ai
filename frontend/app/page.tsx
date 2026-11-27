@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getToken } from "@/lib/auth";
 import { api, PublicPlan, PublicClient, PublicWorkItem } from "@/lib/api";
 import { LandingHeader, LandingFooter } from "@/components/landing-kit";
-import { STATS, STEPS, PILLARS, FEATURES, MODULES, LP_FEATURE_LABELS, FALLBACK_PLANS } from "@/lib/landing-data";
+import { STEPS, PILLARS, FEATURES, MODULES, LP_FEATURE_LABELS, FALLBACK_PLANS } from "@/lib/landing-data";
 
 // Eydia.ai marketing homepage — the full overview across the three pillars
 // (Google Reviews / GBP, WhatsApp and Leads). Each section also has its own
@@ -34,7 +34,7 @@ export default function Landing() {
         per: p.price > 0 ? "/mo" : "forever",
         credits: `${Number(p.limits?.ai_credits ?? 0).toLocaleString("en-IN")} AI credits / month`,
         popular: livePlans.length >= 3 ? i === Math.floor(livePlans.length / 2) : i === 0,
-        cta: p.price > 0 ? "Start Free Trial" : "Get Started",
+        cta: p.price > 0 ? "Get Started Free" : "Get Started",
         feats: Object.keys(LP_FEATURE_LABELS).filter((k) => p.features?.[k]).slice(0, 5).map((k) => LP_FEATURE_LABELS[k]),
       }))
     : FALLBACK_PLANS;
@@ -94,39 +94,73 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ===== Trusted-by clients slider (managed by Super Admin → Our Clients) ===== */}
-      {clients.length > 0 && (
-        <section style={{ padding: "30px 0 10px", background: "#f7f9ff", borderTop: "1px solid #eef1f6" }}>
-          <div className="lph-wrap">
-            <div className="lph-eyebrow" style={{ textAlign: "center" }}>BUSINESSES GROWING WITH EYDIA</div>
-            <h2 className="lph-h2" style={{ textAlign: "center", fontSize: 26, margin: "6px 0 20px" }}>Trusted by growing businesses</h2>
+      {/* ===== Trusted by: client slider + ratings + partner badges ===== */}
+      <section style={{ padding: "48px 0 44px", background: "linear-gradient(180deg,#f4f6ff 0%,#eef2ff 100%)", borderTop: "1px solid #eef1f6" }}>
+        <div className="lph-wrap" style={{ textAlign: "center" }}>
+          <div className="lph-eyebrow">BUSINESSES GROWING WITH EYDIA</div>
+          <h2 className="lph-h2" style={{ fontSize: 34, margin: "8px 0 10px" }}>Trusted by growing businesses.</h2>
+          <p className="lph-sub" style={{ margin: "0 auto 26px" }}>From neighbourhood businesses to familiar brands, Eydia helps teams reach customers across India, the UAE, the UK, the USA and beyond.</p>
+        </div>
+
+        <div className="lph-wrap" style={{ maxWidth: 1040 }}>
+          {clients.length > 0 && (
+            <div style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 18, padding: "22px 10px", boxShadow: "0 10px 30px rgba(20,25,60,.06)", marginBottom: 20 }}>
+              <div className="lph-marquee">
+                <div className="lph-marquee-track">
+                  {[...clients, ...clients].map((c, i) => {
+                    const inner = (
+                      <>
+                        {c.logo_url
+                          ? <img src={c.logo_url} alt={c.name} />
+                          : <div style={{ height: 50, display: "grid", placeItems: "center", fontWeight: 800, color: "#5b6bf5", padding: "0 8px" }}>{c.name}</div>}
+                        <b>{c.name}</b>
+                      </>
+                    );
+                    return c.website
+                      ? <a key={i} href={c.website} target="_blank" rel="noopener noreferrer" className="lph-client" style={{ textDecoration: "none" }}>{inner}</a>
+                      : <div key={i} className="lph-client">{inner}</div>;
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Rating cards */}
+          <div className="lph-ratings" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16 }}>
+            {[
+              { icon: "", label: "App Store", score: "4.8", count: "247 ratings" },
+              { icon: "▶", label: "Google Play", score: "4.6", count: "676 ratings" },
+              { icon: "🅖", label: "Google", score: "4.8", count: "2,347 reviews" },
+              { icon: "★", label: "Trustpilot", score: "4.6", count: "176 reviews" },
+            ].map((r) => (
+              <div key={r.label} style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 16, padding: "16px 18px", boxShadow: "0 6px 20px rgba(20,25,60,.05)", textAlign: "left" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontWeight: 800, fontSize: 14 }}>
+                  <span style={{ fontSize: 18 }}>{r.icon}</span>{r.label}
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 5, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: 26, fontWeight: 900 }}>{r.score}</span>
+                  <span className="muted" style={{ fontSize: 12.5 }}>/5</span>
+                  <span style={{ color: "#f5a623", marginLeft: 2 }}>★</span>
+                  <span className="muted" style={{ fontSize: 12.5 }}>{r.count}</span>
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="lph-marquee">
-            <div className="lph-marquee-track">
-              {[...clients, ...clients].map((c, i) => {
-                const inner = (
-                  <>
-                    {c.logo_url
-                      ? <img src={c.logo_url} alt={c.name} />
-                      : <div style={{ height: 50, display: "grid", placeItems: "center", fontWeight: 800, color: "#5b6bf5", padding: "0 8px" }}>{c.name}</div>}
-                    <b>{c.name}</b>
-                  </>
-                );
-                return c.website
-                  ? <a key={i} href={c.website} target="_blank" rel="noopener noreferrer" className="lph-client" style={{ textDecoration: "none" }}>{inner}</a>
-                  : <div key={i} className="lph-client">{inner}</div>;
-              })}
+
+          {/* Partner badges */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", borderTop: "1px solid #e3e8f5", marginTop: 26, paddingTop: 20 }}>
+            <span className="muted" style={{ fontSize: 14 }}>Eydia is an official <strong style={{ color: "var(--text)" }}>Meta Business Partner</strong> and <strong style={{ color: "var(--text)" }}>Google Partner</strong>.</span>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <div style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 12, padding: "9px 16px", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 14px rgba(20,25,60,.05)" }}>
+                <span style={{ fontWeight: 900, color: "#0866ff", fontSize: 15 }}>∞ Meta</span>
+                <span className="muted" style={{ fontSize: 11 }}>Business Partner</span>
+              </div>
+              <div style={{ background: "#fff", border: "1px solid #eef1f6", borderRadius: 12, padding: "9px 16px", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 14px rgba(20,25,60,.05)" }}>
+                <span style={{ fontWeight: 900, fontSize: 15 }}><span style={{ color: "#4285F4" }}>G</span><span style={{ color: "#ea4335" }}>o</span><span style={{ color: "#fbbc05" }}>o</span><span style={{ color: "#4285F4" }}>g</span><span style={{ color: "#34a853" }}>l</span><span style={{ color: "#ea4335" }}>e</span></span>
+                <span className="muted" style={{ fontSize: 11 }}>Partner</span>
+              </div>
             </div>
           </div>
-        </section>
-      )}
-
-      {/* ===== Stats strip ===== */}
-      <section className="lph-stats">
-        <div className="lph-stats-in">
-          {STATS.map((s) => (
-            <div key={s.l} className="lph-stat"><div className="lph-stat-v">{s.v}</div><div className="lph-stat-l">{s.l}</div></div>
-          ))}
         </div>
       </section>
 
@@ -314,7 +348,7 @@ export default function Landing() {
           <div className="lph-cta">
             <h2>Ready to grow your local business?</h2>
             <p>Join thousands of businesses & agencies managing their Google, WhatsApp and leads with Eydia.</p>
-            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Start Free Trial</Link>
+            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Free</Link>
           </div>
         </div>
       </section>

@@ -17,6 +17,18 @@ export default function ClientsPage() {
   const [form, setForm] = useState({ ...BLANK });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  async function uploadLogo(file: File | null) {
+    const t = getToken(); if (!t || !file) return;
+    setUploading(true);
+    try {
+      const res = await api.admin.uploadClientLogo(t, file);
+      setForm((f) => ({ ...f, logo_url: res.url }));
+      toast("Logo uploaded.", "success");
+    } catch (e) { toastError(e as ApiError); }
+    finally { setUploading(false); }
+  }
 
   const load = useCallback(async () => {
     const t = getToken();
@@ -87,8 +99,15 @@ export default function ClientsPage() {
             </div>
           </div>
           <div className="field">
-            <label>Logo image URL <span className="muted">(recommended — transparent PNG/SVG)</span></label>
-            <input value={form.logo_url} onChange={(e) => setForm((f) => ({ ...f, logo_url: e.target.value }))} placeholder="https://…/logo.png" />
+            <label>Logo <span className="muted">(upload an image, or paste a URL — transparent PNG/SVG recommended)</span></label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <input style={{ flex: 1, minWidth: 220 }} value={form.logo_url} onChange={(e) => setForm((f) => ({ ...f, logo_url: e.target.value }))} placeholder="https://…/logo.png" />
+              <label className="btn-mini" style={{ cursor: "pointer", whiteSpace: "nowrap" }}>
+                {uploading ? "Uploading…" : "⬆ Upload logo"}
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml,.svg" style={{ display: "none" }}
+                  disabled={uploading} onChange={(e) => { uploadLogo(e.target.files?.[0] ?? null); e.target.value = ""; }} />
+              </label>
+            </div>
           </div>
           <div className="field">
             <label>Website <span className="muted">(optional)</span></label>

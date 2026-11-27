@@ -56,7 +56,7 @@ const MODULES = [
 // Fallback cards until live plans load (or if none are tagged for WhatsApp).
 const FALLBACK_PLANS = [
   { name: "Starter", price: "Free", per: "forever", credits: "100 AI credits / month", popular: false, cta: "Get Started", feats: ["WhatsApp inbox & templates", "1,000 contacts", "Basic reports"] },
-  { name: "Growth", price: "₹2,999", per: "/mo", credits: "1,000 AI credits / month", popular: true, cta: "Start Free Trial", feats: ["WhatsApp broadcasts + AI chatbot", "Drip automations", "Delivery & engagement reports"] },
+  { name: "Growth", price: "₹2,999", per: "/mo", credits: "1,000 AI credits / month", popular: true, cta: "Get Started Free", feats: ["WhatsApp broadcasts + AI chatbot", "Drip automations", "Delivery & engagement reports"] },
   { name: "Enterprise", price: "₹9,999", per: "/mo", credits: "50,000 AI credits / month", popular: false, cta: "Contact Sales", feats: ["Unlimited contacts", "WhatsApp API access", "Priority support"] },
 ];
 
@@ -70,8 +70,11 @@ export default function WhatsAppLanding() {
   const inr0 = (n: number) => "₹" + Math.round(n).toLocaleString("en-IN");
   // Only plans that include the WhatsApp dashboard. If none are tagged that way,
   // fall back to all live plans so the section is never empty.
-  const waPlans = (livePlans ?? []).filter((p) => p.features?.dash_whatsapp);
-  const sourcePlans = waPlans.length > 0 ? waPlans : (livePlans ?? []);
+  // Only the pure WhatsApp plan(s) — exclude combined GBP+WhatsApp plans so this
+  // page shows just WhatsApp pricing. Fall back to any WhatsApp plan, then all.
+  const waOnly = (livePlans ?? []).filter((p) => p.features?.dash_whatsapp && !p.features?.dash_gbp);
+  const waAny = (livePlans ?? []).filter((p) => p.features?.dash_whatsapp);
+  const sourcePlans = waOnly.length > 0 ? waOnly : (waAny.length > 0 ? waAny : (livePlans ?? []));
   const pricingCards = sourcePlans.length > 0
     ? sourcePlans.map((p, i) => ({
         name: p.name,
@@ -79,7 +82,7 @@ export default function WhatsAppLanding() {
         per: p.price > 0 ? "/mo" : "forever",
         credits: `${Number(p.limits?.ai_credits ?? 0).toLocaleString("en-IN")} AI credits / month`,
         popular: sourcePlans.length >= 3 ? i === Math.floor(sourcePlans.length / 2) : i === 0,
-        cta: p.price > 0 ? "Start Free Trial" : "Get Started",
+        cta: p.price > 0 ? "Get Started Free" : "Get Started",
         feats: Object.keys(WA_FEATURE_LABELS).filter((k) => p.features?.[k]).slice(0, 5).map((k) => WA_FEATURE_LABELS[k]),
       }))
     : FALLBACK_PLANS;
@@ -217,7 +220,7 @@ export default function WhatsAppLanding() {
           <div className="lph-cta">
             <h2>Ready to grow on WhatsApp?</h2>
             <p>Join businesses using Eydia to turn WhatsApp into their best-performing sales channel.</p>
-            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Start Free Trial</Link>
+            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Free</Link>
           </div>
         </div>
       </section>

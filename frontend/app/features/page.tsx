@@ -113,7 +113,7 @@ export default function FeaturesPage() {
           <div className="lph-cta">
             <h2>Ready to see it in action?</h2>
             <p>Start free — no credit card required. Explore every feature on the free Starter plan.</p>
-            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Start Free Trial</Link>
+            <Link href={cta} className="lph-btn lph-btn-white lph-btn-lg">Get Started Free</Link>
           </div>
         </div>
       </section>
