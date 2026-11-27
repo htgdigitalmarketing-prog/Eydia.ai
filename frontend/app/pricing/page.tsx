@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api, CyclePrice, PricingOffer, PublicPlan } from "@/lib/api";
 import { getToken } from "@/lib/auth";
-import { StoreBadges } from "@/components/landing-kit";
+import { LandingHeader, LandingFooter } from "@/components/landing-kit";
 
 // Public pricing page. Cycles, per-cycle discounts and the limited-time launch
 // offer (countdown) are all BACKEND-MANAGED (/public/plans).
@@ -69,12 +69,7 @@ export default function PricingPage() {
         @media(max-width:860px){.pr-grid{grid-template-columns:1fr;}}
       `}</style>
 
-      <header style={{ position: "sticky", top: 0, zIndex: 20, background: "rgba(246,247,251,.85)", backdropFilter: "blur(10px)", borderBottom: "1px solid #eceef6" }}>
-        <div className="pr-wrap" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: 66 }}>
-          <Link href="/"><img src="/eydia-logo.png" alt="Eydia.ai" style={{ height: 34 }} /></Link>
-          <Link href={loggedIn ? "/dashboard" : "/login"} className="pr-btn" style={{ background: grad, color: "#fff", padding: "9px 18px", fontSize: 14 }}>{loggedIn ? "Open app" : "Login"}</Link>
-        </div>
-      </header>
+      <LandingHeader active="/pricing" />
 
       <section style={{ background: grad, color: "#fff", padding: "54px 0 70px", textAlign: "center" }}>
         <div className="pr-wrap">
@@ -140,15 +135,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <footer style={{ background: "#0f1b2d", color: "#aeb8cc", padding: "28px 0", textAlign: "center", fontSize: 13 }}>
-        <div className="pr-wrap" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-            <span style={{ fontWeight: 700, color: "#fff" }}>📱 Get the Eydia app:</span>
-            <StoreBadges />
-          </div>
-          <div>© {new Date().getFullYear()} Eydia.ai · <Link href="/" style={{ color: "#fff" }}>Home</Link> · <Link href="/terms" style={{ color: "#fff" }}>Terms</Link> · <Link href="/privacy" style={{ color: "#fff" }}>Privacy</Link></div>
-        </div>
-      </footer>
+      <LandingFooter />
     </div>
   );
 }

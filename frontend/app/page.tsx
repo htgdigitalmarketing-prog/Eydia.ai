@@ -94,6 +94,33 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ===== Trusted-by clients slider (managed by Super Admin → Our Clients) ===== */}
+      {clients.length > 0 && (
+        <section style={{ padding: "30px 0 10px", background: "#f7f9ff", borderTop: "1px solid #eef1f6" }}>
+          <div className="lph-wrap">
+            <div className="lph-eyebrow" style={{ textAlign: "center" }}>BUSINESSES GROWING WITH EYDIA</div>
+            <h2 className="lph-h2" style={{ textAlign: "center", fontSize: 26, margin: "6px 0 20px" }}>Trusted by growing businesses</h2>
+          </div>
+          <div className="lph-marquee">
+            <div className="lph-marquee-track">
+              {[...clients, ...clients].map((c, i) => {
+                const inner = (
+                  <>
+                    {c.logo_url
+                      ? <img src={c.logo_url} alt={c.name} />
+                      : <div style={{ height: 50, display: "grid", placeItems: "center", fontWeight: 800, color: "#5b6bf5", padding: "0 8px" }}>{c.name}</div>}
+                    <b>{c.name}</b>
+                  </>
+                );
+                return c.website
+                  ? <a key={i} href={c.website} target="_blank" rel="noopener noreferrer" className="lph-client" style={{ textDecoration: "none" }}>{inner}</a>
+                  : <div key={i} className="lph-client">{inner}</div>;
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ===== Stats strip ===== */}
       <section className="lph-stats">
         <div className="lph-stats-in">

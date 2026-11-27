@@ -1358,6 +1358,27 @@ a:hover { text-decoration: underline; }
 .lph-foot-links a:hover { color: var(--text); }
 .lph-foot-copy { font-size: 12.5px; color: var(--muted); }
 
+/* ── Redesigned footer ── */
+@keyframes eydiaWaPulse { 0%,100%{ box-shadow:0 10px 26px rgba(18,140,126,.45) } 50%{ box-shadow:0 10px 26px rgba(18,140,126,.25), 0 0 0 12px rgba(37,211,102,0) } }
+.lph-foot2 { background: #0f1b2d; color: #fff; padding: 54px 0 0; margin-top: 44px; }
+.lph-foot2-grid { display: grid; grid-template-columns: 1.7fr 1fr 1fr 1fr 1.3fr; gap: 30px; padding-bottom: 36px; }
+.lph-foot2-col h4 { font-size: 12.5px; letter-spacing: .07em; text-transform: uppercase; color: #fff; margin: 4px 0 12px; }
+.lph-foot2-col a { display: block; color: rgba(255,255,255,.72); font-size: 13.5px; text-decoration: none; padding: 6px 0; transition: color .15s; }
+.lph-foot2-col a:hover { color: #fff; }
+.lph-foot2-bottom { border-top: 1px solid rgba(255,255,255,.1); padding: 18px 20px; max-width: 1120px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 12.5px; color: rgba(255,255,255,.72); }
+@media (max-width: 920px) { .lph-foot2-grid { grid-template-columns: 1fr 1fr; } .lph-foot2-brand { grid-column: 1 / -1; } }
+@media (max-width: 560px) { .lph-foot2-grid { grid-template-columns: 1fr; } }
+
+/* ── Clients marquee (home, below hero) ── */
+.lph-marquee { overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent); }
+.lph-marquee-track { display: flex; gap: 46px; align-items: center; width: max-content; animation: eydiaMarquee 34s linear infinite; }
+.lph-marquee:hover .lph-marquee-track { animation-play-state: paused; }
+@keyframes eydiaMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.lph-client { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 110px; }
+.lph-client img { max-height: 50px; max-width: 128px; object-fit: contain; filter: grayscale(1); opacity: .8; transition: all .2s; }
+.lph-client:hover img { filter: none; opacity: 1; }
+.lph-client b { font-size: 12.5px; font-weight: 700; color: #51607a; white-space: nowrap; }
+
 @media (max-width: 920px) {
   .lph-hero-in { grid-template-columns: 1fr; }
   .lph-hero-visual { margin-top: 28px; max-width: 460px; }

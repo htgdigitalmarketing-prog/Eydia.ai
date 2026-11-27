@@ -151,8 +151,8 @@ function MediaBubble({ msg }: { msg: InboxMessage }) {
         {att.caption && <div className="media-caption">{att.caption}</div>}
       </div>
       {att.url && (
-        <a href={att.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "auto", padding: "6px 10px", background: "var(--primary)", color: "#fff", borderRadius: 8, fontSize: 12, textDecoration: "none", fontWeight: 600, whiteSpace: "nowrap" }}>
-          Download
+        <a href={att.url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: "auto", padding: "6px 12px", background: "#eef1ff", color: "#2160ef", border: "1px solid #2160ef", borderRadius: 8, fontSize: 12, textDecoration: "none", fontWeight: 700, whiteSpace: "nowrap" }}>
+          ⬇ Download
         </a>
       )}
     </div>
