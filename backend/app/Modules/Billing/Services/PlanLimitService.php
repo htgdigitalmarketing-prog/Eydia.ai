@@ -9,7 +9,7 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\Template;
 use App\Models\User;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 
 /**
  * Central plan-limit + feature engine. Limits and feature flags live in the
@@ -110,15 +110,26 @@ class PlanLimitService
             return; // unlimited
         }
         if ($limit === 0) {
-            throw ValidationException::withMessages([
-                'plan' => ["Your current plan does not include {$noun}. Please upgrade your plan to use this feature."],
-            ]);
+            $this->throwUpgrade("Your current plan does not include {$noun}. Please upgrade your plan to use this feature.");
         }
         if ($this->usage($tenantId, $usageKey) >= $limit) {
-            throw ValidationException::withMessages([
-                'plan' => ["Your current plan allows a maximum of {$limit} {$noun}. Please upgrade your plan to add more."],
-            ]);
+            $this->throwUpgrade("Your current plan allows a maximum of {$limit} {$noun}. Please upgrade your plan to add more.");
         }
+    }
+
+    /**
+     * Signal a plan-limit block with the machine-readable `feature_not_included`
+     * code so the web app's global upgrade prompt fires (and native clients can
+     * branch on it) instead of showing Laravel's generic validation message.
+     */
+    private function throwUpgrade(string $message): never
+    {
+        throw new HttpResponseException(response()->json([
+            'success' => false,
+            'message' => $message,
+            'errors' => ['plan' => ['feature_not_included']],
+            'code' => 'feature_not_included',
+        ], 403));
     }
 
     /**

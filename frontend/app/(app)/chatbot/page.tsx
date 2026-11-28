@@ -16,6 +16,17 @@ const MATCH_TYPES = [
 
 type View = "list" | "editor";
 
+/** Readable error text — prefers the specific field message(s) over Laravel's
+ *  generic "The given data was invalid." so plan-limit reasons actually show. */
+function errMsg(err: unknown): string {
+  const e = err as ApiError;
+  if (e?.errors) {
+    const flat = Object.values(e.errors).flat().filter(Boolean) as string[];
+    if (flat.length) return flat.join(" ");
+  }
+  return e?.message || "Something went wrong. Please try again.";
+}
+
 const EMPTY_RULE = {
   keyword: "",
   match_type: "contains",
@@ -75,7 +86,7 @@ export default function ChatbotPage() {
       setBot((b) => (b ? { ...b, ai_enabled: res.chatbot.ai_enabled, ai_instructions: res.chatbot.ai_instructions, website_builder: res.chatbot.website_builder } : b));
       flash("AI settings saved.");
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     } finally {
       setAiSaving(false);
     }
@@ -91,7 +102,7 @@ export default function ChatbotPage() {
       setBot((b) => (b ? { ...b, followup_enabled: res.chatbot.followup_enabled, followup_message: res.chatbot.followup_message } : b));
       flash("Follow-up settings saved.");
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     } finally {
       setFollowupSaving(false);
     }
@@ -111,7 +122,7 @@ export default function ChatbotPage() {
       setNumbers(numsRes.numbers);
       setTemplates(tplRes.templates);
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     } finally {
       setLoading(false);
     }
@@ -140,7 +151,7 @@ export default function ChatbotPage() {
       flash(res.message);
       await Promise.all([loadBots(), loadLeadFlow()]);
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     } finally {
       setFlowBusy(false);
     }
@@ -164,7 +175,7 @@ export default function ChatbotPage() {
       await loadBots();
       openEditor(res.chatbot.id);
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     } finally {
       setSubmitting(false);
     }
@@ -180,7 +191,7 @@ export default function ChatbotPage() {
       setView("editor");
       resetRuleForm();
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     }
   }
 
@@ -192,7 +203,7 @@ export default function ChatbotPage() {
       await loadBots();
       if (bot?.id === id) await openEditor(id);
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     }
   }
 
@@ -206,7 +217,7 @@ export default function ChatbotPage() {
       if (bot?.id === id) { setView("list"); setBot(null); }
       await loadBots();
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     }
   }
 
@@ -251,7 +262,7 @@ export default function ChatbotPage() {
       }
       await openEditor(bot.id);
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     } finally {
       setSavingRule(false);
     }
@@ -265,7 +276,7 @@ export default function ChatbotPage() {
       await api.chatbot.deleteRule(token, bot.id, ruleId);
       await openEditor(bot.id);
     } catch (err) {
-      setError((err as ApiError).message);
+      setError(errMsg(err));
     }
   }
 
